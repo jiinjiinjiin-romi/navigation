@@ -246,14 +246,18 @@ function normalizeTrafficSegments(features: TmapFeature[]): RouteTrafficSegment[
     const coordinates = extractLineCoordinates(feature.geometry)
     const congestion = getTrafficCongestion(feature)
 
-    if (coordinates.length < 2 || congestion === undefined) {
+    if (coordinates.length < 2) {
       return []
     }
 
-    return [{
-      coordinates,
-      congestion,
-    }]
+    if (congestion !== undefined) {
+      return [{
+        coordinates,
+        congestion,
+      }]
+    }
+
+    return getGeometryTrafficSegments(coordinates, feature.geometry?.traffic)
   })
 }
 
@@ -273,6 +277,45 @@ function getTrafficCongestion(feature: TmapFeature): TrafficCongestion | undefin
   }
 
   return undefined
+}
+
+function getGeometryTrafficSegments(
+  coordinates: Coordinate[],
+  traffic: unknown,
+): RouteTrafficSegment[] {
+  if (!Array.isArray(traffic)) {
+    return []
+  }
+
+  return traffic.flatMap((entry) => {
+    if (!Array.isArray(entry)) {
+      return []
+    }
+
+    const startIndex = Number(entry[0])
+    const endIndex = Number(entry[1])
+    const congestion = Number(entry[2])
+
+    if (
+      !Number.isInteger(startIndex) ||
+      !Number.isInteger(endIndex) ||
+      !isTrafficCongestion(congestion)
+    ) {
+      return []
+    }
+
+    const start = Math.max(0, startIndex)
+    const end = Math.min(coordinates.length - 1, endIndex)
+
+    if (end <= start) {
+      return []
+    }
+
+    return [{
+      coordinates: coordinates.slice(start, end + 1),
+      congestion,
+    }]
+  })
 }
 
 function isTrafficCongestion(value: number): value is TrafficCongestion {
