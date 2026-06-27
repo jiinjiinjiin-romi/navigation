@@ -466,6 +466,62 @@ describe('TmapPanel', () => {
     )
   })
 
+  it('keeps the selected 3d pitch when navigation camera starts during a mode transition', async () => {
+    const animationFrames: FrameRequestCallback[] = []
+    vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({ matches: false }))
+    vi.stubGlobal('requestAnimationFrame', vi.fn((callback: FrameRequestCallback) => {
+      animationFrames.push(callback)
+      return animationFrames.length
+    }))
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+
+    const { rerender } = render(
+      <TmapPanel
+        cameraSettings={{ mode: '2d', zoom: 18.3, pitch: 0 }}
+        currentPosition={{ lat: 37.5665, lng: 126.978 }}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(setPitch).toHaveBeenCalledWith(0)
+    })
+    setPitch.mockClear()
+    getPitch.mockReturnValue(0)
+
+    rerender(
+      <TmapPanel
+        cameraSettings={{ mode: '3d', zoom: 18.3, pitch: 45 }}
+        currentPosition={{ lat: 37.5665, lng: 126.978 }}
+        route={{
+          coordinates: [
+            { lat: 37.5665, lng: 126.978 },
+            { lat: 37.4979, lng: 127.0276 },
+          ],
+          summary: {
+            distanceMeters: 12340,
+            durationSeconds: 1320,
+          },
+        }}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(animationFrames.length).toBeGreaterThanOrEqual(2)
+    })
+
+    ;[0, 120, 240, 360].forEach((timestamp) => {
+      const frame = animationFrames.shift()
+      if (!frame) {
+        return
+      }
+      act(() => {
+        frame(timestamp)
+      })
+    })
+
+    expect(setPitch).toHaveBeenLastCalledWith(45)
+  })
+
   it('keeps the 3d map pitch when compass resets orientation', async () => {
     const matchMedia = vi.fn().mockReturnValue({ matches: true })
     vi.stubGlobal('matchMedia', matchMedia)

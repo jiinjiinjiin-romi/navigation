@@ -559,6 +559,75 @@ describe('NavigationShell', () => {
     expect(screen.getByText('12.8 km')).toBeInTheDocument()
   })
 
+  it('restores 3D map mode after selecting a route option from route selection', async () => {
+    mockedGetRouteOptions.mockResolvedValue([
+      {
+        id: 'route-recommended',
+        label: '추천',
+        searchOption: '0',
+        color: '#0EA5E9',
+        isRecommended: true,
+        route: {
+          coordinates: [
+            { lat: 37.5665, lng: 126.978 },
+            { lat: 37.4979, lng: 127.0276 },
+          ],
+          summary: {
+            distanceMeters: 12340,
+            durationSeconds: 1320,
+          },
+        },
+      },
+      {
+        id: 'route-fastest',
+        label: '최소시간',
+        searchOption: '2',
+        color: '#F97316',
+        isRecommended: false,
+        route: {
+          coordinates: [
+            { lat: 37.5665, lng: 126.978 },
+            { lat: 37.51, lng: 127.01 },
+            { lat: 37.4979, lng: 127.0276 },
+          ],
+          summary: {
+            distanceMeters: 12800,
+            durationSeconds: 1260,
+          },
+        },
+      },
+    ])
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '설정' }))
+    fireEvent.click(await screen.findByRole('button', { name: '3D 지도' }))
+    expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-camera-mode', '3d')
+    fireEvent.click(screen.getByRole('button', { name: '설정 닫기' }))
+
+    await openDestinationEditor()
+    fireEvent.click(await screen.findByRole('button', { name: '도착지를 회사로 설정' }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-camera-mode', '2d')
+    })
+    expect(await screen.findByText('2개 경로')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '최소시간 여기서 경로 선택' }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-route-options', '0')
+    })
+    expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-camera-mode', '3d')
+    expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-camera-pitch', '45')
+  })
+
   it('keeps route candidates visible while editing the destination before selecting a route', async () => {
     mockedGetRouteOptions.mockResolvedValue([
       {

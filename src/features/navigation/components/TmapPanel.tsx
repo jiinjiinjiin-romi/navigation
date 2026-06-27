@@ -600,9 +600,7 @@ export function TmapPanel({
       bearing: typeof bearing === 'number' ? bearing : renderedBearingRef.current,
       markerBearing: options.markerBearing ?? 0,
       pitch: options.pitch ?? (
-        shouldApplyMap
-          ? (mapModePitchFrameRef.current !== undefined ? renderedPitchRef.current : getSettingsMapPitch())
-          : getDisplayMapPitch()
+        shouldApplyMap ? getSettingsMapPitch() : getDisplayMapPitch()
       ),
     }
     const shouldReduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
