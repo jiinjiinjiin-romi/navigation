@@ -13,6 +13,7 @@ interface Window {
   }
   Tmapv3Marker?: {
     setMap: (map: unknown | null) => void
+    setOptions?: (options: Record<string, unknown>) => void
     setPosition?: (latLng: unknown) => void
   }
   Tmapv3Polyline?: {

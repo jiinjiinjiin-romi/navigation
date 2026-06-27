@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 
 import {
   calculateBearing,
-  getLookaheadRouteBearing,
   getRouteBearingNearCoordinate,
   interpolateBearing,
   interpolateBearingContinuously,
@@ -31,21 +30,6 @@ describe('navigationCamera', () => {
     ]
 
     expect(getRouteBearingNearCoordinate(route, { lat: 37.1, lng: 127 })).toBeCloseTo(0)
-  })
-
-  it('uses a lookahead point to turn progressively before a corner', () => {
-    const route = [
-      { lat: 37, lng: 127 },
-      { lat: 37, lng: 127.001 },
-      { lat: 37.001, lng: 127.001 },
-    ]
-
-    const segmentBearing = getRouteBearingNearCoordinate(route, { lat: 37, lng: 127.0009 })
-    const lookaheadBearing = getLookaheadRouteBearing(route, { lat: 37, lng: 127.0009 }, 40)
-
-    expect(segmentBearing).toBeCloseTo(89.7, 0)
-    expect(lookaheadBearing).toBeGreaterThan(0)
-    expect(lookaheadBearing).toBeLessThan(segmentBearing)
   })
 
   it('projects an off-road position onto the nearest route segment', () => {

@@ -181,6 +181,63 @@ describe('getRoute', () => {
       { lat: 37.4979, lng: 127.0276 },
     ])
   })
+
+  it('normalizes route traffic congestion segments from TMAP line features', async () => {
+    const post = vi.fn().mockResolvedValue({
+      data: {
+        features: [
+          {
+            geometry: { type: 'Point', coordinates: [126.978, 37.5665] },
+            properties: { totalDistance: '1000', totalTime: '120' },
+          },
+          {
+            geometry: {
+              type: 'LineString',
+              coordinates: [
+                [126.978, 37.5665],
+                [127, 37.55],
+              ],
+            },
+            properties: { congestion: 1 },
+          },
+          {
+            geometry: {
+              type: 'LineString',
+              coordinates: [
+                [127, 37.55],
+                [127.0276, 37.4979],
+              ],
+              traffic: [4],
+            },
+            properties: {},
+          },
+        ],
+      },
+    })
+
+    const route = await getRoute(
+      { lat: 37.5665, lng: 126.978 },
+      { lat: 37.4979, lng: 127.0276 },
+      { post },
+    )
+
+    expect(route.trafficSegments).toEqual([
+      {
+        coordinates: [
+          { lat: 37.5665, lng: 126.978 },
+          { lat: 37.55, lng: 127 },
+        ],
+        congestion: 1,
+      },
+      {
+        coordinates: [
+          { lat: 37.55, lng: 127 },
+          { lat: 37.4979, lng: 127.0276 },
+        ],
+        congestion: 4,
+      },
+    ])
+  })
 })
 
 describe('getRoadMatch', () => {

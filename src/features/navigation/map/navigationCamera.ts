@@ -30,33 +30,6 @@ export function getRouteBearingNearCoordinate(coordinates: Coordinate[], coordin
   return getRouteBearing(coordinates, segmentIndex)
 }
 
-export function getLookaheadRouteBearing(
-  coordinates: Coordinate[],
-  coordinate: Coordinate,
-  lookaheadMeters: number,
-) {
-  if (coordinates.length < 2) {
-    return 0
-  }
-
-  const projected = projectCoordinateToRouteSegment(coordinates, coordinate)
-  const lookaheadCoordinate = getCoordinateAheadOnRoute(
-    coordinates,
-    projected.segmentIndex,
-    projected.coordinate,
-    lookaheadMeters,
-  )
-
-  if (
-    lookaheadCoordinate.lat === projected.coordinate.lat &&
-    lookaheadCoordinate.lng === projected.coordinate.lng
-  ) {
-    return getRouteBearing(coordinates, projected.segmentIndex)
-  }
-
-  return calculateBearing(projected.coordinate, lookaheadCoordinate)
-}
-
 export function interpolateBearing(from: number, to: number, progress: number) {
   return normalizeBearing(interpolateBearingContinuously(from, to, progress))
 }
@@ -129,54 +102,8 @@ function projectCoordinateToSegment(start: Coordinate, end: Coordinate, coordina
   }
 }
 
-function getCoordinateAheadOnRoute(
-  coordinates: Coordinate[],
-  segmentIndex: number,
-  coordinate: Coordinate,
-  lookaheadMeters: number,
-) {
-  let remainingMeters = Math.max(0, lookaheadMeters)
-  let current = coordinate
-
-  for (let index = segmentIndex; index < coordinates.length - 1; index += 1) {
-    const next = coordinates[index + 1]
-    const distanceToNext = getDistanceMeters(current, next)
-
-    if (remainingMeters <= distanceToNext) {
-      return interpolateCoordinateByDistance(current, next, remainingMeters)
-    }
-
-    remainingMeters -= distanceToNext
-    current = next
-  }
-
-  return coordinates[coordinates.length - 1]
-}
-
-function interpolateCoordinateByDistance(start: Coordinate, end: Coordinate, distanceMeters: number) {
-  const segmentDistanceMeters = getDistanceMeters(start, end)
-
-  if (segmentDistanceMeters === 0) {
-    return start
-  }
-
-  const ratio = Math.min(Math.max(distanceMeters / segmentDistanceMeters, 0), 1)
-
-  return {
-    lat: start.lat + (end.lat - start.lat) * ratio,
-    lng: start.lng + (end.lng - start.lng) * ratio,
-  }
-}
-
 function toRadians(value: number) {
   return (value * Math.PI) / 180
-}
-
-function getDistanceMeters(from: Coordinate, to: Coordinate) {
-  const latMeters = (to.lat - from.lat) * 111_320
-  const lngMeters = (to.lng - from.lng) * 111_320 * Math.cos(toRadians((from.lat + to.lat) / 2))
-
-  return Math.sqrt(latMeters * latMeters + lngMeters * lngMeters)
 }
 
 function getApproximateSquaredDistance(from: Coordinate, to: Coordinate) {

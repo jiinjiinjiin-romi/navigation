@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { NavigationShell } from './NavigationShell'
@@ -420,7 +420,134 @@ describe('NavigationShell', () => {
     fireEvent.click(screen.getByRole('button', { name: '시뮬레이션 시작' }))
 
     expect(screen.getByText('시뮬레이션 중')).toBeInTheDocument()
+    expect(screen.getByTestId('primary-maneuver-card')).toBeInTheDocument()
+    expect(screen.getByText('좌회전')).toBeInTheDocument()
     expect(screen.getByTestId('tmap-panel')).toHaveTextContent('sim:37.5665,126.9780')
+  })
+
+  it('keeps route guidance visible during simulation when TMAP returns no maneuver points', async () => {
+    mockedSearchPlaces.mockResolvedValue([
+      {
+        id: 'destination',
+        name: '강남역',
+        address: '서울 강남구',
+        coordinate: { lat: 37.4979, lng: 127.0276 },
+      },
+    ])
+    mockedGetRoute.mockResolvedValue({
+      coordinates: [
+        { lat: 37.5665, lng: 126.978 },
+        { lat: 37.4979, lng: 127.0276 },
+      ],
+      summary: {
+        distanceMeters: 12340,
+        durationSeconds: 1320,
+      },
+      maneuvers: [],
+    })
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /어디로 갈까요/ }))
+    fireEvent.change(screen.getByPlaceholderText('목적지 검색'), {
+      target: { value: '강남역' },
+    })
+    fireEvent.click(await screen.findByRole('option', { name: /강남역/ }))
+    await screen.findByText('22분')
+
+    fireEvent.click(screen.getByRole('button', { name: '시뮬레이션 시작' }))
+
+    expect(screen.getByTestId('primary-maneuver-card')).toBeInTheDocument()
+    expect(screen.getByText('경로 따라 주행')).toBeInTheDocument()
+    expect(screen.queryByText('경로 안내')).not.toBeInTheDocument()
+  })
+
+  it('updates sub-kilometer maneuver distance in randomized 3 to 10 meter steps', async () => {
+    const rafCallbacks: FrameRequestCallback[] = []
+    const requestAnimationFrameSpy = vi
+      .spyOn(window, 'requestAnimationFrame')
+      .mockImplementation((callback) => {
+        rafCallbacks.push(callback)
+        return rafCallbacks.length
+      })
+    const cancelAnimationFrameSpy = vi
+      .spyOn(window, 'cancelAnimationFrame')
+      .mockImplementation(() => undefined)
+    const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0)
+
+    mockedSearchPlaces.mockResolvedValue([
+      {
+        id: 'destination',
+        name: '강남역',
+        address: '서울 강남구',
+        coordinate: { lat: 37.4979, lng: 127.0276 },
+      },
+    ])
+    mockedGetRoute.mockResolvedValue({
+      coordinates: [
+        { lat: 37.5665, lng: 126.978 },
+        { lat: 37.4979, lng: 127.0276 },
+      ],
+      summary: {
+        distanceMeters: 1000,
+        durationSeconds: 60,
+      },
+      maneuvers: [
+        {
+          id: 'left-500',
+          type: 'left',
+          label: '좌회전',
+          description: '좌회전',
+          coordinate: { lat: 37.56, lng: 126.98 },
+          distanceFromStartMeters: 500,
+        },
+      ],
+    })
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /어디로 갈까요/ }))
+    fireEvent.change(screen.getByPlaceholderText('목적지 검색'), {
+      target: { value: '강남역' },
+    })
+    fireEvent.click(await screen.findByRole('option', { name: /강남역/ }))
+    await screen.findByText('좌회전')
+    expect(screen.getByText('500')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '시뮬레이션 시작' }))
+    await waitFor(() => {
+      expect(rafCallbacks.length).toBeGreaterThan(0)
+    })
+
+    await act(async () => {
+      rafCallbacks.shift()?.(0)
+    })
+    await act(async () => {
+      rafCallbacks.shift()?.(240)
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('497')).toBeInTheDocument()
+    })
+    expect(screen.queryByText('496')).not.toBeInTheDocument()
+
+    requestAnimationFrameSpy.mockRestore()
+    cancelAnimationFrameSpy.mockRestore()
+    randomSpy.mockRestore()
   })
 
   it('passes a rounded driving path to the map instead of raw right-angle route vertices', async () => {

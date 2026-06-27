@@ -3,6 +3,8 @@ export interface Coordinate {
   lng: number
 }
 
+export type TrafficCongestion = 0 | 1 | 2 | 3 | 4
+
 export interface Place {
   id: string
   name: string
@@ -43,9 +45,15 @@ export interface RoadMatchPoint {
   roadCategory?: number
 }
 
+export interface RouteTrafficSegment {
+  coordinates: Coordinate[]
+  congestion: TrafficCongestion
+}
+
 export interface NavigationRoute {
   coordinates: Coordinate[]
   summary: RouteSummary
   maneuvers?: RouteManeuver[]
   safetyAlerts?: SafetyAlert[]
+  trafficSegments?: RouteTrafficSegment[]
 }

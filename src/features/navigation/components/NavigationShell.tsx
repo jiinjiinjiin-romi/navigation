@@ -1,21 +1,19 @@
 import { useQuery } from '@tanstack/react-query'
 import {
-  AlertTriangle,
+  ArrowBendUpLeft,
+  ArrowBendUpRight,
+  ArrowClockwise,
   ArrowUp,
-  CornerUpLeft,
-  CornerUpRight,
   CloudSun,
-  Clock3,
-  LocateFixed,
+  Clock,
+  MagnifyingGlass,
   MapPin,
-  Menu,
   Play,
-  RefreshCw,
-  Route,
-  Search,
+  RoadHorizon,
   Timer,
+  Warning,
   X,
-} from 'lucide-react'
+} from '@phosphor-icons/react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getCurrentAddress, getRoadMatch, getRoute, searchPlaces } from '../api/tmapApi'
@@ -35,6 +33,8 @@ type MotionTiming = {
 const CURRENT_LOCATION_PLACE_ID = 'current-location'
 const PRODUCT_EASE: [number, number, number, number] = [0.22, 1, 0.36, 1]
 const WEATHER_STALE_TIME_MS = 10 * 60 * 1000
+const GUIDANCE_DISTANCE_STEP_MIN_METERS = 3
+const GUIDANCE_DISTANCE_STEP_MAX_METERS = 10
 
 export function NavigationShell() {
   const shouldReduceMotion = useReducedMotion()
@@ -54,6 +54,7 @@ export function NavigationShell() {
   const [simulationRemainingDuration, setSimulationRemainingDuration] = useState(0)
   const animationFrameRef = useRef<number | undefined>(undefined)
   const simulationStartedAtRef = useRef<number | undefined>(undefined)
+  const guidanceDistanceDisplayRef = useRef<GuidanceDistanceDisplayStore>(new Map())
 
   const originSearch = useQuery({
     queryKey: ['places', originKeyword],
@@ -107,6 +108,10 @@ export function NavigationShell() {
       coordinates: createRoundedRoutePath(route.coordinates),
     }
   }, [routeQuery.data])
+
+  useEffect(() => {
+    guidanceDistanceDisplayRef.current.clear()
+  }, [activeRoute])
   const remainingDurationSeconds = simulationRunning
     ? simulationRemainingDuration
     : activeRoute?.summary.durationSeconds ?? 0
@@ -134,7 +139,11 @@ export function NavigationShell() {
       })
     : undefined
   const maneuverGuidance = activeRoute
-    ? getManeuverGuidance(activeRoute, travelledDistanceMeters)
+    ? getManeuverGuidance(
+      activeRoute,
+      travelledDistanceMeters,
+      guidanceDistanceDisplayRef.current,
+    )
     : undefined
   const activePlaces = activeField === 'origin'
     ? originSearch.data ?? []
@@ -278,6 +287,7 @@ export function NavigationShell() {
     setSimulationPosition(firstCoordinate)
     setSimulationRemainingDistance(route.summary.distanceMeters)
     setSimulationRemainingDuration(route.summary.durationSeconds)
+    guidanceDistanceDisplayRef.current.clear()
     simulationStartedAtRef.current = undefined
     setSimulationRunning(true)
   }
@@ -339,6 +349,7 @@ export function NavigationShell() {
           origin={origin}
           destination={destination}
           simulationPosition={simulationPosition}
+          onRequestLocation={requestCurrentLocation}
         />
 
         {!activeRoute ? (
@@ -504,7 +515,7 @@ function RouteSearchSheet({
           whileTap={motionTiming.duration === 0 ? undefined : { scale: 0.94 }}
           type="button"
         >
-          <X className="h-5 w-5" />
+          <X className="h-5 w-5" weight="bold" />
         </motion.button>
 
         <motion.div
@@ -518,7 +529,7 @@ function RouteSearchSheet({
             active={activeField === 'origin'}
             activeOptionId={showSuggestions && activeField === 'origin' ? `${activeListId}-option-${activeIndex}` : undefined}
             controlsId={activeListId}
-            icon={<MapPin className="h-5 w-5" />}
+            icon={<MapPin className="h-5 w-5" weight="bold" />}
             label="출발지"
             value={originKeyword}
             onChange={onChangeOrigin}
@@ -534,7 +545,7 @@ function RouteSearchSheet({
             activeOptionId={showSuggestions && activeField === 'destination' ? `${activeListId}-option-${activeIndex}` : undefined}
             autoFocus
             controlsId={activeListId}
-            icon={<Search className="h-5 w-5" />}
+            icon={<MagnifyingGlass className="h-5 w-5" weight="bold" />}
             label="도착지"
             value={destinationKeyword}
             onChange={onChangeDestination}
@@ -571,16 +582,10 @@ function IdleMapControls({
 
   return (
     <div className="pointer-events-none absolute inset-0 text-[var(--nav-ink)]">
-      <div className="absolute bottom-[11.25rem] left-5 flex flex-col items-center gap-3 max-sm:bottom-[10.75rem] max-sm:left-3">
-        <HudCircleButton label="현재 위치" onClick={onRequestLocation}>
-          <LocateFixed className="h-7 w-7 max-sm:h-6 max-sm:w-6" />
-        </HudCircleButton>
-      </div>
-
       <AnimatePresence initial={false}>
         {!searchOpen ? (
           <motion.div
-            className="absolute bottom-20 left-1/2 w-[min(34rem,calc(100%-2rem))] -translate-x-1/2 max-sm:bottom-18"
+            className="absolute bottom-20 left-1/2 w-[min(26rem,calc(100%-2rem))] -translate-x-1/2 max-sm:bottom-18 max-sm:w-[min(22rem,calc(100%-1.5rem))]"
             initial={{ opacity: 0, y: 14, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 12, scale: 0.985 }}
@@ -610,16 +615,15 @@ function IdleMapControls({
               ) : null}
             </AnimatePresence>
             <motion.button
-              className="pointer-events-auto flex h-16 w-full items-center gap-4 rounded-full bg-white px-6 text-left text-lg font-semibold text-[var(--nav-ink)] shadow-[var(--nav-shadow-panel)] transition hover:bg-[var(--nav-panel)] disabled:cursor-not-allowed disabled:bg-white/80 disabled:text-[var(--nav-subtle)] max-sm:h-14 max-sm:px-5 max-sm:text-base"
+              className="pointer-events-auto flex h-15 w-full items-center gap-3.5 rounded-full bg-white px-5 text-left text-base font-semibold text-[var(--nav-ink)] shadow-[var(--nav-shadow-panel)] transition hover:bg-[var(--nav-panel)] disabled:cursor-not-allowed disabled:bg-white/80 disabled:text-[var(--nav-subtle)] max-sm:h-14 max-sm:px-5"
               disabled={navigationBlocked}
               onClick={onOpenSearch}
               type="button"
               whileHover={navigationBlocked || motionTiming.duration === 0 ? undefined : { scale: 1.01 }}
               whileTap={navigationBlocked || motionTiming.duration === 0 ? undefined : { scale: 0.985 }}
             >
-              <Search className="h-6 w-6 text-[var(--nav-primary)]" />
+              <MagnifyingGlass className="h-5 w-5 text-[var(--nav-primary)]" weight="bold" />
               <span className="min-w-0 flex-1">어디로 갈까요?</span>
-              <Menu className="h-6 w-6 text-[var(--nav-muted)]" />
             </motion.button>
           </motion.div>
         ) : null}
@@ -643,7 +647,7 @@ function DrivingHud({
 }) {
   return (
     <motion.div
-      className="pointer-events-none absolute inset-0 text-[var(--nav-ink)]"
+      className="pointer-events-none absolute inset-0 z-40 text-[var(--nav-ink)]"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={motionTiming}
@@ -693,7 +697,7 @@ function DrivingHud({
             assist.tone === 'warning' ? 'bg-[#e43d30]' : 'bg-[var(--nav-primary)]',
           ].join(' ')}
           >
-            <AlertTriangle className="h-6 w-6" />
+            <Warning className="h-6 w-6" weight="bold" />
           </span>
           <span className="grid min-w-0 gap-0.5">
             <span className="truncate text-sm font-bold leading-tight">{assist.title}</span>
@@ -703,18 +707,7 @@ function DrivingHud({
       ) : null}
 
       <motion.div
-        className="absolute bottom-[11.25rem] left-5 flex flex-col items-center gap-3 max-sm:bottom-[10.75rem] max-sm:left-3"
-        initial={{ opacity: 0, x: -14 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ ...motionTiming, delay: motionTiming.duration === 0 ? 0 : 0.06 }}
-      >
-        <HudCircleButton label="현재 위치">
-          <LocateFixed className="h-7 w-7 max-sm:h-6 max-sm:w-6" />
-        </HudCircleButton>
-      </motion.div>
-
-      <motion.div
-        className="absolute bottom-17 left-[5.25rem] flex items-center gap-3 max-sm:bottom-16 max-sm:left-[4.75rem]"
+        className="absolute bottom-17 right-5 flex items-center gap-3 max-sm:bottom-16 max-sm:right-3"
         initial={{ opacity: 0, y: 22 }}
         animate={{ opacity: 1, y: 0 }}
         transition={motionTiming}
@@ -727,9 +720,9 @@ function DrivingHud({
           whileTap={simulationRunning || motionTiming.duration === 0 ? undefined : { scale: 0.97 }}
         >
           {simulationRunning ? (
-            <Play className="h-4 w-4 fill-current" />
+            <Play className="h-4 w-4" weight="fill" />
           ) : (
-            <RefreshCw className="h-4 w-4" />
+            <ArrowClockwise className="h-4 w-4" weight="bold" />
           )}
           <span>{simulationRunning ? '시뮬레이션 중' : '시뮬레이션 시작'}</span>
         </motion.button>
@@ -760,16 +753,16 @@ function BottomStatusBar({
 }) {
   const items = hasRoute
     ? [
-        { label: '도착', value: `${arrivalLabel} 예정`, icon: <Clock3 className="h-4 w-4" /> },
-        { label: '거리', value: distanceLabel, icon: <Route className="h-4 w-4" /> },
-        { label: '소요시간', value: durationLabel, icon: <Timer className="h-4 w-4" /> },
-        { label: '현재 위치', value: currentLocationLabel, icon: <MapPin className="h-4 w-4" /> },
-        { label: '날씨', value: weatherLabel, icon: <CloudSun className="h-4 w-4" /> },
+        { label: '도착', value: `${arrivalLabel} 예정`, icon: <Clock className="h-4 w-4" weight="bold" /> },
+        { label: '거리', value: distanceLabel, icon: <RoadHorizon className="h-4 w-4" weight="bold" /> },
+        { label: '소요시간', value: durationLabel, icon: <Timer className="h-4 w-4" weight="bold" /> },
+        { label: '현재 위치', value: currentLocationLabel, icon: <MapPin className="h-4 w-4" weight="bold" /> },
+        { label: '날씨', value: weatherLabel, icon: <CloudSun className="h-4 w-4" weight="bold" /> },
       ]
     : [
-        { label: '시간', value: currentTimeLabel, icon: <Clock3 className="h-4 w-4" /> },
-        { label: '현재 위치', value: currentLocationLabel, icon: <MapPin className="h-4 w-4" /> },
-        { label: '날씨', value: weatherLabel, icon: <CloudSun className="h-4 w-4" /> },
+        { label: '시간', value: currentTimeLabel, icon: <Clock className="h-4 w-4" weight="bold" /> },
+        { label: '현재 위치', value: currentLocationLabel, icon: <MapPin className="h-4 w-4" weight="bold" /> },
+        { label: '날씨', value: weatherLabel, icon: <CloudSun className="h-4 w-4" weight="bold" /> },
       ]
 
   return (
@@ -799,36 +792,6 @@ function BottomStatusBar({
   )
 }
 
-function HudCircleButton({
-  children,
-  className = '',
-  label,
-  onClick,
-}: {
-  children: React.ReactNode
-  className?: string
-  label: string
-  onClick?: () => void
-}) {
-  const shouldReduceMotion = useReducedMotion()
-
-  return (
-    <motion.button
-      aria-label={label}
-      className={[
-        'pointer-events-auto grid h-14 w-14 place-items-center rounded-full bg-[var(--nav-control)] text-[var(--nav-ink)] shadow-[var(--nav-shadow-control)] transition hover:bg-[var(--nav-surface-raised)] max-sm:h-13 max-sm:w-13',
-        className,
-      ].join(' ')}
-      onClick={onClick}
-      type="button"
-      whileHover={shouldReduceMotion ? undefined : { scale: 1.04 }}
-      whileTap={shouldReduceMotion ? undefined : { scale: 0.94 }}
-    >
-      {children}
-    </motion.button>
-  )
-}
-
 interface DrivingAssistInfo {
   title: string
   detail: string
@@ -848,11 +811,24 @@ interface ManeuverGuidance {
   next?: ManeuverGuidanceItem
 }
 
+interface GuidanceDistanceDisplayState {
+  displayMeters: number
+  nextStepMeters: number
+}
+
+type GuidanceDistanceDisplayStore = Map<string, GuidanceDistanceDisplayState>
+
 function getManeuverGuidance(
   route: NavigationRoute,
   travelledDistanceMeters: number,
+  distanceDisplayStore: GuidanceDistanceDisplayStore,
 ): ManeuverGuidance | undefined {
   const maneuvers = route.maneuvers ?? []
+
+  if (maneuvers.length === 0) {
+    return createFallbackManeuverGuidance(route, travelledDistanceMeters)
+  }
+
   const currentIndex = maneuvers.findIndex((maneuver) => (
     maneuver.distanceFromStartMeters >= travelledDistanceMeters - 5
   ))
@@ -860,28 +836,55 @@ function getManeuverGuidance(
   const nextManeuver = currentIndex >= 0 ? maneuvers[currentIndex + 1] : undefined
 
   if (!currentManeuver) {
-    return undefined
+    return createFallbackManeuverGuidance(route, travelledDistanceMeters)
   }
 
   return {
     current: createManeuverGuidanceItem(
       currentManeuver,
       currentManeuver.distanceFromStartMeters - travelledDistanceMeters,
+      distanceDisplayStore,
     ),
     next: nextManeuver
       ? createManeuverGuidanceItem(
         nextManeuver,
         nextManeuver.distanceFromStartMeters - travelledDistanceMeters,
+        distanceDisplayStore,
       )
       : undefined,
+  }
+}
+
+function createFallbackManeuverGuidance(
+  route: NavigationRoute,
+  travelledDistanceMeters: number,
+): ManeuverGuidance {
+  const remainingDistanceMeters = Math.max(0, route.summary.distanceMeters - travelledDistanceMeters)
+  const distance = formatGuidanceDistance(remainingDistanceMeters)
+  const isArriving = remainingDistanceMeters <= 30
+
+  return {
+    current: {
+      type: isArriving ? 'arrive' : 'straight',
+      label: isArriving ? '목적지' : '경로 따라 주행',
+      distanceLabel: `${distance.value}${distance.unit}`,
+      distanceValue: distance.value,
+      distanceUnit: distance.unit,
+    },
   }
 }
 
 function createManeuverGuidanceItem(
   maneuver: RouteManeuver,
   distanceMeters: number,
+  distanceDisplayStore: GuidanceDistanceDisplayStore,
 ): ManeuverGuidanceItem {
-  const distance = formatGuidanceDistance(distanceMeters)
+  const displayDistanceMeters = getSteppedGuidanceDistance(
+    distanceDisplayStore,
+    maneuver.id,
+    distanceMeters,
+  )
+  const distance = formatGuidanceDistance(displayDistanceMeters)
 
   return {
     type: maneuver.type,
@@ -890,6 +893,52 @@ function createManeuverGuidanceItem(
     distanceValue: distance.value,
     distanceUnit: distance.unit,
   }
+}
+
+function getSteppedGuidanceDistance(
+  store: GuidanceDistanceDisplayStore,
+  key: string,
+  distanceMeters: number,
+) {
+  const actualMeters = Math.max(0, Math.round(distanceMeters))
+
+  if (actualMeters >= 1000) {
+    store.delete(key)
+    return actualMeters
+  }
+
+  const existing = store.get(key)
+
+  if (!existing || actualMeters > existing.displayMeters || actualMeters === 0) {
+    const nextState = {
+      displayMeters: actualMeters,
+      nextStepMeters: getRandomGuidanceDistanceStep(),
+    }
+    store.set(key, nextState)
+    return nextState.displayMeters
+  }
+
+  while (
+    existing.displayMeters > 0 &&
+    actualMeters <= existing.displayMeters - existing.nextStepMeters
+  ) {
+    existing.displayMeters = Math.max(0, existing.displayMeters - existing.nextStepMeters)
+    existing.nextStepMeters = getRandomGuidanceDistanceStep()
+  }
+
+  return existing.displayMeters
+}
+
+function getRandomGuidanceDistanceStep() {
+  return (
+    Math.floor(
+      Math.random() * (
+        GUIDANCE_DISTANCE_STEP_MAX_METERS -
+        GUIDANCE_DISTANCE_STEP_MIN_METERS +
+        1
+      ),
+    ) + GUIDANCE_DISTANCE_STEP_MIN_METERS
+  )
 }
 
 function formatGuidanceDistance(distanceMeters: number) {
@@ -915,10 +964,10 @@ function ManeuverIcon({
   className: string
   type: RouteManeuver['type']
 }) {
-  if (type === 'left') return <CornerUpLeft className={className} />
-  if (type === 'right') return <CornerUpRight className={className} />
-  if (type === 'arrive' || type === 'caution') return <AlertTriangle className={className} />
-  return <ArrowUp className={className} />
+  if (type === 'left') return <ArrowBendUpLeft className={className} weight="bold" />
+  if (type === 'right') return <ArrowBendUpRight className={className} weight="bold" />
+  if (type === 'arrive' || type === 'caution') return <Warning className={className} weight="bold" />
+  return <ArrowUp className={className} weight="bold" />
 }
 
 function getDrivingAssistInfo({

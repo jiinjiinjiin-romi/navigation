@@ -1,4 +1,4 @@
-import { render, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { TmapPanel } from './TmapPanel'
@@ -16,15 +16,18 @@ describe('TmapPanel', () => {
   const setBearing = vi.fn()
   const setPitch = vi.fn()
   const markerSetPosition = vi.fn()
+  const markerSetOptions = vi.fn()
   const polylineSetMap = vi.fn()
 
   beforeEach(() => {
+    vi.unstubAllGlobals()
     mockedLoadTmapSdk.mockResolvedValue()
     setCenter.mockReset()
     setZoom.mockReset()
     setBearing.mockReset()
     setPitch.mockReset()
     markerSetPosition.mockReset()
+    markerSetOptions.mockReset()
     polylineSetMap.mockReset()
 
     window.Tmapv3 = {
@@ -42,6 +45,7 @@ describe('TmapPanel', () => {
       Marker: vi.fn(function () {
         return {
           setMap: vi.fn(),
+          setOptions: markerSetOptions,
           setPosition: markerSetPosition,
         }
       }),
@@ -148,6 +152,176 @@ describe('TmapPanel', () => {
     expect(setPitch).toHaveBeenCalledWith(0)
   })
 
+  it('resets the map to north-up when the compass is pressed', async () => {
+    const matchMedia = vi.fn().mockReturnValue({ matches: true })
+    vi.stubGlobal('matchMedia', matchMedia)
+
+    render(
+      <TmapPanel
+        route={{
+          coordinates: [
+            { lat: 37, lng: 126 },
+            { lat: 37, lng: 127 },
+          ],
+          summary: {
+            distanceMeters: 1000,
+            durationSeconds: 120,
+          },
+        }}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(setBearing).toHaveBeenLastCalledWith(expect.closeTo(89.8, 0))
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: '나침반 원위치' }))
+
+    expect(setBearing).toHaveBeenLastCalledWith(0)
+    vi.unstubAllGlobals()
+  })
+
+  it('does not draw a north tick behind the compass N mark', async () => {
+    render(<TmapPanel />)
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '나침반 원위치' })).toBeInTheDocument()
+    })
+
+    const tickTransforms = Array.from(
+      screen.getByRole('button', { name: '나침반 원위치' }).querySelectorAll('line'),
+      (line) => line.getAttribute('transform'),
+    )
+
+    expect(tickTransforms).not.toContain('rotate(0 22 22)')
+    expect(tickTransforms).toContain('rotate(90 22 22)')
+    expect(tickTransforms).toContain('rotate(180 22 22)')
+    expect(tickTransforms).toContain('rotate(270 22 22)')
+  })
+
+  it('keeps compass rotation on the shortest path when bearing wraps around north', async () => {
+    const firstRoute = {
+      coordinates: [
+        { lat: 37, lng: 126 },
+        { lat: 37, lng: 127 },
+      ],
+      summary: {
+        distanceMeters: 1000,
+        durationSeconds: 120,
+      },
+    }
+    const wrappingRoute = {
+      coordinates: [
+        { lat: 37, lng: 126 },
+        { lat: 38, lng: 125.95 },
+      ],
+      summary: {
+        distanceMeters: 1000,
+        durationSeconds: 120,
+      },
+    }
+    const { rerender } = render(<TmapPanel route={firstRoute} />)
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '나침반 원위치' })).toBeInTheDocument()
+    })
+
+    rerender(<TmapPanel route={wrappingRoute} />)
+
+    await waitFor(() => {
+      const compassNeedle = screen
+        .getByRole('button', { name: '나침반 원위치' })
+        .querySelector('span')
+
+      expect(compassNeedle?.style.transform).toMatch(/rotate\(2\.\d+deg\)/)
+    })
+  })
+
+  it('keeps north-up after compass reset while simulation continues', async () => {
+    const matchMedia = vi.fn().mockReturnValue({ matches: true })
+    vi.stubGlobal('matchMedia', matchMedia)
+
+    const route = {
+      coordinates: [
+        { lat: 37, lng: 126 },
+        { lat: 37, lng: 127 },
+      ],
+      summary: {
+        distanceMeters: 1000,
+        durationSeconds: 120,
+      },
+    }
+    const { rerender } = render(
+      <TmapPanel
+        route={route}
+        simulationPosition={{ lat: 37, lng: 126 }}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(setBearing).toHaveBeenLastCalledWith(expect.closeTo(89.8, 0))
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: '나침반 원위치' }))
+    expect(setBearing).toHaveBeenLastCalledWith(0)
+
+    rerender(
+      <TmapPanel
+        route={route}
+        simulationPosition={{ lat: 37, lng: 126.5 }}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(setBearing).toHaveBeenLastCalledWith(0)
+    })
+    vi.unstubAllGlobals()
+  })
+
+  it('rotates the vehicle marker toward the route bearing after compass north-up reset', async () => {
+    const matchMedia = vi.fn().mockReturnValue({ matches: true })
+    vi.stubGlobal('matchMedia', matchMedia)
+
+    const route = {
+      coordinates: [
+        { lat: 37, lng: 126 },
+        { lat: 37, lng: 127 },
+      ],
+      summary: {
+        distanceMeters: 1000,
+        durationSeconds: 120,
+      },
+    }
+
+    render(
+      <TmapPanel
+        route={route}
+        simulationPosition={{ lat: 37, lng: 126 }}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(setBearing).toHaveBeenLastCalledWith(expect.closeTo(89.8, 0))
+    })
+    expect(window.Tmapv3!.Marker).toHaveBeenCalledWith(
+      expect.objectContaining({
+        iconHTML: expect.stringContaining('--vehicle-marker-bearing:0deg'),
+      }),
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '나침반 원위치' }))
+
+    await waitFor(() => {
+      expect(setBearing).toHaveBeenLastCalledWith(0)
+    })
+    expect(markerSetOptions).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        iconHTML: expect.stringContaining('--vehicle-marker-bearing:89.'),
+      }),
+    )
+    vi.unstubAllGlobals()
+  })
+
   it('draws the route line when guidance starts', async () => {
     render(
       <TmapPanel
@@ -173,16 +347,267 @@ describe('TmapPanel', () => {
             { lat: 37, lng: 126.5 },
             { lat: 37, lng: 127 },
           ],
-          strokeWeight: 8,
+          strokeWeight: 10,
         }),
       )
     })
+  })
+
+  it('draws traffic-aware route segments with congestion colors', async () => {
+    render(
+      <TmapPanel
+        route={{
+          coordinates: [
+            { lat: 37, lng: 126 },
+            { lat: 37, lng: 126.5 },
+            { lat: 37, lng: 127 },
+          ],
+          trafficSegments: [
+            {
+              coordinates: [
+                { lat: 37, lng: 126 },
+                { lat: 37, lng: 126.5 },
+              ],
+              congestion: 1,
+            },
+            {
+              coordinates: [
+                { lat: 37, lng: 126.5 },
+                { lat: 37, lng: 127 },
+              ],
+              congestion: 4,
+            },
+          ],
+          summary: {
+            distanceMeters: 1000,
+            durationSeconds: 120,
+          },
+        }}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(window.Tmapv3!.Polyline).toHaveBeenCalledWith(
+        expect.objectContaining({
+          path: [
+            { lat: 37, lng: 126 },
+            { lat: 37, lng: 126.5 },
+          ],
+          strokeColor: '#16a34a',
+          strokeWeight: 10,
+        }),
+      )
+    })
+    expect(window.Tmapv3!.Polyline).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: [
+          { lat: 37, lng: 126.5 },
+          { lat: 37, lng: 127 },
+        ],
+        strokeColor: '#dc2626',
+      }),
+    )
+  })
+
+  it('keeps a base remaining route line under partial traffic segments', async () => {
+    render(
+      <TmapPanel
+        route={{
+          coordinates: [
+            { lat: 37, lng: 126 },
+            { lat: 37, lng: 126.5 },
+            { lat: 37, lng: 127 },
+          ],
+          trafficSegments: [
+            {
+              coordinates: [
+                { lat: 37, lng: 126 },
+                { lat: 37, lng: 126.5 },
+              ],
+              congestion: 1,
+            },
+          ],
+          summary: {
+            distanceMeters: 1000,
+            durationSeconds: 120,
+          },
+        }}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(window.Tmapv3!.Polyline).toHaveBeenCalledWith(
+        expect.objectContaining({
+          path: [
+            { lat: 37, lng: 126 },
+            { lat: 37, lng: 126.5 },
+            { lat: 37, lng: 127 },
+          ],
+          strokeColor: '#2563eb',
+        }),
+      )
+    })
+    expect(window.Tmapv3!.Polyline).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: [
+          { lat: 37, lng: 126 },
+          { lat: 37, lng: 126.5 },
+        ],
+        strokeColor: '#16a34a',
+      }),
+    )
+  })
+
+  it('falls back to the remaining route line when traffic segments collapse during simulation', async () => {
+    render(
+      <TmapPanel
+        route={{
+          coordinates: [
+            { lat: 37, lng: 126 },
+            { lat: 37, lng: 126.5 },
+            { lat: 37, lng: 127 },
+          ],
+          trafficSegments: [
+            {
+              coordinates: [
+                { lat: 37, lng: 126 },
+                { lat: 37, lng: 126.5 },
+              ],
+              congestion: 1,
+            },
+          ],
+          summary: {
+            distanceMeters: 1000,
+            durationSeconds: 120,
+          },
+        }}
+        simulationPosition={{ lat: 37, lng: 126.5 }}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(window.Tmapv3!.Polyline).toHaveBeenCalledWith(
+        expect.objectContaining({
+          path: [
+            { lat: 37, lng: 126.5 },
+            { lat: 37, lng: 127 },
+          ],
+          strokeWeight: 10,
+        }),
+      )
+    })
+  })
+
+  it('removes the previous route line before drawing the replacement during simulation', async () => {
+    const route = {
+      coordinates: [
+        { lat: 37, lng: 126 },
+        { lat: 37, lng: 126.5 },
+        { lat: 37, lng: 127 },
+      ],
+      summary: {
+        distanceMeters: 1000,
+        durationSeconds: 120,
+      },
+    }
+    const { rerender } = render(<TmapPanel route={route} />)
+
+    await waitFor(() => {
+      expect(window.Tmapv3!.Polyline).toHaveBeenCalledTimes(1)
+    })
+
+    rerender(
+      <TmapPanel
+        route={route}
+        simulationPosition={{ lat: 37, lng: 126.5 }}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(window.Tmapv3!.Polyline).toHaveBeenCalledTimes(2)
+    })
+
+    const removePreviousLineOrder = polylineSetMap.mock.invocationCallOrder[0]
+    const replacementLineOrder = vi.mocked(window.Tmapv3!.Polyline).mock.invocationCallOrder[1]
+
+    expect(removePreviousLineOrder).toBeLessThan(replacementLineOrder)
+    expect(polylineSetMap).toHaveBeenCalledWith(null)
+  })
+
+  it('keeps the existing route line when simulation starts at the same first coordinate', async () => {
+    const route = {
+      coordinates: [
+        { lat: 37, lng: 126 },
+        { lat: 37, lng: 126.5 },
+        { lat: 37, lng: 127 },
+      ],
+      summary: {
+        distanceMeters: 1000,
+        durationSeconds: 120,
+      },
+    }
+    const { rerender } = render(<TmapPanel route={route} />)
+
+    await waitFor(() => {
+      expect(window.Tmapv3!.Polyline).toHaveBeenCalledTimes(1)
+    })
+
+    rerender(
+      <TmapPanel
+        route={route}
+        simulationPosition={{ lat: 37, lng: 126 }}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(setCenter).toHaveBeenCalled()
+    })
+
+    expect(window.Tmapv3!.Polyline).toHaveBeenCalledTimes(1)
+    expect(polylineSetMap).not.toHaveBeenCalledWith(null)
   })
 
   it('keeps the full route visible before simulation even when current GPS is away from the route', async () => {
     render(
       <TmapPanel
         currentPosition={{ lat: 38, lng: 128 }}
+        route={{
+          coordinates: [
+            { lat: 37, lng: 126 },
+            { lat: 37, lng: 126.5 },
+            { lat: 37, lng: 127 },
+          ],
+          summary: {
+            distanceMeters: 1000,
+            durationSeconds: 120,
+          },
+        }}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(window.Tmapv3!.Polyline).toHaveBeenCalledWith(
+        expect.objectContaining({
+          path: [
+            { lat: 37, lng: 126 },
+            { lat: 37, lng: 126.5 },
+            { lat: 37, lng: 127 },
+          ],
+        }),
+      )
+    })
+  })
+
+  it('keeps the full route visible before simulation when the origin is current location', async () => {
+    render(
+      <TmapPanel
+        currentPosition={{ lat: 38, lng: 128 }}
+        origin={{
+          id: 'current-location',
+          name: '현재 위치',
+          address: 'GPS 위치',
+          coordinate: { lat: 38, lng: 128 },
+        }}
         route={{
           coordinates: [
             { lat: 37, lng: 126 },
@@ -260,5 +685,104 @@ describe('TmapPanel', () => {
         position: { lat: 37, lng: 126.4 },
       }),
     )
+  })
+
+  it('animates marker and camera updates between simulation coordinates instead of jumping instantly', async () => {
+    let frameTime = 0
+    const rafCallbacks: FrameRequestCallback[] = []
+    const requestAnimationFrameSpy = vi
+      .spyOn(window, 'requestAnimationFrame')
+      .mockImplementation((callback) => {
+        rafCallbacks.push(callback)
+        return rafCallbacks.length
+      })
+    const cancelAnimationFrameSpy = vi
+      .spyOn(window, 'cancelAnimationFrame')
+      .mockImplementation(() => undefined)
+
+    const route = {
+      coordinates: [
+        { lat: 37, lng: 126 },
+        { lat: 37, lng: 127 },
+      ],
+      summary: {
+        distanceMeters: 1000,
+        durationSeconds: 120,
+      },
+    }
+
+    const { rerender } = render(
+      <TmapPanel
+        route={route}
+        simulationPosition={{ lat: 37, lng: 126 }}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(setCenter).toHaveBeenCalledWith({ lat: 37, lng: 126 })
+    })
+
+    setCenter.mockClear()
+    markerSetPosition.mockClear()
+    rerender(
+      <TmapPanel
+        route={route}
+        simulationPosition={{ lat: 37, lng: 127 }}
+      />,
+    )
+
+    expect(setCenter).not.toHaveBeenCalledWith({ lat: 37, lng: 127 })
+
+    rafCallbacks.shift()?.(frameTime)
+    expect(setCenter).toHaveBeenLastCalledWith({ lat: 37, lng: 126 })
+
+    frameTime += 110
+    rafCallbacks.shift()?.(frameTime)
+    expect(setCenter).toHaveBeenLastCalledWith(expect.objectContaining({
+      lat: 37,
+      lng: expect.closeTo(126.875, 3),
+    }))
+    expect(markerSetPosition).toHaveBeenLastCalledWith(expect.objectContaining({
+      lat: 37,
+      lng: expect.closeTo(126.875, 3),
+    }))
+
+    frameTime += 110
+    rafCallbacks.shift()?.(frameTime)
+    expect(setCenter).toHaveBeenLastCalledWith({ lat: 37, lng: 127 })
+
+    requestAnimationFrameSpy.mockRestore()
+    cancelAnimationFrameSpy.mockRestore()
+  })
+
+  it('applies bearing before resolving the offset camera center to avoid lateral shake while turning', async () => {
+    render(
+      <TmapPanel
+        route={{
+          coordinates: [
+            { lat: 37, lng: 126 },
+            { lat: 38, lng: 126 },
+          ],
+          summary: {
+            distanceMeters: 1000,
+            durationSeconds: 120,
+          },
+        }}
+        simulationPosition={{ lat: 37.5, lng: 126 }}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(setCenter).toHaveBeenCalled()
+    })
+
+    const lastBearingCallOrder = setBearing.mock.invocationCallOrder[
+      setBearing.mock.invocationCallOrder.length - 1
+    ]
+    const lastCenterCallOrder = setCenter.mock.invocationCallOrder[
+      setCenter.mock.invocationCallOrder.length - 1
+    ]
+
+    expect(lastBearingCallOrder).toBeLessThan(lastCenterCallOrder)
   })
 })

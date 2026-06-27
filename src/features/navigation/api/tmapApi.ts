@@ -1,5 +1,14 @@
 import axios from 'axios'
-import type { Coordinate, NavigationRoute, Place, RoadMatchPoint, RouteManeuver, SafetyAlert } from '../types'
+import type {
+  Coordinate,
+  NavigationRoute,
+  Place,
+  RoadMatchPoint,
+  RouteManeuver,
+  RouteTrafficSegment,
+  SafetyAlert,
+  TrafficCongestion,
+} from '../types'
 
 interface HttpClient {
   get: typeof axios.get
@@ -31,6 +40,7 @@ interface TmapFeature {
   geometry?: {
     type?: string
     coordinates?: unknown
+    traffic?: unknown
   }
   properties?: {
     index?: number | string
@@ -43,6 +53,7 @@ interface TmapFeature {
     distance?: number | string
     roadType?: number | string
     facilityType?: number | string
+    congestion?: number | string
     totalDistance?: number | string
     totalTime?: number | string
   }
@@ -171,6 +182,7 @@ function normalizeRoute(data: TmapRouteResponse): NavigationRoute {
   const features = data.features ?? []
   const coordinates = features.flatMap((feature) => extractLineCoordinates(feature.geometry))
   const firstProperties = features[0]?.properties
+  const trafficSegments = normalizeTrafficSegments(features)
 
   return {
     coordinates,
@@ -180,6 +192,7 @@ function normalizeRoute(data: TmapRouteResponse): NavigationRoute {
     },
     maneuvers: normalizeManeuvers(features, coordinates),
     safetyAlerts: normalizeSafetyAlerts(features, coordinates),
+    ...(trafficSegments.length ? { trafficSegments } : {}),
   }
 }
 
@@ -207,6 +220,44 @@ function extractLineCoordinates(geometry?: TmapFeature['geometry']): Coordinate[
   }
 
   return []
+}
+
+function normalizeTrafficSegments(features: TmapFeature[]): RouteTrafficSegment[] {
+  return features.flatMap((feature) => {
+    const coordinates = extractLineCoordinates(feature.geometry)
+    const congestion = getTrafficCongestion(feature)
+
+    if (coordinates.length < 2 || congestion === undefined) {
+      return []
+    }
+
+    return [{
+      coordinates,
+      congestion,
+    }]
+  })
+}
+
+function getTrafficCongestion(feature: TmapFeature): TrafficCongestion | undefined {
+  const propertyCongestion = Number(feature.properties?.congestion)
+
+  if (isTrafficCongestion(propertyCongestion)) {
+    return propertyCongestion
+  }
+
+  if (Array.isArray(feature.geometry?.traffic)) {
+    const geometryCongestion = Number(feature.geometry.traffic[0])
+
+    if (isTrafficCongestion(geometryCongestion)) {
+      return geometryCongestion
+    }
+  }
+
+  return undefined
+}
+
+function isTrafficCongestion(value: number): value is TrafficCongestion {
+  return Number.isInteger(value) && value >= 0 && value <= 4
 }
 
 function parseCoordinate(value: unknown): Array<Coordinate | null> {
