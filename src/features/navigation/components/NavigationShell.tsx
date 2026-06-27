@@ -2,14 +2,17 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import {
   ArrowBendUpLeft,
   ArrowBendUpRight,
-  ArrowClockwise,
   ArrowUp,
+  Buildings,
+  CaretLeft,
   CloudSun,
   Clock,
+  HouseLine,
   MagnifyingGlass,
   MapPin,
   Play,
   RoadHorizon,
+  Stop,
   Timer,
   Warning,
   X,
@@ -20,7 +23,7 @@ import { getCurrentAddress, getRoadMatch, getRoute, searchPlaces } from '../api/
 import { createRoundedRoutePath } from '../map/routeGeometry'
 import { createRouteSimulationPlan, getSimulatedRoutePosition } from '../simulation/routeSimulation'
 import { getSimulationDurationMs } from '../simulation/simulationTiming'
-import type { Coordinate, NavigationRoute, Place, RoadMatchPoint, RouteManeuver } from '../types'
+import type { Coordinate, NavigationRoute, Place, RoadMatchPoint, RouteManeuver, SafetyAlert } from '../types'
 import { TmapPanel } from './TmapPanel'
 
 type SearchFieldId = 'origin' | 'destination'
@@ -38,7 +41,77 @@ const ADDRESS_COORDINATE_PRECISION = 5
 const WEATHER_COORDINATE_PRECISION = 3
 const GUIDANCE_DISTANCE_STEP_MIN_METERS = 3
 const GUIDANCE_DISTANCE_STEP_MAX_METERS = 10
+const GUIDANCE_DISTANCE_SHARED_STEP_KEY = '__guidance-distance-shared-step__'
+const ROUTE_SEARCH_SUMMARY_FIELDS_HEIGHT = 140
+const ROUTE_SEARCH_EDITOR_FIELDS_HEIGHT = 380
 const SIMULATION_UI_UPDATE_INTERVAL_MS = 200
+const DRIVING_ASSIST_DEBUG_QUERY_PARAM = 'debugSigns'
+const DRIVING_ASSIST_DEBUG_SEQUENCE_INTERVAL_MS = 1400
+const SAVED_PLACES: Place[] = [
+  {
+    id: 'saved-home',
+    name: '집',
+    address: '서울 중구 세종대로 110',
+    coordinate: { lat: 37.5547, lng: 126.9706 },
+  },
+  {
+    id: 'saved-work',
+    name: '회사',
+    address: '서울 강남구 테헤란로 152',
+    coordinate: { lat: 37.4979, lng: 127.0276 },
+  },
+]
+const DEBUG_DRIVING_ASSIST_SEQUENCE: DrivingAssistInfo[] = [
+  {
+    alert: {
+      type: 'caution',
+      label: '어린이보호구역',
+      distanceLabel: '40m',
+      schoolZone: true,
+    },
+  },
+  { speedLimitKph: 30 },
+  {
+    alert: {
+      type: 'enforcement',
+      label: '단속구간',
+      distanceLabel: '80m',
+      schoolZone: false,
+    },
+  },
+  {
+    alert: {
+      type: 'curve',
+      label: '급커브',
+      distanceLabel: '120m',
+      schoolZone: false,
+    },
+  },
+  {
+    alert: {
+      type: 'falling-rock',
+      label: '낙석주의',
+      distanceLabel: '180m',
+      schoolZone: false,
+    },
+  },
+  {
+    alert: {
+      type: 'accident',
+      label: '사고주의',
+      distanceLabel: '240m',
+      schoolZone: false,
+    },
+  },
+  {
+    alert: {
+      type: 'caution',
+      label: '주의',
+      distanceLabel: '300m',
+      schoolZone: false,
+    },
+  },
+]
 
 export function NavigationShell() {
   const shouldReduceMotion = useReducedMotion()
@@ -74,19 +147,27 @@ export function NavigationShell() {
   const originSearch = useQuery({
     queryKey: ['places', debouncedOriginKeyword],
     queryFn: ({ signal }) => searchPlaces(debouncedOriginKeyword, undefined, signal),
-    enabled: activeField === 'origin' && debouncedOriginKeyword.length >= 2,
+    enabled: activeField === 'origin' && debouncedOriginKeyword.length >= 2 && debouncedOriginKeyword !== origin?.name,
     placeholderData: keepPreviousData,
   })
 
   const destinationSearch = useQuery({
     queryKey: ['places', debouncedDestinationKeyword],
     queryFn: ({ signal }) => searchPlaces(debouncedDestinationKeyword, undefined, signal),
-    enabled: activeField === 'destination' && debouncedDestinationKeyword.length >= 2,
+    enabled: activeField === 'destination' && debouncedDestinationKeyword.length >= 2 && debouncedDestinationKeyword !== destination?.name,
     placeholderData: keepPreviousData,
   })
 
   const routeQuery = useQuery({
-    queryKey: ['route', origin?.id, destination?.id],
+    queryKey: [
+      'route',
+      origin?.id,
+      origin?.coordinate.lat,
+      origin?.coordinate.lng,
+      destination?.id,
+      destination?.coordinate.lat,
+      destination?.coordinate.lng,
+    ],
     queryFn: ({ signal }) => getRoute(origin!.coordinate, destination!.coordinate, undefined, signal),
     enabled: locationStatus === 'granted' && Boolean(origin && destination),
   })
@@ -159,6 +240,7 @@ export function NavigationShell() {
         travelledDistanceMeters,
       })
     : undefined
+  const debugDrivingAssist = useDrivingAssistDebugSequence(Boolean(activeRoute))
   const maneuverGuidance = activeRoute
     ? getManeuverGuidance(
       activeRoute,
@@ -233,7 +315,7 @@ export function NavigationShell() {
 
     setOrigin(currentPlace)
     setOriginKeyword(currentPlace.name)
-    setActiveField('destination')
+    setActiveField(null)
     setHighlightedIndex(0)
     setRouteSearchOpen(true)
   }, [currentPosition, requestCurrentLocation])
@@ -263,6 +345,11 @@ export function NavigationShell() {
 
     setActiveField(null)
     setHighlightedIndex(0)
+  }
+
+  const selectSavedPlace = (field: SearchFieldId, place: Place) => {
+    selectPlace(field, place)
+    setActiveField(null)
   }
 
   const handleSearchKeyDown = (field: SearchFieldId, event: KeyboardEvent<HTMLInputElement>) => {
@@ -313,6 +400,17 @@ export function NavigationShell() {
     simulationLastUiUpdateAtRef.current = undefined
     setSimulationRunning(true)
   }
+
+  const stopSimulation = useCallback(() => {
+    if (animationFrameRef.current !== undefined) {
+      window.cancelAnimationFrame(animationFrameRef.current)
+      animationFrameRef.current = undefined
+    }
+
+    simulationStartedAtRef.current = undefined
+    simulationLastUiUpdateAtRef.current = undefined
+    setSimulationRunning(false)
+  }, [])
 
   useEffect(() => {
     const route = activeRoute
@@ -393,7 +491,7 @@ export function NavigationShell() {
               searchOpen={routeSearchOpen}
               onOpenSearch={() => {
                 setRouteSearchOpen(true)
-                setActiveField('destination')
+                setActiveField(null)
               }}
               onRequestLocation={requestCurrentLocation}
             />
@@ -407,6 +505,7 @@ export function NavigationShell() {
           motionTiming={motionTiming}
           originKeyword={originKeyword}
           places={activePlaces}
+          savedPlaces={SAVED_PLACES}
           showSuggestions={showSuggestions}
           onChangeOrigin={(value) => {
             setOriginKeyword(value)
@@ -424,10 +523,15 @@ export function NavigationShell() {
                   setRouteSearchOpen(false)
                   setActiveField(null)
                 }}
+                onBackToSummary={() => {
+                  setActiveField(null)
+                  setHighlightedIndex(0)
+                }}
                 onFocusOrigin={() => setActiveField('origin')}
                 onFocusDestination={() => setActiveField('destination')}
                 onKeyDown={(field, event) => handleSearchKeyDown(field, event)}
                 onSelectPlace={(place) => selectPlace(activeField ?? 'destination', place)}
+                onSelectSavedPlace={selectSavedPlace}
                 onFillOriginWithCurrentLocation={fillOriginWithCurrentLocation}
                 />
               ) : null}
@@ -435,11 +539,11 @@ export function NavigationShell() {
           </>
         ) : (
           <DrivingHud
-            assist={drivingAssist}
+            assist={debugDrivingAssist ?? drivingAssist}
             guidance={maneuverGuidance}
             motionTiming={motionTiming}
             simulationRunning={simulationRunning}
-            onStartSimulation={startSimulation}
+            onToggleSimulation={simulationRunning ? stopSimulation : startSimulation}
           />
         )}
 
@@ -466,14 +570,17 @@ function RouteSearchSheet({
   motionTiming,
   originKeyword,
   places,
+  savedPlaces,
   showSuggestions,
   onChangeOrigin,
   onChangeDestination,
   onClose,
+  onBackToSummary,
   onFocusOrigin,
   onFocusDestination,
   onKeyDown,
   onSelectPlace,
+  onSelectSavedPlace,
   onFillOriginWithCurrentLocation,
 }: {
   activeField: SearchFieldId | null
@@ -483,30 +590,74 @@ function RouteSearchSheet({
   motionTiming: MotionTiming
   originKeyword: string
   places: Place[]
+  savedPlaces: Place[]
   showSuggestions: boolean
   onChangeOrigin: (value: string) => void
   onChangeDestination: (value: string) => void
   onClose: () => void
+  onBackToSummary: () => void
   onFocusOrigin: () => void
   onFocusDestination: () => void
   onKeyDown: (field: SearchFieldId, event: KeyboardEvent<HTMLInputElement>) => void
   onSelectPlace: (place: Place) => void
+  onSelectSavedPlace: (field: SearchFieldId, place: Place) => void
   onFillOriginWithCurrentLocation: () => void
 }) {
   const activeListId = activeField ? `place-results-${activeField}` : 'place-results'
+  const isEditingField = activeField !== null
+  const activeFieldTitle = activeField === 'origin' ? '출발 위치' : '목적지'
+  const routeSearchFieldsHeight = isEditingField
+    ? ROUTE_SEARCH_EDITOR_FIELDS_HEIGHT
+    : ROUTE_SEARCH_SUMMARY_FIELDS_HEIGHT
+  const routeSearchLayoutTransition = {
+    ease: motionTiming.duration === 0 ? undefined : [0.34, 0, 0.2, 1] as [number, number, number, number],
+    duration: motionTiming.duration === 0 ? 0 : 0.36,
+  }
+  const routeSearchItemTransition = {
+    ...motionTiming,
+    duration: motionTiming.duration === 0 ? 0 : 0.18,
+  }
+  const routeSearchGroupVariants = {
+    hidden: {
+      transition: {
+        staggerChildren: motionTiming.duration === 0 ? 0 : 0.035,
+        staggerDirection: -1,
+      },
+    },
+    visible: {
+      transition: {
+        delayChildren: motionTiming.duration === 0 ? 0 : 0.04,
+        staggerChildren: motionTiming.duration === 0 ? 0 : 0.045,
+      },
+    },
+  }
+  const routeSearchElementVariants = {
+    hidden: {
+      opacity: 0,
+      y: motionTiming.duration === 0 ? 0 : 8,
+      scale: motionTiming.duration === 0 ? 1 : 0.985,
+      transition: routeSearchItemTransition,
+    },
+    visible: {
+      opacity: 1,
+      y: 0,
+      scale: 1,
+      transition: routeSearchItemTransition,
+    },
+  }
   const renderSuggestions = (field: SearchFieldId) => {
     const showForField = showSuggestions && activeField === field
 
     return (
       <div
-        className="mt-2 min-h-0 overflow-hidden rounded-lg bg-[var(--nav-panel)]"
-        data-testid={showForField ? 'route-search-results' : undefined}
+        className="mt-3 min-h-[10.5rem] overflow-hidden rounded-xl"
+        data-testid={showForField ? 'route-search-results' : 'route-search-results-empty'}
       >
         <AnimatePresence initial={false} mode="wait">
           {showForField ? (
             <PlaceResults
               activeIndex={activeIndex}
-              key={field}
+              key={`${field}-results`}
               label={activeLabel}
               listId={activeListId}
               motionTiming={motionTiming}
@@ -516,12 +667,12 @@ function RouteSearchSheet({
           ) : (
             <motion.div
               aria-hidden="true"
-              className="h-full"
-              key="empty-results"
-              initial={{ opacity: 0 }}
+              className="h-[10.5rem]"
+              key={`${field}-empty`}
+              initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={motionTiming}
+              exit={{ opacity: 0, y: -4 }}
+              transition={routeSearchItemTransition}
             />
           )}
         </AnimatePresence>
@@ -531,62 +682,187 @@ function RouteSearchSheet({
 
   return (
     <motion.div
-      className="pointer-events-none absolute bottom-18 left-1/2 z-20 h-[22rem] w-[min(31rem,calc(100%-1.5rem))] -translate-x-1/2 text-[var(--nav-ink)] max-sm:bottom-16 max-sm:h-[21rem] max-sm:w-[calc(100%-1rem)]"
+      className="pointer-events-none absolute bottom-18 left-1/2 z-20 w-[min(34rem,calc(100%-1.5rem))] -translate-x-1/2 text-[var(--nav-ink)] max-sm:bottom-15 max-sm:w-[calc(100%-1rem)]"
       initial={{ opacity: 0, y: 22, scale: 0.98 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: 14, scale: 0.985 }}
-      transition={motionTiming}
+      transition={routeSearchLayoutTransition}
     >
       <motion.div
-        className="pointer-events-auto relative grid h-full grid-rows-[auto_1fr] overflow-hidden rounded-xl bg-[var(--nav-surface-raised)] p-3 shadow-[var(--nav-shadow-panel)]"
-        transition={motionTiming}
+        className="pointer-events-auto relative rounded-[1.25rem] bg-[var(--nav-surface-raised)] p-3 shadow-[var(--nav-shadow-panel)]"
+        transition={routeSearchLayoutTransition}
       >
         <motion.button
           aria-label="경로 검색 닫기"
-          className="absolute right-2 top-2 z-10 grid h-11 w-11 place-items-center rounded-full text-[var(--nav-muted)] transition hover:bg-[var(--nav-panel)] hover:text-[var(--nav-ink)]"
+          className="absolute -right-2 -top-2 z-10 grid h-9 w-9 place-items-center rounded-full bg-white text-[var(--nav-muted)] shadow-[0_4px_10px_rgba(15,23,42,0.12)] transition hover:text-[var(--nav-ink)]"
           onClick={onClose}
           whileTap={motionTiming.duration === 0 ? undefined : { scale: 0.94 }}
           type="button"
         >
-          <X className="h-5 w-5" weight="bold" />
+          <X className="h-4.5 w-4.5" weight="bold" />
         </motion.button>
 
         <motion.div
-          className="space-y-3 pt-1.5"
+          animate={{ height: routeSearchFieldsHeight }}
+          className="grid overflow-hidden"
           data-testid="route-search-fields"
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ ...motionTiming, delay: motionTiming.duration === 0 ? 0 : 0.07 }}
+          initial={false}
+          transition={routeSearchLayoutTransition}
         >
-          <SearchField
-            active={activeField === 'origin'}
-            activeOptionId={showSuggestions && activeField === 'origin' ? `${activeListId}-option-${activeIndex}` : undefined}
-            controlsId={activeListId}
-            icon={<MapPin className="h-5 w-5" weight="bold" />}
-            label="출발지"
-            value={originKeyword}
-            onChange={onChangeOrigin}
-            onFocus={onFocusOrigin}
-            onKeyDown={(event) => onKeyDown('origin', event)}
-            placeholder="출발지 검색"
-            onFillCurrentLocation={onFillOriginWithCurrentLocation}
-          />
-          {activeField === 'origin' ? renderSuggestions('origin') : null}
+            <AnimatePresence initial={false} mode="wait">
+              {!isEditingField ? (
+                <motion.div
+                  animate="visible"
+                  className="grid grid-cols-[1rem_1fr] gap-x-3 rounded-2xl bg-white p-3"
+                  exit="hidden"
+                  initial="hidden"
+                  key="route-fields-summary"
+                  variants={routeSearchGroupVariants}
+                >
+                  <motion.div
+                    className="grid content-start justify-center pt-4.5"
+                    variants={routeSearchElementVariants}
+                  >
+                    <span className="size-2 rounded-full bg-[var(--nav-primary)]" />
+                    <span className="mx-auto h-[3.8rem] w-px bg-[var(--nav-border)]" />
+                    <span className="size-2 rounded-full bg-[var(--nav-guidance)]" />
+                  </motion.div>
+                  <motion.div
+                    className="grid gap-3"
+                    variants={routeSearchGroupVariants}
+                  >
+                    <motion.div variants={routeSearchElementVariants}>
+                      <SearchField
+                        active={false}
+                        activeOptionId={undefined}
+                        expanded={false}
+                        controlsId={undefined}
+                        icon={<MapPin className="h-5 w-5" weight="bold" />}
+                        label="출발 위치"
+                        labelHidden
+                        value={originKeyword}
+                        onChange={onChangeOrigin}
+                        onFocus={onFocusOrigin}
+                        onKeyDown={(event) => onKeyDown('origin', event)}
+                        placeholder="출발 위치"
+                      />
+                    </motion.div>
+                    <motion.div variants={routeSearchElementVariants}>
+                      <SearchField
+                        active={false}
+                        activeOptionId={undefined}
+                        expanded={false}
+                        controlsId={undefined}
+                        icon={<MagnifyingGlass className="h-5 w-5" weight="bold" />}
+                        label="목적지"
+                        labelHidden
+                        value={destinationKeyword}
+                        onChange={onChangeDestination}
+                        onFocus={onFocusDestination}
+                        onKeyDown={(event) => onKeyDown('destination', event)}
+                        placeholder="목적지"
+                      />
+                    </motion.div>
+                  </motion.div>
+                </motion.div>
+              ) : (
+                <motion.div
+                  animate="visible"
+                  className="rounded-2xl bg-white p-3"
+                  exit="hidden"
+                  initial="hidden"
+                  key={`route-field-editor-${activeField}`}
+                  variants={routeSearchGroupVariants}
+                >
+                <motion.div
+                  className="mb-3 flex items-center gap-2"
+                  variants={routeSearchElementVariants}
+                >
+                  <motion.button
+                    aria-label="경로 입력으로 돌아가기"
+                    className="grid h-9 w-9 place-items-center rounded-full text-[var(--nav-muted)] transition hover:bg-[var(--nav-panel)] hover:text-[var(--nav-ink)]"
+                    onClick={onBackToSummary}
+                    type="button"
+                    whileTap={motionTiming.duration === 0 ? undefined : { scale: 0.94 }}
+                  >
+                    <CaretLeft className="h-5 w-5" weight="bold" />
+                  </motion.button>
+                  <span className="text-[15px] font-bold text-[var(--nav-ink)]">{activeFieldTitle}</span>
+                </motion.div>
 
-          <SearchField
-            active={activeField === 'destination'}
-            activeOptionId={showSuggestions && activeField === 'destination' ? `${activeListId}-option-${activeIndex}` : undefined}
-            autoFocus
-            controlsId={activeListId}
-            icon={<MagnifyingGlass className="h-5 w-5" weight="bold" />}
-            label="도착지"
-            value={destinationKeyword}
-            onChange={onChangeDestination}
-            onFocus={onFocusDestination}
-            onKeyDown={(event) => onKeyDown('destination', event)}
-            placeholder="목적지 검색"
-          />
-          {activeField === 'destination' ? renderSuggestions('destination') : null}
+                {activeField === 'origin' ? (
+                  <>
+                    <motion.div
+                      variants={routeSearchElementVariants}
+                    >
+                      <SearchField
+                        active
+                        activeOptionId={showSuggestions ? `${activeListId}-option-${activeIndex}` : undefined}
+                        autoFocus
+                        expanded={showSuggestions}
+                        controlsId={activeListId}
+                        icon={<MapPin className="h-5 w-5" weight="bold" />}
+                        label="출발 위치"
+                        labelHidden
+                        value={originKeyword}
+                        onChange={onChangeOrigin}
+                        onFocus={onFocusOrigin}
+                        onKeyDown={(event) => onKeyDown('origin', event)}
+                        placeholder="출발지 검색"
+                      />
+                    </motion.div>
+                    <motion.div
+                      variants={routeSearchElementVariants}
+                    >
+                      <SavedPlaceButtons
+                        field="origin"
+                        places={savedPlaces}
+                        onFillCurrentLocation={onFillOriginWithCurrentLocation}
+                        onSelect={onSelectSavedPlace}
+                      />
+                    </motion.div>
+                    <motion.div variants={routeSearchElementVariants}>
+                      {renderSuggestions('origin')}
+                    </motion.div>
+                  </>
+                ) : (
+                  <>
+                    <motion.div
+                      variants={routeSearchElementVariants}
+                    >
+                      <SearchField
+                        active
+                        activeOptionId={showSuggestions ? `${activeListId}-option-${activeIndex}` : undefined}
+                        autoFocus
+                        expanded={showSuggestions}
+                        controlsId={activeListId}
+                        icon={<MagnifyingGlass className="h-5 w-5" weight="bold" />}
+                        label="목적지"
+                        labelHidden
+                        value={destinationKeyword}
+                        onChange={onChangeDestination}
+                        onFocus={onFocusDestination}
+                        onKeyDown={(event) => onKeyDown('destination', event)}
+                        placeholder="목적지 검색"
+                      />
+                    </motion.div>
+                    <motion.div
+                      variants={routeSearchElementVariants}
+                    >
+                      <SavedPlaceButtons
+                        field="destination"
+                        places={savedPlaces}
+                        onSelect={onSelectSavedPlace}
+                      />
+                    </motion.div>
+                    <motion.div variants={routeSearchElementVariants}>
+                      {renderSuggestions('destination')}
+                    </motion.div>
+                  </>
+                )}
+                </motion.div>
+              )}
+            </AnimatePresence>
         </motion.div>
       </motion.div>
     </motion.div>
@@ -670,13 +946,13 @@ function DrivingHud({
   guidance,
   motionTiming,
   simulationRunning,
-  onStartSimulation,
+  onToggleSimulation,
 }: {
   assist?: DrivingAssistInfo
   guidance?: ManeuverGuidance
   motionTiming: MotionTiming
   simulationRunning: boolean
-  onStartSimulation: () => void
+  onToggleSimulation: () => void
 }) {
   return (
     <motion.div
@@ -686,56 +962,46 @@ function DrivingHud({
       transition={motionTiming}
     >
       <motion.div
-        className="absolute left-0 top-0 w-[min(26rem,calc(100%-7rem))] overflow-hidden rounded-br-xl bg-[var(--nav-guidance)] text-white shadow-[0_5px_12px_rgba(13,97,65,0.18)] max-sm:w-[calc(100%-5rem)]"
+        className="absolute left-0 top-0 w-fit max-w-[min(22rem,calc(100%-7rem))] overflow-hidden rounded-br-xl bg-[var(--nav-guidance)] text-white shadow-[0_5px_12px_rgba(13,97,65,0.18)] max-sm:max-w-[calc(100%-5rem)]"
         data-testid="primary-maneuver-card"
         initial={{ opacity: 0, x: -24, y: -8 }}
         animate={{ opacity: 1, x: 0, y: 0 }}
         transition={motionTiming}
       >
-        <div className="flex h-[7rem] items-center gap-4 px-5 py-3 max-sm:h-[5.75rem] max-sm:gap-3 max-sm:px-3">
+        <div className="flex h-[7rem] max-w-full items-center gap-3.5 py-3 pl-5 pr-8 max-sm:h-[5.75rem] max-sm:gap-3 max-sm:pl-3 max-sm:pr-5">
           <ManeuverIcon className="h-20 w-20 stroke-[3.5] max-sm:h-16 max-sm:w-16" type={guidance?.current.type ?? 'straight'} />
           <div className="min-w-0">
             <div className="flex items-baseline gap-2">
               <span className="text-5xl font-bold leading-none max-sm:text-4xl">{guidance?.current.distanceValue ?? '0'}</span>
               <span className="text-2xl font-bold max-sm:text-xl">{guidance?.current.distanceUnit ?? 'm'}</span>
             </div>
-            <div className="mt-1 text-2xl font-semibold max-sm:text-xl">{guidance?.current.label ?? '경로 안내'}</div>
+            <div className="mt-1 truncate text-2xl font-semibold max-sm:text-xl">{guidance?.current.label ?? '경로 안내'}</div>
           </div>
         </div>
       </motion.div>
 
       {guidance?.next ? (
         <motion.div
-          className="absolute left-0 top-[7rem] flex h-14 w-[min(16rem,calc(100%-10rem))] items-center gap-3 rounded-br-xl bg-[var(--nav-guidance-strong)] px-5 text-white shadow-[0_4px_10px_rgba(13,97,65,0.16)] max-sm:top-[5.75rem] max-sm:h-12 max-sm:w-[min(13.5rem,calc(100%-7rem))] max-sm:px-3"
+          className="absolute left-0 top-[7rem] flex h-14 w-fit max-w-[calc(100%-10rem)] items-center gap-3 rounded-br-xl bg-[var(--nav-guidance-strong)] py-0 pl-5 pr-7 text-white shadow-[0_4px_10px_rgba(13,97,65,0.16)] max-sm:top-[5.75rem] max-sm:h-12 max-sm:max-w-[calc(100%-7rem)] max-sm:pl-3 max-sm:pr-5"
           data-testid="next-maneuver-card"
           initial={{ opacity: 0, x: -18, y: -4 }}
           animate={{ opacity: 1, x: 0, y: 0 }}
           transition={{ ...motionTiming, delay: motionTiming.duration === 0 ? 0 : 0.04 }}
         >
           <ManeuverIcon className="h-7 w-7 stroke-[3] max-sm:h-6 max-sm:w-6" type={guidance.next.type} />
-          <span className="text-2xl font-bold max-sm:text-xl">{guidance.next.distanceLabel}</span>
+          <span className="whitespace-nowrap text-2xl font-bold max-sm:text-xl">{guidance.next.distanceLabel}</span>
         </motion.div>
       ) : null}
 
       {assist ? (
         <motion.div
-          className="absolute left-3 top-[10.9rem] flex min-h-16 w-[min(17.5rem,calc(100%-9rem))] items-center gap-3 rounded-xl bg-white/96 px-3.5 py-2.5 text-[var(--nav-ink)] shadow-[0_6px_18px_rgba(15,23,42,0.16)] backdrop-blur max-sm:left-2 max-sm:top-[9rem] max-sm:w-[min(15.5rem,calc(100%-6rem))]"
-          data-testid="driving-assist-card"
+          className="absolute left-4 top-[11rem] max-sm:left-2 max-sm:top-[9rem]"
+          data-testid="driving-assist-signs"
           initial={{ opacity: 0, x: -12, y: -4 }}
           animate={{ opacity: 1, x: 0, y: 0 }}
           transition={{ ...motionTiming, delay: motionTiming.duration === 0 ? 0 : 0.08 }}
         >
-          <span className={[
-            'grid h-10 w-10 shrink-0 place-items-center rounded-xl text-white',
-            assist.tone === 'warning' ? 'bg-[#e43d30]' : 'bg-[var(--nav-primary)]',
-          ].join(' ')}
-          >
-            <Warning className="h-6 w-6" weight="bold" />
-          </span>
-          <span className="grid min-w-0 gap-0.5">
-            <span className="truncate text-sm font-bold leading-tight">{assist.title}</span>
-            <span className="truncate text-xs font-medium leading-tight text-[var(--nav-muted)]">{assist.detail}</span>
-          </span>
+          <DrivingAssistSigns assist={assist} />
         </motion.div>
       ) : null}
 
@@ -746,18 +1012,17 @@ function DrivingHud({
         transition={motionTiming}
       >
         <motion.button
-          className="pointer-events-auto inline-flex h-11 items-center gap-2 rounded-full bg-[var(--nav-primary)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--nav-primary-hover)] disabled:bg-[var(--nav-disabled)] disabled:text-[var(--nav-subtle)] max-sm:px-3"
-          disabled={simulationRunning}
-          onClick={onStartSimulation}
+          className="pointer-events-auto inline-flex h-11 items-center gap-2 rounded-full bg-[var(--nav-primary)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--nav-primary-hover)] max-sm:px-3"
+          onClick={onToggleSimulation}
           type="button"
-          whileTap={simulationRunning || motionTiming.duration === 0 ? undefined : { scale: 0.97 }}
+          whileTap={motionTiming.duration === 0 ? undefined : { scale: 0.97 }}
         >
           {simulationRunning ? (
-            <Play className="h-4 w-4" weight="fill" />
+            <Stop className="h-4 w-4" weight="fill" />
           ) : (
-            <ArrowClockwise className="h-4 w-4" weight="bold" />
+            <Play className="h-4 w-4" weight="fill" />
           )}
-          <span>{simulationRunning ? '시뮬레이션 중' : '시뮬레이션 시작'}</span>
+          <span>{simulationRunning ? '시뮬레이션 중지' : '시뮬레이션 시작'}</span>
         </motion.button>
       </motion.div>
 
@@ -826,9 +1091,13 @@ function BottomStatusBar({
 }
 
 interface DrivingAssistInfo {
-  title: string
-  detail: string
-  tone: 'info' | 'warning'
+  alert?: {
+    type?: SafetyAlert['type']
+    label: string
+    distanceLabel: string
+    schoolZone: boolean
+  }
+  speedLimitKph?: number
 }
 
 interface ManeuverGuidanceItem {
@@ -846,7 +1115,7 @@ interface ManeuverGuidance {
 
 interface GuidanceDistanceDisplayState {
   displayMeters: number
-  nextStepMeters: number
+  nextStepMeters?: number
 }
 
 type GuidanceDistanceDisplayStore = Map<string, GuidanceDistanceDisplayState>
@@ -872,17 +1141,21 @@ function getManeuverGuidance(
     return createFallbackManeuverGuidance(route, travelledDistanceMeters)
   }
 
+  const sharedStepMeters = getSharedGuidanceDistanceStep(distanceDisplayStore, travelledDistanceMeters)
+
   return {
     current: createManeuverGuidanceItem(
       currentManeuver,
       currentManeuver.distanceFromStartMeters - travelledDistanceMeters,
       distanceDisplayStore,
+      sharedStepMeters,
     ),
     next: nextManeuver
       ? createManeuverGuidanceItem(
         nextManeuver,
         nextManeuver.distanceFromStartMeters - travelledDistanceMeters,
         distanceDisplayStore,
+        sharedStepMeters,
       )
       : undefined,
   }
@@ -911,11 +1184,13 @@ function createManeuverGuidanceItem(
   maneuver: RouteManeuver,
   distanceMeters: number,
   distanceDisplayStore: GuidanceDistanceDisplayStore,
+  stepMeters: number,
 ): ManeuverGuidanceItem {
   const displayDistanceMeters = getSteppedGuidanceDistance(
     distanceDisplayStore,
     maneuver.id,
     distanceMeters,
+    stepMeters,
   )
   const distance = formatGuidanceDistance(displayDistanceMeters)
 
@@ -932,6 +1207,7 @@ function getSteppedGuidanceDistance(
   store: GuidanceDistanceDisplayStore,
   key: string,
   distanceMeters: number,
+  stepMeters: number,
 ) {
   const actualMeters = Math.max(0, Math.round(distanceMeters))
 
@@ -945,7 +1221,6 @@ function getSteppedGuidanceDistance(
   if (!existing || actualMeters > existing.displayMeters || actualMeters === 0) {
     const nextState = {
       displayMeters: actualMeters,
-      nextStepMeters: getRandomGuidanceDistanceStep(),
     }
     store.set(key, nextState)
     return nextState.displayMeters
@@ -953,13 +1228,39 @@ function getSteppedGuidanceDistance(
 
   while (
     existing.displayMeters > 0 &&
-    actualMeters <= existing.displayMeters - existing.nextStepMeters
+    actualMeters <= existing.displayMeters - stepMeters
   ) {
-    existing.displayMeters = Math.max(0, existing.displayMeters - existing.nextStepMeters)
-    existing.nextStepMeters = getRandomGuidanceDistanceStep()
+    existing.displayMeters = Math.max(0, existing.displayMeters - stepMeters)
   }
 
   return existing.displayMeters
+}
+
+function getSharedGuidanceDistanceStep(
+  store: GuidanceDistanceDisplayStore,
+  travelledDistanceMeters: number,
+) {
+  const travelledMeters = Math.max(0, Math.round(travelledDistanceMeters))
+  const existing = store.get(GUIDANCE_DISTANCE_SHARED_STEP_KEY)
+
+  if (!existing || existing.nextStepMeters === undefined || travelledMeters < existing.displayMeters) {
+    const nextState = {
+      displayMeters: travelledMeters,
+      nextStepMeters: getRandomGuidanceDistanceStep(),
+    }
+    store.set(GUIDANCE_DISTANCE_SHARED_STEP_KEY, nextState)
+    return nextState.nextStepMeters
+  }
+
+  let activeStepMeters = existing.nextStepMeters
+
+  while (travelledMeters >= existing.displayMeters + existing.nextStepMeters) {
+    activeStepMeters = existing.nextStepMeters
+    existing.displayMeters += existing.nextStepMeters
+    existing.nextStepMeters = getRandomGuidanceDistanceStep()
+  }
+
+  return activeStepMeters
 }
 
 function getRandomGuidanceDistanceStep() {
@@ -1003,6 +1304,117 @@ function ManeuverIcon({
   return <ArrowUp className={className} weight="bold" />
 }
 
+function DrivingAssistSigns({ assist }: { assist: DrivingAssistInfo }) {
+  return (
+    <div className="grid w-30 gap-2 max-sm:w-24">
+      {assist.alert ? (
+        <div
+          aria-label={`${assist.alert.label} ${assist.alert.distanceLabel} 남음`}
+          className="grid justify-items-center"
+        >
+          {assist.alert.schoolZone ? (
+            <SchoolZoneSign />
+          ) : (
+            <WarningZoneSign label={assist.alert.label} type={assist.alert.type} />
+          )}
+          <DistancePlaque label={assist.alert.distanceLabel} tone="danger" />
+        </div>
+      ) : null}
+      {assist.speedLimitKph ? (
+        <SpeedLimitSign speed={assist.speedLimitKph} />
+      ) : null}
+    </div>
+  )
+}
+
+function SchoolZoneSign() {
+  return (
+    <svg aria-hidden="true" className="h-auto w-full drop-shadow-[0_4px_8px_rgba(15,23,42,0.26)]" viewBox="0 0 128 112">
+      <path d="M64 4 124 108H4L64 4Z" fill="#E94B2F" />
+      <path d="M64 18 108 96H20L64 18Z" fill="#FFD940" />
+      <path d="M57 42a7 7 0 1 0-14 0 7 7 0 0 0 14 0ZM45 52h10l6 21h-8l-3-10-3 10h-8l6-21Z" fill="#050505" />
+      <path d="M82 52a5 5 0 1 0-10 0 5 5 0 0 0 10 0ZM73 60h8l5 18h-7l-2-8-2 8h-7l5-18Z" fill="#050505" />
+      <path d="M57 56c7 5 13 5 18 1" stroke="#050505" strokeLinecap="round" strokeWidth="5" />
+    </svg>
+  )
+}
+
+function WarningZoneSign({
+  label,
+  type,
+}: {
+  label: string
+  type?: SafetyAlert['type']
+}) {
+  const iconPath = getWarningSignIconPath(type)
+
+  return (
+    <svg
+      aria-hidden="true"
+      className="h-auto w-full drop-shadow-[0_4px_8px_rgba(15,23,42,0.26)]"
+      viewBox="0 0 128 112"
+    >
+      <path d="M64 4 124 108H4L64 4Z" fill="#E94B2F" />
+      <path d="M64 18 108 96H20L64 18Z" fill="#FFD940" />
+      <path d={iconPath} fill="#050505" />
+      <text
+        fill="#050505"
+        fontFamily="Pretendard, sans-serif"
+        fontSize="13"
+        fontWeight="900"
+        textAnchor="middle"
+        x="64"
+        y="91"
+      >
+        {label}
+      </text>
+    </svg>
+  )
+}
+
+function getWarningSignIconPath(type?: SafetyAlert['type']) {
+  if (type === 'curve') {
+    return 'M44 37h16c18 0 30 12 30 30v5h-13v-5c0-11-6-18-17-18H44l9 9-9 9-24-24 24-24 9 9-9 9Z'
+  }
+
+  if (type === 'falling-rock') {
+    return 'M38 31h22l-8 14 14-7-9 18 18-7 13 26H40L28 54l10-23Zm43 5 9 5-5 9-9-5 5-9Zm-18-14 11 7-7 11-11-7 7-11Z'
+  }
+
+  if (type === 'accident') {
+    return 'M37 57h54l8 15v14h-9a10 10 0 0 1-20 0H58a10 10 0 0 1-20 0h-9V72l8-15Zm7 9-4 8h47l-4-8H44Zm5 26a6 6 0 1 0 0-12 6 6 0 0 0 0 12Zm31 0a6 6 0 1 0 0-12 6 6 0 0 0 0 12ZM43 29l9-5 8 15 8-15 9 5-10 19H53L43 29Z'
+  }
+
+  if (type === 'enforcement') {
+    return 'M38 39h52a8 8 0 0 1 8 8v30a8 8 0 0 1-8 8H38a8 8 0 0 1-8-8V47a8 8 0 0 1 8-8Zm26 10a15 15 0 1 0 0 30 15 15 0 0 0 0-30Zm0 10a5 5 0 1 1 0 10 5 5 0 0 1 0-10Zm-20-30h40l6 10H38l6-10Z'
+  }
+
+  return 'M58 33h12l-2 34H60l-2-34Zm6 44a7 7 0 1 0 0-14 7 7 0 0 0 0 14Z'
+}
+
+function DistancePlaque({ label, tone }: { label: string; tone: 'danger' }) {
+  return (
+    <div className={[
+      'mt-[-2px] w-[78%] rounded-md px-2 py-1 text-center text-2xl font-black leading-none text-white shadow-[0_4px_8px_rgba(15,23,42,0.22)] max-sm:text-xl',
+      tone === 'danger' ? 'bg-[#E84B2F]' : 'bg-[var(--nav-primary)]',
+    ].join(' ')}
+    >
+      {label}
+    </div>
+  )
+}
+
+function SpeedLimitSign({ speed }: { speed: number }) {
+  return (
+    <div
+      aria-label={`제한속도 ${speed}km/h`}
+      className="grid h-20 w-20 place-items-center rounded-full border-[8px] border-[#E6462E] bg-white text-center font-black leading-none text-[#111] shadow-[0_4px_8px_rgba(15,23,42,0.22)] max-sm:h-16 max-sm:w-16 max-sm:border-[6px]"
+    >
+      <span className="text-3xl max-sm:text-2xl">{speed}</span>
+    </div>
+  )
+}
+
 function getDrivingAssistInfo({
   position,
   roadMatches,
@@ -1021,24 +1433,23 @@ function getDrivingAssistInfo({
   const nearestRoadMatch = position
     ? getNearestRoadMatch(roadMatches, position)
     : roadMatches[0]
+  const speedLimitKph = nearestRoadMatch?.speedLimitKph
 
   if (upcomingAlert) {
     return {
-      title: `${formatMeters(upcomingAlert.distanceFromStartMeters - travelledDistanceMeters)} ${upcomingAlert.label}`,
-      detail: nearestRoadMatch?.speedLimitKph
-        ? `${upcomingAlert.description} · 제한 ${nearestRoadMatch.speedLimitKph}km/h`
-        : upcomingAlert.description,
-      tone: 'warning',
+      alert: {
+        type: upcomingAlert.type,
+        label: upcomingAlert.label,
+        distanceLabel: formatMeters(upcomingAlert.distanceFromStartMeters - travelledDistanceMeters),
+        schoolZone: isSchoolZoneAlert(upcomingAlert),
+      },
+      speedLimitKph,
     }
   }
 
-  if (nearestRoadMatch?.speedLimitKph || nearestRoadMatch?.roadCategory !== undefined) {
+  if (speedLimitKph) {
     return {
-      title: nearestRoadMatch.speedLimitKph
-        ? `제한속도 ${nearestRoadMatch.speedLimitKph}km/h`
-        : '도로 정보',
-      detail: getRoadCategoryLabel(nearestRoadMatch.roadCategory),
-      tone: 'info',
+      speedLimitKph,
     }
   }
 
@@ -1058,20 +1469,8 @@ function getNearestRoadMatch(roadMatches: RoadMatchPoint[], position: Coordinate
   }, undefined)
 }
 
-function getRoadCategoryLabel(category?: number) {
-  if (category === 0) return '고속국도'
-  if (category === 1) return '도시고속화도로'
-  if (category === 2) return '국도'
-  if (category === 3) return '국가지원지방도'
-  if (category === 4) return '지방도'
-  if (category === 5) return '주요도로 1'
-  if (category === 6) return '주요도로 2'
-  if (category === 7) return '주요도로 3'
-  if (category === 8) return '기타도로'
-  if (category === 9) return '이면도로'
-  if (category === 11) return '단지내도로'
-  if (category === 12) return '이면도로'
-  return '도로 정보'
+function isSchoolZoneAlert(alert: SafetyAlert) {
+  return /어린이|보호구역|school/i.test(`${alert.label} ${alert.description}`)
 }
 
 function formatMeters(distanceMeters: number) {
@@ -1103,6 +1502,38 @@ function formatClockTime(date: Date) {
   const minutes = date.getMinutes().toString().padStart(2, '0')
 
   return `${period} ${hour12.toString().padStart(2, '0')}:${minutes}`
+}
+
+function useDrivingAssistDebugSequence(hasRoute: boolean) {
+  const debugEnabled = hasRoute && isDrivingAssistDebugSequenceEnabled()
+  const [debugIndex, setDebugIndex] = useState(0)
+
+  useEffect(() => {
+    if (!debugEnabled) {
+      setDebugIndex(0)
+      return
+    }
+
+    const timer = window.setInterval(() => {
+      setDebugIndex((index) => (index + 1) % DEBUG_DRIVING_ASSIST_SEQUENCE.length)
+    }, DRIVING_ASSIST_DEBUG_SEQUENCE_INTERVAL_MS)
+
+    return () => window.clearInterval(timer)
+  }, [debugEnabled])
+
+  if (!debugEnabled) {
+    return undefined
+  }
+
+  return DEBUG_DRIVING_ASSIST_SEQUENCE[debugIndex]
+}
+
+function isDrivingAssistDebugSequenceEnabled() {
+  if (typeof window === 'undefined') {
+    return false
+  }
+
+  return new URLSearchParams(window.location.search).get(DRIVING_ASSIST_DEBUG_QUERY_PARAM) === '1'
 }
 
 function useDebouncedValue<T>(value: T, delayMs: number) {
@@ -1226,8 +1657,8 @@ function PlaceResults({
             aria-selected={index === activeIndex}
             type="button"
             className={[
-              'grid min-h-12 w-full gap-0.5 rounded-lg px-3 py-2.5 text-left text-sm transition',
-              index === activeIndex ? 'bg-[var(--nav-selection)] text-[var(--nav-ink)]' : 'text-[var(--nav-ink)] hover:bg-[var(--nav-surface-raised)]',
+              'grid min-h-12 w-full gap-0.5 rounded-lg px-3 py-2.5 text-left text-sm transition-colors',
+              index === activeIndex ? 'bg-[var(--nav-selection)] text-[var(--nav-ink)]' : 'text-[var(--nav-ink)] hover:bg-[var(--nav-selection)]',
             ].join(' ')}
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
@@ -1252,62 +1683,117 @@ function SearchField({
   activeOptionId,
   autoFocus = false,
   controlsId,
+  expanded,
   icon,
   label,
+  labelHidden = false,
   value,
   onChange,
   onFocus,
   onKeyDown,
   placeholder,
-  onFillCurrentLocation,
 }: {
   active: boolean
   activeOptionId?: string
   autoFocus?: boolean
-  controlsId: string
+  controlsId?: string
+  expanded: boolean
   icon: React.ReactNode
   label: string
+  labelHidden?: boolean
   value: string
   onChange: (value: string) => void
   onFocus: () => void
   onKeyDown: (event: KeyboardEvent<HTMLInputElement>) => void
   placeholder: string
-  onFillCurrentLocation?: () => void
 }) {
   return (
     <label className="block text-sm">
-      <span className="mb-2 block text-[var(--nav-muted)]">{label}</span>
+      <span className={[
+        'mb-2 block font-semibold text-[var(--nav-muted)]',
+        labelHidden ? 'sr-only' : '',
+      ].join(' ')}
+      >
+        {label}
+      </span>
       <span
         className={[
-          'flex h-12 items-center gap-2.5 rounded-xl border px-3 py-1 text-[var(--nav-muted)] transition',
-          active ? 'border-[var(--nav-primary)] bg-[var(--nav-surface)] shadow-[0_0_0_3px_var(--nav-focus-ring)]' : 'border-transparent bg-[var(--nav-panel)]',
+          'flex h-13 items-center gap-2.5 rounded-xl border px-3.5 py-1.5 text-[var(--nav-muted)] transition',
+          active ? 'border-[var(--nav-primary)] bg-white shadow-[0_0_0_3px_var(--nav-focus-ring)]' : 'border-transparent bg-white',
         ].join(' ')}
       >
         {icon}
         <input
           role="combobox"
+          aria-autocomplete="list"
           aria-activedescendant={activeOptionId}
           aria-controls={controlsId}
-          aria-expanded={active}
+          aria-expanded={expanded}
           autoFocus={autoFocus}
           value={value}
           onChange={(event) => onChange(event.target.value)}
           onFocus={onFocus}
           onKeyDown={onKeyDown}
-          className="min-w-0 flex-1 bg-transparent text-[var(--nav-ink)] outline-none placeholder:text-[var(--nav-muted)]"
+          className="min-w-0 flex-1 bg-transparent text-[15px] font-semibold text-[var(--nav-ink)] outline-none placeholder:text-[var(--nav-muted)]"
           placeholder={placeholder}
         />
-        {onFillCurrentLocation ? (
-          <button
-            aria-label="현재 위치로 출발지 설정"
-            className="rounded-full px-2 py-1 text-xs font-semibold text-[var(--nav-primary)] transition hover:bg-[var(--nav-surface)]"
-            onClick={onFillCurrentLocation}
-            type="button"
-          >
-            현재 위치
-          </button>
-        ) : null}
       </span>
     </label>
   )
+}
+
+function SavedPlaceButtons({
+  field,
+  places,
+  onFillCurrentLocation,
+  onSelect,
+}: {
+  field: SearchFieldId
+  places: Place[]
+  onFillCurrentLocation?: () => void
+  onSelect: (field: SearchFieldId, place: Place) => void
+}) {
+  const fieldLabel = field === 'origin' ? '출발지' : '도착지'
+
+  return (
+    <div
+      className={[
+        'mt-2 grid gap-2',
+        onFillCurrentLocation ? 'grid-cols-3' : 'grid-cols-2',
+      ].join(' ')}
+      aria-label={`${fieldLabel} 빠른 설정`}
+    >
+      {onFillCurrentLocation ? (
+        <button
+          aria-label={`${fieldLabel}를 현재 위치로 설정`}
+          className="inline-flex min-h-10 min-w-0 items-center justify-center gap-2 rounded-xl bg-[var(--nav-panel)] px-3 text-[13px] font-semibold text-[var(--nav-primary)] transition hover:bg-[var(--nav-selection)]"
+          onClick={onFillCurrentLocation}
+          type="button"
+        >
+          <MapPin className="h-4 w-4" weight="bold" />
+          <span className="min-w-0 truncate">현재 위치</span>
+        </button>
+      ) : null}
+      {places.map((place) => (
+        <button
+          aria-label={`${fieldLabel}를 ${formatSavedPlaceDirection(place.name)} 설정`}
+          className="inline-flex min-h-10 min-w-0 items-center justify-center gap-2 rounded-xl bg-[var(--nav-panel)] px-3 text-[13px] font-semibold text-[var(--nav-ink)] transition hover:bg-[var(--nav-selection)]"
+          key={`${field}-${place.id}`}
+          onClick={() => onSelect(field, place)}
+          type="button"
+        >
+          {place.id === 'saved-home' ? (
+            <HouseLine className="h-4 w-4 text-[var(--nav-primary)]" weight="bold" />
+          ) : (
+            <Buildings className="h-4 w-4 text-[var(--nav-primary)]" weight="bold" />
+          )}
+          <span className="min-w-0 truncate">{place.name}</span>
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function formatSavedPlaceDirection(name: string) {
+  return name === '회사' ? '회사로' : `${name}으로`
 }

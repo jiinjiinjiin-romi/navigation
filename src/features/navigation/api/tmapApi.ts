@@ -93,6 +93,9 @@ interface TmapRoadMatchPoint {
 
 interface TmapRoadMatchResponse {
   matchedPoints?: TmapRoadMatchPoint[]
+  resultData?: {
+    matchedPoints?: TmapRoadMatchPoint[]
+  }
 }
 
 export async function searchPlaces(
@@ -293,7 +296,7 @@ function parseCoordinate(value: unknown): Array<Coordinate | null> {
 }
 
 function normalizeRoadMatch(data: TmapRoadMatchResponse): RoadMatchPoint[] {
-  return (data.matchedPoints ?? []).flatMap((point, index) => {
+  return (data.matchedPoints ?? data.resultData?.matchedPoints ?? []).flatMap((point, index) => {
     const location = point.matchedLocation ?? point.mathedLocation
     const lat = Number(location?.latitude)
     const lng = Number(location?.longitude)

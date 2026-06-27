@@ -63,6 +63,8 @@ describe('NavigationShell', () => {
   }
 
   beforeEach(() => {
+    vi.useRealTimers()
+    window.history.replaceState(null, '', '/')
     mockedSearchPlaces.mockReset()
     mockedGetRoute.mockReset()
     mockedGetRoadMatch.mockReset()
@@ -87,6 +89,35 @@ describe('NavigationShell', () => {
     })))
     mockGeolocationSuccess()
   })
+
+  const openRouteSearchSummary = async () => {
+    const existingDestinationField = screen.queryByRole('combobox', { name: '목적지' })
+    if (existingDestinationField) {
+      return existingDestinationField
+    }
+
+    const searchButton = await screen.findByRole('button', { name: /어디로 갈까요/ })
+    await waitFor(() => {
+      expect(searchButton).not.toBeDisabled()
+    })
+    fireEvent.click(searchButton)
+
+    return screen.findByRole('combobox', { name: '목적지' })
+  }
+
+  const openOriginEditor = async () => {
+    await openRouteSearchSummary()
+    fireEvent.focus(screen.getByRole('combobox', { name: '출발 위치' }))
+
+    return screen.findByPlaceholderText('출발지 검색')
+  }
+
+  const openDestinationEditor = async () => {
+    await openRouteSearchSummary()
+    fireEvent.focus(screen.getByRole('combobox', { name: '목적지' }))
+
+    return screen.findByPlaceholderText('목적지 검색')
+  }
 
   it('centers a 16:10 navigation viewport on a black stage', () => {
     const queryClient = new QueryClient()
@@ -173,13 +204,16 @@ describe('NavigationShell', () => {
       </QueryClientProvider>,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: /어디로 갈까요/ }))
+    await openRouteSearchSummary()
 
     expect(screen.queryByText('현재 위치에서')).not.toBeInTheDocument()
     expect(screen.queryByText('출발지는 변경할 수 있습니다')).not.toBeInTheDocument()
     expect(screen.queryByText('선택됨')).not.toBeInTheDocument()
     expect(screen.getByDisplayValue('현재 위치')).toBeInTheDocument()
-    expect(screen.getByPlaceholderText('목적지 검색')).toHaveFocus()
+    expect(screen.getByPlaceholderText('목적지')).toBeInTheDocument()
+    expect(screen.queryByPlaceholderText('목적지 검색')).not.toBeInTheDocument()
+    fireEvent.focus(screen.getByRole('combobox', { name: '목적지' }))
+    expect(await screen.findByPlaceholderText('목적지 검색')).toHaveFocus()
     await waitFor(() => {
       expect(screen.queryByRole('button', { name: /어디로 갈까요/ })).not.toBeInTheDocument()
     })
@@ -235,6 +269,16 @@ describe('NavigationShell', () => {
           distanceFromStartMeters: 900,
         },
       ],
+      safetyAlerts: [
+        {
+          id: 'school-zone-40',
+          type: 'caution',
+          label: '어린이보호구역',
+          description: '어린이보호구역 안내',
+          coordinate: { lat: 37.557, lng: 126.976 },
+          distanceFromStartMeters: 40,
+        },
+      ],
     })
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false } },
@@ -246,8 +290,8 @@ describe('NavigationShell', () => {
       </QueryClientProvider>,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: /어디로 갈까요/ }))
-    fireEvent.change(screen.getByDisplayValue('현재 위치'), {
+    const originInput = await openOriginEditor()
+    fireEvent.change(originInput, {
       target: { value: '서울역' },
     })
     fireEvent.click(await screen.findByRole('option', { name: /서울역/ }))
@@ -255,7 +299,8 @@ describe('NavigationShell', () => {
       expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
     })
 
-    fireEvent.change(screen.getByPlaceholderText('목적지 검색'), {
+    const destinationInput = await openDestinationEditor()
+    fireEvent.change(destinationInput, {
       target: { value: '강남역' },
     })
     fireEvent.click(await screen.findByRole('option', { name: /강남역/ }))
@@ -279,13 +324,103 @@ describe('NavigationShell', () => {
     expect(screen.getByText('소요시간')).toBeInTheDocument()
     expect(screen.getByText('좌회전')).toBeInTheDocument()
     expect(screen.getByText('500')).toBeInTheDocument()
-    expect(await screen.findByText('제한속도 50km/h')).toBeInTheDocument()
-    expect(screen.getByText('주요도로 1')).toBeInTheDocument()
+    const assistSigns = await screen.findByTestId('driving-assist-signs')
+    expect(assistSigns).toContainElement(screen.getByLabelText('어린이보호구역 40m 남음'))
+    expect(assistSigns).toContainElement(screen.getByLabelText('제한속도 50km/h'))
     const primaryManeuverCard = screen.getByTestId('primary-maneuver-card')
     const nextManeuverCard = screen.getByTestId('next-maneuver-card')
+    expect(primaryManeuverCard).toHaveClass('w-fit')
+    expect(primaryManeuverCard).toHaveClass('max-w-[min(22rem,calc(100%-7rem))]')
     expect(primaryManeuverCard).toContainElement(screen.getByText('좌회전'))
+    expect(nextManeuverCard).toHaveClass('w-fit')
+    expect(nextManeuverCard).not.toHaveClass('w-[min(16rem,calc(100%-10rem))]')
     expect(nextManeuverCard).toContainElement(screen.getByText('900m'))
     expect(primaryManeuverCard).not.toContainElement(nextManeuverCard)
+  })
+
+  it('cycles every driving assist sign in debug mode', async () => {
+    const debugSequenceWaitMs = 1450
+    window.history.replaceState(null, '', '/?debugSigns=1')
+    mockedGetRoute.mockResolvedValue({
+      coordinates: [
+        { lat: 37.5547, lng: 126.9706 },
+        { lat: 37.4979, lng: 127.0276 },
+      ],
+      summary: {
+        distanceMeters: 12300,
+        durationSeconds: 1320,
+      },
+    })
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell />
+      </QueryClientProvider>,
+    )
+
+    await openOriginEditor()
+    mockedSearchPlaces.mockClear()
+    fireEvent.click(screen.getByRole('button', { name: '출발지를 집으로 설정' }))
+    await waitFor(() => {
+      expect(screen.getByRole('combobox', { name: '목적지' })).toBeInTheDocument()
+    })
+    fireEvent.focus(screen.getByRole('combobox', { name: '목적지' }))
+    fireEvent.click(await screen.findByRole('button', { name: '도착지를 회사로 설정' }))
+
+    expect(await screen.findByLabelText('어린이보호구역 40m 남음')).toBeInTheDocument()
+
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, debugSequenceWaitMs))
+    })
+    expect(screen.getByLabelText('제한속도 30km/h')).toBeInTheDocument()
+
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, debugSequenceWaitMs))
+    })
+    expect(screen.getByLabelText('단속구간 80m 남음')).toBeInTheDocument()
+  })
+
+  it('sets origin and destination from saved places without a POI search request', async () => {
+    mockedGetRoute.mockResolvedValue({
+      coordinates: [
+        { lat: 37.5547, lng: 126.9706 },
+        { lat: 37.4979, lng: 127.0276 },
+      ],
+      summary: {
+        distanceMeters: 12300,
+        durationSeconds: 1320,
+      },
+    })
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell />
+      </QueryClientProvider>,
+    )
+
+    await openOriginEditor()
+    fireEvent.click(screen.getByRole('button', { name: '출발지를 집으로 설정' }))
+    await waitFor(() => {
+      expect(screen.getByRole('combobox', { name: '목적지' })).toBeInTheDocument()
+    })
+    fireEvent.focus(screen.getByRole('combobox', { name: '목적지' }))
+    fireEvent.click(await screen.findByRole('button', { name: '도착지를 회사로 설정' }))
+
+    expect(mockedSearchPlaces).not.toHaveBeenCalled()
+    await waitFor(() => {
+      expect(mockedGetRoute).toHaveBeenCalledWith(
+        { lat: 37.5547, lng: 126.9706 },
+        { lat: 37.4979, lng: 127.0276 },
+        undefined,
+        expect.objectContaining({ aborted: false }),
+      )
+    })
   })
 
   it('supports keyboard selection for autocomplete results', async () => {
@@ -307,8 +442,7 @@ describe('NavigationShell', () => {
       </QueryClientProvider>,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: /어디로 갈까요/ }))
-    const destinationInput = screen.getByPlaceholderText('목적지 검색')
+    const destinationInput = await openDestinationEditor()
     fireEvent.change(destinationInput, {
       target: { value: '세종' },
     })
@@ -318,10 +452,10 @@ describe('NavigationShell', () => {
     fireEvent.keyDown(destinationInput, { key: 'ArrowDown' })
     fireEvent.keyDown(destinationInput, { key: 'Enter' })
 
-    expect(destinationInput).toHaveValue('세종대학교')
     await waitFor(() => {
       expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
     })
+    expect(screen.getByRole('combobox', { name: '목적지' })).toHaveValue('세종대학교')
   })
 
   it('debounces autocomplete API calls while keeping the input responsive', async () => {
@@ -343,8 +477,7 @@ describe('NavigationShell', () => {
       </QueryClientProvider>,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: /어디로 갈까요/ }))
-    const destinationInput = screen.getByPlaceholderText('목적지 검색')
+    const destinationInput = await openDestinationEditor()
 
     fireEvent.change(destinationInput, { target: { value: '강' } })
     fireEvent.change(destinationInput, { target: { value: '강남' } })
@@ -381,8 +514,7 @@ describe('NavigationShell', () => {
       </QueryClientProvider>,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: /어디로 갈까요/ }))
-    const destinationInput = screen.getByPlaceholderText('목적지 검색')
+    const destinationInput = await openDestinationEditor()
     fireEvent.change(destinationInput, {
       target: { value: '검색' },
     })
@@ -438,6 +570,14 @@ describe('NavigationShell', () => {
           coordinate: { lat: 37.56, lng: 126.98 },
           distanceFromStartMeters: 500,
         },
+        {
+          id: 'right-900',
+          type: 'right',
+          label: '우회전',
+          description: '우회전',
+          coordinate: { lat: 37.52, lng: 127.01 },
+          distanceFromStartMeters: 900,
+        },
       ],
     })
     const queryClient = new QueryClient({
@@ -450,8 +590,8 @@ describe('NavigationShell', () => {
       </QueryClientProvider>,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: /어디로 갈까요/ }))
-    fireEvent.change(screen.getByPlaceholderText('목적지 검색'), {
+    const destinationInput = await openDestinationEditor()
+    fireEvent.change(destinationInput, {
       target: { value: '강남역' },
     })
     fireEvent.click(await screen.findByRole('option', { name: /강남역/ }))
@@ -459,10 +599,14 @@ describe('NavigationShell', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '시뮬레이션 시작' }))
 
-    expect(screen.getByText('시뮬레이션 중')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '시뮬레이션 중지' })).toBeInTheDocument()
     expect(screen.getByTestId('primary-maneuver-card')).toBeInTheDocument()
     expect(screen.getByText('좌회전')).toBeInTheDocument()
     expect(screen.getByTestId('tmap-panel')).toHaveTextContent('sim:37.5665,126.9780')
+
+    fireEvent.click(screen.getByRole('button', { name: '시뮬레이션 중지' }))
+
+    expect(screen.getByRole('button', { name: '시뮬레이션 시작' })).toBeInTheDocument()
   })
 
   it('keeps route guidance visible during simulation when TMAP returns no maneuver points', async () => {
@@ -495,8 +639,8 @@ describe('NavigationShell', () => {
       </QueryClientProvider>,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: /어디로 갈까요/ }))
-    fireEvent.change(screen.getByPlaceholderText('목적지 검색'), {
+    const destinationInput = await openDestinationEditor()
+    fireEvent.change(destinationInput, {
       target: { value: '강남역' },
     })
     fireEvent.click(await screen.findByRole('option', { name: /강남역/ }))
@@ -548,6 +692,14 @@ describe('NavigationShell', () => {
           coordinate: { lat: 37.56, lng: 126.98 },
           distanceFromStartMeters: 500,
         },
+        {
+          id: 'right-900',
+          type: 'right',
+          label: '우회전',
+          description: '우회전',
+          coordinate: { lat: 37.52, lng: 127.01 },
+          distanceFromStartMeters: 900,
+        },
       ],
     })
     const queryClient = new QueryClient({
@@ -560,8 +712,8 @@ describe('NavigationShell', () => {
       </QueryClientProvider>,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: /어디로 갈까요/ }))
-    fireEvent.change(screen.getByPlaceholderText('목적지 검색'), {
+    const destinationInput = await openDestinationEditor()
+    fireEvent.change(destinationInput, {
       target: { value: '강남역' },
     })
     fireEvent.click(await screen.findByRole('option', { name: /강남역/ }))
@@ -582,8 +734,10 @@ describe('NavigationShell', () => {
 
     await waitFor(() => {
       expect(screen.getByText('497')).toBeInTheDocument()
+      expect(screen.getByText('897m')).toBeInTheDocument()
     })
     expect(screen.queryByText('496')).not.toBeInTheDocument()
+    expect(screen.queryByText('896m')).not.toBeInTheDocument()
 
     requestAnimationFrameSpy.mockRestore()
     cancelAnimationFrameSpy.mockRestore()
@@ -622,8 +776,8 @@ describe('NavigationShell', () => {
       </QueryClientProvider>,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: /어디로 갈까요/ }))
-    fireEvent.change(screen.getByPlaceholderText('목적지 검색'), {
+    const destinationInput = await openDestinationEditor()
+    fireEvent.change(destinationInput, {
       target: { value: '도착지' },
     })
     fireEvent.click(await screen.findByRole('option', { name: /도착지/ }))

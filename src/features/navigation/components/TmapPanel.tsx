@@ -19,13 +19,17 @@ interface TmapPanelProps {
   onRequestLocation?: () => void
 }
 
-const MAP_OVERVIEW_ZOOM = 19
-const MAP_NAVIGATION_ZOOM = 19
+const MAP_OVERVIEW_ZOOM = 18
+const MAP_NAVIGATION_ZOOM = 18
 const MAP_NAVIGATION_PITCH = 0
 const CAMERA_FOLLOW_OFFSET_Y = 180
 const CAMERA_ANIMATION_MS = 220
 const COMPASS_CAMERA_ANIMATION_MS = 640
-const ROUTE_LINE_STROKE_WEIGHT = 10
+const ROUTE_LINE_STROKE_WEIGHT = 13
+const ROUTE_LINE_BORDER_STROKE_WEIGHT = 18
+const ROUTE_DIRECTION_ARROW_SIZE = 18
+const ROUTE_DIRECTION_ARROW_END_OFFSET_METERS = 70
+const ROUTE_DIRECTION_ARROW_MIN_EDGE_GAP_METERS = 40
 const MAX_TRAFFIC_SEGMENT_MATCH_DISTANCE_SQUARED = 0.000001
 const CURRENT_LOCATION_PLACE_ID = 'current-location'
 const NAVIGATION_MARKER_BEARING_PRECISION = 0.05
@@ -50,6 +54,23 @@ function createNavigationArrowMarker(markerBearing = 0) {
 `
 }
 
+function createRouteDirectionArrowMarker(arrowBearing = 0) {
+  return `
+  <div class="nav-route-direction-arrow" style="
+    --route-arrow-bearing:${formatCssBearing(arrowBearing)}deg;
+    width:${ROUTE_DIRECTION_ARROW_SIZE}px;
+    height:${ROUTE_DIRECTION_ARROW_SIZE}px;
+    display:grid;
+    place-items:center;
+    pointer-events:none;
+  ">
+    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true" style="display:block; transform:rotate(var(--route-arrow-bearing)); transform-origin:50% 50%; filter:drop-shadow(0 1px 1px rgba(1,96,154,0.34));">
+      <path d="M9 1.8 15 16.2 9 12.6 3 16.2 9 1.8Z" fill="#fff"></path>
+    </svg>
+  </div>
+`
+}
+
 interface RenderedCamera {
   position: Coordinate
   bearing: number
@@ -61,8 +82,20 @@ interface CameraAnimation {
   to: RenderedCamera
   durationMs: number
   animatePosition: boolean
+  applyMap: boolean
   mode?: 'compass'
   startedAt?: number
+}
+
+interface RouteDirectionMarker {
+  marker: NonNullable<Window['Tmapv3Marker']>
+  bearing: number
+}
+
+interface RouteDirectionArrowDensity {
+  spacingMeters: number
+  startOffsetMeters: number
+  maxArrows: number
 }
 
 export function TmapPanel({
@@ -76,8 +109,10 @@ export function TmapPanel({
   const mapElementRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<Window['Tmapv3Map']>(undefined)
   const routeLineRefs = useRef<Window['Tmapv3Polyline'][]>([])
+  const routeDirectionMarkerRefs = useRef<RouteDirectionMarker[]>([])
   const routeLineSignatureRef = useRef<string | undefined>(undefined)
   const routeLineStructureSignatureRef = useRef<string | undefined>(undefined)
+  const routeDirectionMarkerSignatureRef = useRef<string | undefined>(undefined)
   const currentMarkerRef = useRef<Window['Tmapv3Marker']>(undefined)
   const currentMarkerBearingRef = useRef<number | undefined>(undefined)
   const originMarkerRef = useRef<Window['Tmapv3Marker']>(undefined)
@@ -86,9 +121,12 @@ export function TmapPanel({
   const renderedCameraRef = useRef<RenderedCamera>(undefined)
   const cameraAnimationRef = useRef<CameraAnimation>(undefined)
   const cameraFrameRef = useRef<number>(undefined)
+  const navigationZoomRef = useRef(MAP_NAVIGATION_ZOOM)
+  const cameraFollowingRef = useRef(true)
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [mapBearing, setMapBearing] = useState(0)
   const [northUpLocked, setNorthUpLocked] = useState(false)
+  const [routeDirectionZoom, setRouteDirectionZoom] = useState(MAP_NAVIGATION_ZOOM)
   const hasGuidanceRoute = Boolean(route?.coordinates.length)
   const progressPosition = useMemo(() => {
     if (!simulationPosition || !route?.coordinates.length) {
@@ -189,6 +227,10 @@ export function TmapPanel({
       congestion: 0 as const,
     }]
   }, [progressPosition, remainingRouteCoordinates, route?.trafficSegments])
+  const routeDirectionCoordinates = useMemo(
+    () => compactRouteCoordinates(remainingRouteCoordinates),
+    [remainingRouteCoordinates],
+  )
 
   const updateCurrentMarkerBearing = useCallback((markerBearing: number) => {
     const normalizedBearing = normalizeSignedBearing(markerBearing)
@@ -213,21 +255,47 @@ export function TmapPanel({
     })
   }, [])
 
-  const renderNavigationCamera = useCallback((camera: RenderedCamera) => {
+  const setCameraFollowing = useCallback((enabled: boolean) => {
+    cameraFollowingRef.current = enabled
+  }, [])
+
+  const getCurrentMapBearing = useCallback(() => {
+    const mapBearing = mapRef.current?.getBearing?.()
+    return typeof mapBearing === 'number' ? mapBearing : renderedBearingRef.current
+  }, [])
+
+  const updateRouteDirectionMarkerBearings = useCallback((mapBearing: number) => {
+    const markerElements = mapElementRef.current?.querySelectorAll<HTMLElement>('.nav-route-direction-arrow')
+
+    routeDirectionMarkerRefs.current.forEach((routeDirectionMarker, index) => {
+      const markerBearing = getVehicleMarkerBearing(routeDirectionMarker.bearing, mapBearing)
+      const markerElement = markerElements?.[index]
+
+      if (markerElement) {
+        markerElement.style.setProperty('--route-arrow-bearing', `${formatCssBearing(markerBearing)}deg`)
+      }
+    })
+  }, [])
+
+  const renderNavigationCamera = useCallback((camera: RenderedCamera, applyMap = true) => {
     if (!window.Tmapv3 || !mapRef.current) {
       return
     }
 
     const markerPosition = new window.Tmapv3.LatLng(camera.position.lat, camera.position.lng)
-    const centeredLatLng = resolveCameraCenter(camera.position)
 
-    applyMapCamera(mapRef.current, camera, centeredLatLng)
+    if (applyMap) {
+      const centeredLatLng = resolveCameraCenter(camera.position)
+      applyMapCamera(mapRef.current, camera, centeredLatLng, navigationZoomRef.current)
+      renderedBearingRef.current = camera.bearing
+      renderedCameraRef.current = camera
+      syncCompassBearing(camera.bearing)
+      updateRouteDirectionMarkerBearings(camera.bearing)
+    }
+
     currentMarkerRef.current?.setPosition?.(markerPosition)
     updateCurrentMarkerBearing(camera.markerBearing)
-    renderedBearingRef.current = camera.bearing
-    renderedCameraRef.current = camera
-    syncCompassBearing(camera.bearing)
-  }, [resolveCameraCenter, syncCompassBearing, updateCurrentMarkerBearing])
+  }, [resolveCameraCenter, syncCompassBearing, updateCurrentMarkerBearing, updateRouteDirectionMarkerBearings])
 
   const stopCameraAnimation = useCallback(() => {
     if (cameraFrameRef.current !== undefined) {
@@ -268,7 +336,7 @@ export function TmapPanel({
         ),
       }
 
-      renderNavigationCamera(nextCamera)
+      renderNavigationCamera(nextCamera, animation.applyMap)
 
       if (progress >= 1) {
         cameraAnimationRef.current = undefined
@@ -290,6 +358,7 @@ export function TmapPanel({
       markerBearing?: number
       durationMs?: number
       animatePosition?: boolean
+      applyMap?: boolean
       mode?: 'compass'
     } = {},
   ) => {
@@ -303,9 +372,16 @@ export function TmapPanel({
       markerBearing: options.markerBearing ?? 0,
     }
     const shouldReduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+    const shouldApplyMap = options.applyMap ?? true
 
     if (cameraAnimationRef.current?.mode === 'compass' && options.mode !== 'compass' && !shouldReduceMotion) {
       cameraAnimationRef.current.to = nextCamera
+      return
+    }
+
+    if (!shouldApplyMap) {
+      stopCameraAnimation()
+      renderNavigationCamera(nextCamera, false)
       return
     }
 
@@ -325,6 +401,7 @@ export function TmapPanel({
       to: nextCamera,
       durationMs: options.durationMs ?? CAMERA_ANIMATION_MS,
       animatePosition: options.animatePosition ?? true,
+      applyMap: shouldApplyMap,
       mode: options.mode,
     }
     startCameraAnimation()
@@ -358,6 +435,7 @@ export function TmapPanel({
           window.__naviTmapMap = mapRef.current
         }
         setStatus('ready')
+        setRouteDirectionZoom(MAP_OVERVIEW_ZOOM)
       })
       .catch(() => setStatus('error'))
 
@@ -369,6 +447,91 @@ export function TmapPanel({
       }
     }
   }, [stopCameraAnimation])
+
+  useEffect(() => {
+    setCameraFollowing(true)
+    navigationZoomRef.current = MAP_NAVIGATION_ZOOM
+    setRouteDirectionZoom(MAP_NAVIGATION_ZOOM)
+  }, [route, setCameraFollowing])
+
+  useEffect(() => {
+    const mapElement = mapElementRef.current
+    if (!mapElement || !hasGuidanceRoute || !simulationPosition) {
+      return
+    }
+
+    let dragStart: { x: number; y: number } | undefined
+
+    const handlePointerDown = (event: PointerEvent) => {
+      dragStart = {
+        x: event.clientX,
+        y: event.clientY,
+      }
+    }
+
+    const handlePointerMove = (event: PointerEvent) => {
+      if (!dragStart) {
+        return
+      }
+
+      const distance = Math.hypot(event.clientX - dragStart.x, event.clientY - dragStart.y)
+      if (distance < 8) {
+        return
+      }
+
+      setCameraFollowing(false)
+      stopCameraAnimation()
+      dragStart = undefined
+    }
+
+    const resetDragStart = () => {
+      dragStart = undefined
+    }
+
+    const syncNavigationZoom = (event: WheelEvent) => {
+      const zoomBeforeWheel = mapRef.current?.getZoom?.()
+      const zoomDirection = event.deltaY < 0 ? 1 : event.deltaY > 0 ? -1 : 0
+
+      if (zoomDirection !== 0) {
+        const nextZoom = (
+          typeof zoomBeforeWheel === 'number'
+            ? zoomBeforeWheel
+            : navigationZoomRef.current
+        ) + zoomDirection
+        navigationZoomRef.current = nextZoom
+        setRouteDirectionZoom(nextZoom)
+      }
+
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          const currentZoom = mapRef.current?.getZoom?.()
+          if (
+            typeof currentZoom === 'number' &&
+            currentZoom !== zoomBeforeWheel
+          ) {
+            navigationZoomRef.current = currentZoom
+            setRouteDirectionZoom(currentZoom)
+          }
+        })
+      })
+    }
+
+    mapElement.addEventListener('pointerdown', handlePointerDown)
+    mapElement.addEventListener('pointermove', handlePointerMove)
+    mapElement.addEventListener('pointerup', resetDragStart)
+    mapElement.addEventListener('pointercancel', resetDragStart)
+    mapElement.addEventListener('pointerleave', resetDragStart)
+    mapElement.addEventListener('wheel', syncNavigationZoom, { passive: true })
+
+    return () => {
+      mapElement.removeEventListener('pointerdown', handlePointerDown)
+      mapElement.removeEventListener('pointermove', handlePointerMove)
+      mapElement.removeEventListener('pointerup', resetDragStart)
+      mapElement.removeEventListener('pointercancel', resetDragStart)
+      mapElement.removeEventListener('pointerleave', resetDragStart)
+      mapElement.removeEventListener('wheel', syncNavigationZoom)
+    }
+  }, [hasGuidanceRoute, setCameraFollowing, simulationPosition, stopCameraAnimation])
 
   useEffect(() => {
     if (!window.Tmapv3 || !mapRef.current || status !== 'ready' || !currentPosition) {
@@ -384,14 +547,18 @@ export function TmapPanel({
       displayPosition,
       northUpLocked,
     )
+    const shouldFollowCamera = cameraFollowingRef.current
+    const markerBearing = shouldFollowCamera
+      ? cameraBearing.markerBearing
+      : getNavigationMarkerBearing(route?.coordinates, displayPosition, getCurrentMapBearing())
 
     if (!currentMarkerRef.current) {
-      currentMarkerBearingRef.current = cameraBearing.markerBearing
+      currentMarkerBearingRef.current = markerBearing
       currentMarkerRef.current = new window.Tmapv3.Marker({
         position,
         anchor: 'center',
         iconSize: new window.Tmapv3.Size(NAVIGATION_MARKER_SIZE, NAVIGATION_MARKER_SIZE),
-        iconHTML: createNavigationArrowMarker(cameraBearing.markerBearing),
+        iconHTML: createNavigationArrowMarker(markerBearing),
         map: mapRef.current,
       })
     }
@@ -401,10 +568,11 @@ export function TmapPanel({
       cameraBearing.mapBearing,
       {
         animated: Boolean(route?.coordinates.length),
-        markerBearing: cameraBearing.markerBearing,
+        applyMap: shouldFollowCamera,
+        markerBearing,
       },
     )
-  }, [applyNavigationCamera, currentPosition, northUpLocked, route?.coordinates, status])
+  }, [applyNavigationCamera, currentPosition, getCurrentMapBearing, northUpLocked, route?.coordinates, status])
 
   useEffect(() => {
     if (!window.Tmapv3 || !mapRef.current || status !== 'ready') {
@@ -417,49 +585,61 @@ export function TmapPanel({
       if (!remainingRouteCoordinates.length) {
         routeLineRefs.current.forEach((line) => line?.setMap?.(null))
         routeLineRefs.current = []
+        routeDirectionMarkerRefs.current.forEach(({ marker }) => marker.setMap(null))
+        routeDirectionMarkerRefs.current = []
         routeLineSignatureRef.current = undefined
         routeLineStructureSignatureRef.current = undefined
+        routeDirectionMarkerSignatureRef.current = undefined
       }
       return
     }
 
     const routeLineSignature = getRouteLineSignature(drawableSegments)
-    if (routeLineSignatureRef.current === routeLineSignature) {
-      return
-    }
+    const routeLineChanged = routeLineSignatureRef.current !== routeLineSignature
 
-    const routeColor = window
-      .getComputedStyle(document.documentElement)
-      .getPropertyValue('--nav-route')
-      .trim() || '#2563eb'
+    if (routeLineChanged) {
+      const routeColor = window
+        .getComputedStyle(document.documentElement)
+        .getPropertyValue('--nav-route')
+        .trim() || '#00A2FE'
 
-    const routeLineStructureSignature = getRouteLineStructureSignature(drawableSegments)
-    const canUpdateExistingRouteLines = (
-      routeLineStructureSignatureRef.current === routeLineStructureSignature &&
-      routeLineRefs.current.length === drawableSegments.length &&
-      routeLineRefs.current.every((line) => typeof line?.setPath === 'function')
-    )
+      const routeLineStructureSignature = getRouteLineStructureSignature(drawableSegments)
+      const canUpdateExistingRouteLines = (
+        routeLineStructureSignatureRef.current === routeLineStructureSignature &&
+        routeLineRefs.current.length === drawableSegments.length * 2 &&
+        routeLineRefs.current.every((line) => typeof line?.setPath === 'function')
+      )
 
-    if (canUpdateExistingRouteLines) {
-      drawableSegments.forEach((segment, index) => {
-        routeLineRefs.current[index]?.setPath?.(toTmapPath(segment.coordinates))
-      })
-    } else {
-      routeLineRefs.current.forEach((line) => line?.setMap?.(null))
-      const nextRouteLines = drawableSegments.map((segment) => (
-        new window.Tmapv3!.Polyline({
-          path: toTmapPath(segment.coordinates),
-          strokeColor: getRouteLineColor(segment.congestion, routeColor),
-          strokeOpacity: 1,
-          strokeWeight: ROUTE_LINE_STROKE_WEIGHT,
-          map: mapRef.current,
+      if (canUpdateExistingRouteLines) {
+        drawableSegments.forEach((segment, index) => {
+          const path = toTmapPath(segment.coordinates)
+          routeLineRefs.current[index * 2]?.setPath?.(path)
+          routeLineRefs.current[index * 2 + 1]?.setPath?.(path)
         })
-      ))
+      } else {
+        routeLineRefs.current.forEach((line) => line?.setMap?.(null))
+        const nextRouteLines = drawableSegments.flatMap((segment) => (
+          createRouteLinePolylines(segment, routeColor, mapRef.current)
+        ))
 
-      routeLineRefs.current = nextRouteLines
-      routeLineStructureSignatureRef.current = routeLineStructureSignature
+        routeLineRefs.current = nextRouteLines
+        routeLineStructureSignatureRef.current = routeLineStructureSignature
+      }
+      routeLineSignatureRef.current = routeLineSignature
     }
-    routeLineSignatureRef.current = routeLineSignature
+    const routeDirectionMarkerSignature = getRouteDirectionMarkerSignature(routeDirectionCoordinates, routeDirectionZoom)
+    if (routeDirectionMarkerSignatureRef.current !== routeDirectionMarkerSignature) {
+      routeDirectionMarkerRefs.current.forEach(({ marker }) => marker.setMap(null))
+      routeDirectionMarkerRefs.current = createRouteDirectionMarkers(
+        routeDirectionCoordinates,
+        mapRef.current,
+        getCurrentMapBearing(),
+        routeDirectionZoom,
+      )
+      routeDirectionMarkerSignatureRef.current = routeDirectionMarkerSignature
+    } else {
+      updateRouteDirectionMarkerBearings(getCurrentMapBearing())
+    }
 
     const firstCoordinate = remainingRouteCoordinates[0]
     if (firstCoordinate) {
@@ -473,6 +653,7 @@ export function TmapPanel({
         mapRef.current.setBearing?.(bearing)
         renderedBearingRef.current = bearing
         syncCompassBearing(bearing)
+        updateRouteDirectionMarkerBearings(bearing)
         renderedCameraRef.current = {
           position: firstCoordinate,
           bearing,
@@ -480,7 +661,18 @@ export function TmapPanel({
         }
       }
     }
-  }, [progressPosition, remainingRouteCoordinates, resolveCameraCenter, routeLineSegments, status, syncCompassBearing])
+  }, [
+    getCurrentMapBearing,
+    progressPosition,
+    remainingRouteCoordinates,
+    routeDirectionCoordinates,
+    resolveCameraCenter,
+    routeDirectionZoom,
+    routeLineSegments,
+    status,
+    syncCompassBearing,
+    updateRouteDirectionMarkerBearings,
+  ])
 
   useEffect(() => {
     if (!window.Tmapv3 || !mapRef.current || status !== 'ready') {
@@ -519,14 +711,18 @@ export function TmapPanel({
       displayPosition,
       northUpLocked,
     )
+    const shouldFollowCamera = cameraFollowingRef.current
+    const markerBearing = shouldFollowCamera
+      ? cameraBearing.markerBearing
+      : getNavigationMarkerBearing(route?.coordinates, displayPosition, getCurrentMapBearing())
 
     if (!currentMarkerRef.current) {
-      currentMarkerBearingRef.current = cameraBearing.markerBearing
+      currentMarkerBearingRef.current = markerBearing
       currentMarkerRef.current = new window.Tmapv3.Marker({
         position,
         anchor: 'center',
         iconSize: new window.Tmapv3.Size(NAVIGATION_MARKER_SIZE, NAVIGATION_MARKER_SIZE),
-        iconHTML: createNavigationArrowMarker(cameraBearing.markerBearing),
+        iconHTML: createNavigationArrowMarker(markerBearing),
         map: mapRef.current,
       })
     }
@@ -536,10 +732,11 @@ export function TmapPanel({
       cameraBearing.mapBearing,
       {
         animated: false,
-        markerBearing: cameraBearing.markerBearing,
+        applyMap: shouldFollowCamera,
+        markerBearing,
       },
     )
-  }, [applyNavigationCamera, northUpLocked, progressPosition, route?.coordinates, simulationPosition, status])
+  }, [applyNavigationCamera, getCurrentMapBearing, northUpLocked, progressPosition, route?.coordinates, simulationPosition, status])
 
   const applyCompassMode = useCallback((nextNorthUpLocked: boolean, position?: Coordinate) => {
     setNorthUpLocked(nextNorthUpLocked)
@@ -573,17 +770,46 @@ export function TmapPanel({
     }
   }, [applyNavigationCamera, currentPosition, route?.coordinates, simulationPosition])
 
-  const resetNorthUp = useCallback((position?: Coordinate) => {
-    applyCompassMode(true, position)
-  }, [applyCompassMode])
-
   const toggleCompassMode = useCallback(() => {
     applyCompassMode(!northUpLocked)
   }, [applyCompassMode, northUpLocked])
 
+  const resumeCameraFollowing = useCallback(() => {
+    setCameraFollowing(true)
+
+    const targetPosition = progressPosition
+      ?? simulationPosition
+      ?? currentPosition
+
+    if (!targetPosition) {
+      return
+    }
+
+    const cameraBearing = getNavigationCameraBearing(
+      route?.coordinates,
+      targetPosition,
+      northUpLocked,
+    )
+
+    stopCameraAnimation()
+    applyNavigationCamera(targetPosition, cameraBearing.mapBearing, {
+      animated: false,
+      markerBearing: cameraBearing.markerBearing,
+    })
+  }, [
+    applyNavigationCamera,
+    currentPosition,
+    northUpLocked,
+    progressPosition,
+    route?.coordinates,
+    setCameraFollowing,
+    simulationPosition,
+    stopCameraAnimation,
+  ])
+
   const handleRequestLocation = () => {
     onRequestLocation?.()
-    resetNorthUp()
+    resumeCameraFollowing()
   }
 
   const handleZoom = (direction: 'in' | 'out') => {
@@ -593,25 +819,29 @@ export function TmapPanel({
       return
     }
 
-    if (direction === 'in' && map.zoomIn) {
-      map.zoomIn()
-      return
-    }
-
-    if (direction === 'out' && map.zoomOut) {
-      map.zoomOut()
-      return
-    }
-
     const currentZoom = map.getZoom?.()
-    if (typeof currentZoom === 'number') {
-      map.setZoom?.(currentZoom + (direction === 'in' ? 1 : -1))
+    const nextZoom = (
+      typeof currentZoom === 'number'
+        ? currentZoom
+        : navigationZoomRef.current
+    ) + (direction === 'in' ? 1 : -1)
+
+    navigationZoomRef.current = nextZoom
+    setRouteDirectionZoom(nextZoom)
+
+    const renderedCamera = renderedCameraRef.current
+    if (renderedCamera) {
+      const centeredLatLng = resolveCameraCenter(renderedCamera.position)
+      applyMapCamera(map, renderedCamera, centeredLatLng, nextZoom)
+      return
     }
+
+    map.setZoom?.(nextZoom)
   }
 
   return (
     <div className="relative z-0 h-full w-full overflow-hidden bg-[var(--nav-frame)]">
-      <div ref={mapElementRef} className="h-full w-full" />
+      <div ref={mapElementRef} className="h-full w-full" data-testid="tmap-canvas" />
       {status === 'ready' ? (
         <div className="absolute bottom-20 left-5 z-10 flex flex-col items-center gap-3 max-sm:left-3">
           {hasGuidanceRoute ? (
@@ -738,14 +968,19 @@ function easeInOutCubic(progress: number) {
     : 1 - Math.pow(-2 * progress + 2, 3) / 2
 }
 
-function applyMapCamera(map: NonNullable<Window['Tmapv3Map']>, camera: RenderedCamera, center: unknown) {
+function applyMapCamera(
+  map: NonNullable<Window['Tmapv3Map']>,
+  camera: RenderedCamera,
+  center: unknown,
+  zoom: number,
+) {
   const nativeCamera = getNativeMapCamera(map)
   const centerArray = getLngLatArray(center)
 
   if (nativeCamera?.jumpTo && centerArray) {
     nativeCamera.jumpTo(
       {
-        zoom: MAP_NAVIGATION_ZOOM,
+        zoom,
         center: centerArray,
         bearing: camera.bearing,
         pitch: MAP_NAVIGATION_PITCH,
@@ -756,7 +991,7 @@ function applyMapCamera(map: NonNullable<Window['Tmapv3Map']>, camera: RenderedC
     return
   }
 
-  map.setZoom?.(MAP_NAVIGATION_ZOOM)
+  map.setZoom?.(zoom)
   map.setPitch?.(MAP_NAVIGATION_PITCH)
   map.setBearing?.(camera.bearing)
   map.setCenter?.(center)
@@ -830,6 +1065,19 @@ function getNavigationCameraBearing(
   }
 }
 
+function getNavigationMarkerBearing(
+  routeCoordinates: Coordinate[] | undefined,
+  position: Coordinate,
+  mapBearing: number,
+) {
+  if (!routeCoordinates?.length) {
+    return 0
+  }
+
+  const vehicleBearing = getLocalRouteBearingNearCoordinate(routeCoordinates, position)
+  return getVehicleMarkerBearing(vehicleBearing, mapBearing)
+}
+
 function getVehicleMarkerBearing(vehicleBearing: number, mapBearing: number) {
   return normalizeSignedBearing(vehicleBearing - mapBearing)
 }
@@ -854,12 +1102,162 @@ function compactRouteCoordinates(coordinates: Coordinate[]) {
   ))
 }
 
+function createRouteLinePolylines(
+  segment: RouteTrafficSegment,
+  routeColor: string,
+  map: Window['Tmapv3Map'],
+) {
+  const path = toTmapPath(segment.coordinates)
+
+  return [
+    new window.Tmapv3!.Polyline({
+      path,
+      strokeColor: getRouteLineBorderColor(segment.congestion),
+      strokeOpacity: 1,
+      strokeWeight: ROUTE_LINE_BORDER_STROKE_WEIGHT,
+      map,
+    }),
+    new window.Tmapv3!.Polyline({
+      path,
+      strokeColor: getRouteLineColor(segment.congestion, routeColor),
+      strokeOpacity: 1,
+      strokeWeight: ROUTE_LINE_STROKE_WEIGHT,
+      map,
+    }),
+  ]
+}
+
+function createRouteDirectionMarkers(
+  coordinates: Coordinate[],
+  map: Window['Tmapv3Map'],
+  mapBearing: number,
+  zoom: number,
+) {
+  if (!window.Tmapv3 || !map) {
+    return []
+  }
+
+  return getRouteDirectionArrowAnchors(coordinates, zoom).map((anchor) => {
+    const markerBearing = getVehicleMarkerBearing(anchor.bearing, mapBearing)
+    const marker = new window.Tmapv3!.Marker({
+      position: new window.Tmapv3!.LatLng(anchor.coordinate.lat, anchor.coordinate.lng),
+      anchor: 'center',
+      iconSize: new window.Tmapv3!.Size(ROUTE_DIRECTION_ARROW_SIZE, ROUTE_DIRECTION_ARROW_SIZE),
+      iconHTML: createRouteDirectionArrowMarker(markerBearing),
+      zIndex: 120,
+      map,
+    })
+
+    return {
+      marker,
+      bearing: anchor.bearing,
+    }
+  })
+}
+
+function getRouteDirectionArrowAnchors(coordinates: Coordinate[], zoom: number) {
+  return getSegmentDirectionArrowAnchors(coordinates, getRouteDirectionArrowDensity(zoom))
+}
+
+function getSegmentDirectionArrowAnchors(
+  coordinates: Coordinate[],
+  density: RouteDirectionArrowDensity,
+) {
+  const routeDistance = getRouteDistanceMeters(coordinates)
+
+  if (routeDistance <= ROUTE_DIRECTION_ARROW_MIN_EDGE_GAP_METERS * 2) {
+    return []
+  }
+
+  const startArrowDistance = Math.min(density.startOffsetMeters, routeDistance * 0.18)
+  const endArrowDistance = Math.max(
+    startArrowDistance,
+    routeDistance - Math.min(ROUTE_DIRECTION_ARROW_END_OFFSET_METERS, routeDistance * 0.12),
+  )
+  const drawableDistance = endArrowDistance - startArrowDistance
+  const spacingBasedCount = Math.floor(drawableDistance / density.spacingMeters) + 1
+  const arrowCount = Math.max(1, Math.min(density.maxArrows, spacingBasedCount))
+
+  return Array.from({ length: arrowCount }, (_, index) => {
+    const targetDistance = arrowCount === 1
+      ? endArrowDistance
+      : startArrowDistance + (drawableDistance * index) / (arrowCount - 1)
+
+    return getRouteAnchorAtDistance(coordinates, targetDistance)
+  }).filter((anchor): anchor is { coordinate: Coordinate; bearing: number } => Boolean(anchor))
+}
+
+function getRouteDirectionArrowDensity(zoom: number): RouteDirectionArrowDensity {
+  if (zoom >= 18) {
+    return { spacingMeters: 520, startOffsetMeters: 140, maxArrows: 10 }
+  }
+
+  if (zoom >= 17) {
+    return { spacingMeters: 850, startOffsetMeters: 190, maxArrows: 6 }
+  }
+
+  if (zoom >= 16) {
+    return { spacingMeters: 1200, startOffsetMeters: 260, maxArrows: 5 }
+  }
+
+  if (zoom >= 15) {
+    return { spacingMeters: 1700, startOffsetMeters: 340, maxArrows: 4 }
+  }
+
+  if (zoom >= 14) {
+    return { spacingMeters: 2400, startOffsetMeters: 420, maxArrows: 3 }
+  }
+
+  return { spacingMeters: 3200, startOffsetMeters: 500, maxArrows: 2 }
+}
+
+function getRouteAnchorAtDistance(coordinates: Coordinate[], targetDistance: number) {
+  let walkedDistance = 0
+
+  for (let index = 0; index < coordinates.length - 1; index += 1) {
+    const start = coordinates[index]
+    const end = coordinates[index + 1]
+    const segmentDistance = getApproximateDistanceMeters(start, end)
+
+    if (segmentDistance <= 0) {
+      continue
+    }
+
+    if (walkedDistance + segmentDistance >= targetDistance) {
+      const segmentRatio = (targetDistance - walkedDistance) / segmentDistance
+      return {
+        coordinate: interpolateCoordinate(start, end, segmentRatio),
+        bearing: getRouteBearing(coordinates, index),
+      }
+    }
+
+    walkedDistance += segmentDistance
+  }
+
+  return undefined
+}
+
+function getRouteDistanceMeters(coordinates: Coordinate[]) {
+  return coordinates.reduce((distance, coordinate, index) => {
+    const nextCoordinate = coordinates[index + 1]
+    return nextCoordinate ? distance + getApproximateDistanceMeters(coordinate, nextCoordinate) : distance
+  }, 0)
+}
+
 function getRouteLineColor(congestion: TrafficCongestion, fallbackColor: string) {
-  if (congestion === 1) return '#16a34a'
-  if (congestion === 2) return '#eab308'
-  if (congestion === 3) return '#f97316'
-  if (congestion === 4) return '#dc2626'
+  if (congestion === 1) return '#16C47F'
+  if (congestion === 2) return '#FFD43B'
+  if (congestion === 3) return '#FA9B0B'
+  if (congestion === 4) return '#F04438'
   return fallbackColor
+}
+
+function getRouteLineBorderColor(congestion: TrafficCongestion) {
+  if (congestion === 1) return '#087B4B'
+  if (congestion === 2) return '#A57900'
+  if (congestion === 3) return '#955915'
+  if (congestion === 4) return '#991B1B'
+  return '#01609A'
 }
 
 function getRouteLineSignature(segments: RouteTrafficSegment[]) {
@@ -872,6 +1270,14 @@ function getRouteLineSignature(segments: RouteTrafficSegment[]) {
 
 function getRouteLineStructureSignature(segments: RouteTrafficSegment[]) {
   return segments.map((segment) => segment.congestion).join('|')
+}
+
+function getRouteDirectionMarkerSignature(coordinates: Coordinate[], zoom: number) {
+  const density = getRouteDirectionArrowDensity(zoom)
+
+  return `${density.spacingMeters}:${density.maxArrows}:` + coordinates.map((coordinate) => (
+    `${coordinate.lat.toFixed(4)},${coordinate.lng.toFixed(4)}`
+  )).join('|')
 }
 
 function toTmapPath(coordinates: Coordinate[]) {
@@ -990,6 +1396,15 @@ function getSquaredCoordinateDistance(from: Coordinate, to: Coordinate) {
   const lngDelta = from.lng - to.lng
 
   return latDelta * latDelta + lngDelta * lngDelta
+}
+
+function getApproximateDistanceMeters(from: Coordinate, to: Coordinate) {
+  const earthMetersPerDegree = 111_320
+  const latitudeScale = Math.cos(((from.lat + to.lat) / 2) * Math.PI / 180)
+  const latDeltaMeters = (to.lat - from.lat) * earthMetersPerDegree
+  const lngDeltaMeters = (to.lng - from.lng) * earthMetersPerDegree * latitudeScale
+
+  return Math.hypot(latDeltaMeters, lngDeltaMeters)
 }
 
 function isSameCamera(from: RenderedCamera, to: RenderedCamera) {

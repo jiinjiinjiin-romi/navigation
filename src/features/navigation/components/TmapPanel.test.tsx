@@ -13,6 +13,10 @@ const mockedLoadTmapSdk = vi.mocked(loadTmapSdk)
 describe('TmapPanel', () => {
   const setCenter = vi.fn()
   const setZoom = vi.fn()
+  const getZoom = vi.fn()
+  const getBearing = vi.fn()
+  const zoomIn = vi.fn()
+  const zoomOut = vi.fn()
   const setBearing = vi.fn()
   const setPitch = vi.fn()
   const markerSetPosition = vi.fn()
@@ -26,6 +30,12 @@ describe('TmapPanel', () => {
     mockedLoadTmapSdk.mockResolvedValue()
     setCenter.mockReset()
     setZoom.mockReset()
+    getZoom.mockReset()
+    getZoom.mockReturnValue(19)
+    getBearing.mockReset()
+    getBearing.mockReturnValue(0)
+    zoomIn.mockReset()
+    zoomOut.mockReset()
     setBearing.mockReset()
     setPitch.mockReset()
     markerSetPosition.mockReset()
@@ -37,10 +47,14 @@ describe('TmapPanel', () => {
     window.Tmapv3 = {
       Map: vi.fn(function () {
         return {
+          getBearing,
+          getZoom,
           setCenter,
           setZoom,
           setBearing,
           setPitch,
+          zoomIn,
+          zoomOut,
         }
       }),
       LatLng: vi.fn(function (_lat: number, _lng: number) {
@@ -65,6 +79,12 @@ describe('TmapPanel', () => {
     } as unknown as NonNullable<Window['Tmapv3']>
   })
 
+  const getRouteDirectionMarkerCalls = () => (
+    vi.mocked(window.Tmapv3!.Marker).mock.calls.filter((call) => (
+      String(call[0]?.iconHTML).includes('nav-route-direction-arrow')
+    ))
+  )
+
   it('creates the map at a navigation-focused zoom level', async () => {
     render(<TmapPanel />)
 
@@ -77,7 +97,7 @@ describe('TmapPanel', () => {
       expect.objectContaining({
         pitch: 0,
         rotateEnabled: true,
-        zoom: 19,
+        zoom: 18,
       }),
     )
   })
@@ -88,7 +108,7 @@ describe('TmapPanel', () => {
     await waitFor(() => {
       expect(setCenter).toHaveBeenCalledWith({ lat: 37.5665, lng: 126.978 })
     })
-    expect(setZoom).toHaveBeenCalledWith(19)
+    expect(setZoom).toHaveBeenCalledWith(18)
     expect(window.Tmapv3!.Marker).toHaveBeenCalledWith(
       expect.objectContaining({
         anchor: 'center',
@@ -138,7 +158,7 @@ describe('TmapPanel', () => {
     await waitFor(() => {
       expect(setCenter).toHaveBeenCalledWith({ lat: 37.55, lng: 127.01 })
     })
-    expect(setZoom).toHaveBeenCalledWith(19)
+    expect(setZoom).toHaveBeenCalledWith(18)
   })
 
   it('rotates the map camera to the active route bearing', async () => {
@@ -200,7 +220,7 @@ describe('TmapPanel', () => {
         expect.objectContaining({
           center: [126, 37],
           bearing: expect.closeTo(89.8, 0),
-          zoom: 19,
+          zoom: 18,
           pitch: 0,
         }),
         { animate: false },
@@ -682,10 +702,185 @@ describe('TmapPanel', () => {
             { lat: 37, lng: 126.5 },
             { lat: 37, lng: 127 },
           ],
-          strokeWeight: 10,
+          strokeColor: '#01609A',
+          strokeWeight: 18,
         }),
       )
     })
+    expect(window.Tmapv3!.Polyline).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: [
+          { lat: 37, lng: 126 },
+          { lat: 37, lng: 126.5 },
+          { lat: 37, lng: 127 },
+        ],
+        strokeColor: '#00A2FE',
+        strokeWeight: 13,
+      }),
+    )
+    expect(window.Tmapv3!.Marker).toHaveBeenCalledWith(
+      expect.objectContaining({
+        anchor: 'center',
+        iconSize: { width: 18, height: 18 },
+        iconHTML: expect.stringContaining('nav-route-direction-arrow'),
+      }),
+    )
+  })
+
+  it('draws sparse white route direction markers above the route line', async () => {
+    render(
+      <TmapPanel
+        route={{
+          coordinates: [
+            { lat: 37, lng: 126 },
+            { lat: 37, lng: 126.5 },
+          ],
+          summary: {
+            distanceMeters: 1000,
+            durationSeconds: 120,
+          },
+        }}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(window.Tmapv3!.Polyline).toHaveBeenCalledTimes(2)
+    })
+
+    expect(window.Tmapv3!.Polyline).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        strokeColor: '#01609A',
+        strokeWeight: 18,
+      }),
+    )
+    expect(window.Tmapv3!.Polyline).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        strokeColor: '#00A2FE',
+        strokeWeight: 13,
+      }),
+    )
+    expect(window.Tmapv3!.Marker).toHaveBeenCalledWith(
+      expect.objectContaining({
+        iconHTML: expect.stringContaining('fill="#fff"'),
+        zIndex: 120,
+      }),
+    )
+  })
+
+  it('reduces route direction marker density after zooming out', async () => {
+    render(
+      <TmapPanel
+        route={{
+          coordinates: [
+            { lat: 37, lng: 126 },
+            { lat: 37, lng: 127 },
+          ],
+          summary: {
+            distanceMeters: 88000,
+            durationSeconds: 1200,
+          },
+        }}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(getRouteDirectionMarkerCalls().length).toBeGreaterThan(0)
+    })
+    const zoomedInMarkerCount = getRouteDirectionMarkerCalls().length
+    expect(zoomedInMarkerCount).toBeLessThanOrEqual(10)
+
+    vi.mocked(window.Tmapv3!.Marker).mockClear()
+    getZoom.mockReturnValue(13)
+    fireEvent.click(screen.getByRole('button', { name: '지도 축소' }))
+
+    await waitFor(() => {
+      expect(getRouteDirectionMarkerCalls().length).toBeGreaterThan(0)
+    })
+    expect(getRouteDirectionMarkerCalls().length).toBeLessThan(zoomedInMarkerCount)
+    expect(getRouteDirectionMarkerCalls().length).toBeLessThanOrEqual(2)
+  })
+
+  it('distributes route direction markers across the full remaining route', async () => {
+    render(
+      <TmapPanel
+        route={{
+          coordinates: [
+            { lat: 37, lng: 126 },
+            { lat: 37, lng: 126.03 },
+            { lat: 37, lng: 126.06 },
+          ],
+          trafficSegments: [
+            {
+              coordinates: [
+                { lat: 37, lng: 126 },
+                { lat: 37, lng: 126.012 },
+              ],
+              congestion: 1,
+            },
+            {
+              coordinates: [
+                { lat: 37, lng: 126.048 },
+                { lat: 37, lng: 126.06 },
+              ],
+              congestion: 3,
+            },
+          ],
+          summary: {
+            distanceMeters: 5280,
+            durationSeconds: 420,
+          },
+        }}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(getRouteDirectionMarkerCalls().length).toBeGreaterThan(2)
+    })
+
+    const routeDirectionMarkerLongitudes = getRouteDirectionMarkerCalls()
+      .map((call) => (call[0]?.position as { lng?: number } | undefined)?.lng)
+
+    expect(routeDirectionMarkerLongitudes.some((lng) => (
+      typeof lng === 'number' && lng > 126.025 && lng < 126.04
+    ))).toBe(true)
+    expect(routeDirectionMarkerLongitudes.some((lng) => (
+      typeof lng === 'number' && lng > 126.055
+    ))).toBe(true)
+  })
+
+  it('keeps a route direction marker near the end of the visible route', async () => {
+    render(
+      <TmapPanel
+        route={{
+          coordinates: [
+            { lat: 37, lng: 126 },
+            { lat: 37, lng: 126.01 },
+          ],
+          summary: {
+            distanceMeters: 880,
+            durationSeconds: 120,
+          },
+        }}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(getRouteDirectionMarkerCalls().length).toBeGreaterThan(0)
+    })
+
+    const routeDirectionMarkerPositions = getRouteDirectionMarkerCalls()
+      .map((call) => call[0]?.position)
+
+    expect(routeDirectionMarkerPositions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          lat: expect.closeTo(37, 4),
+          lng: expect.closeTo(126.009, 2),
+        }),
+      ]),
+    )
   })
 
   it('draws traffic-aware route segments with congestion colors', async () => {
@@ -728,8 +923,8 @@ describe('TmapPanel', () => {
             { lat: 37, lng: 126 },
             { lat: 37, lng: 126.5 },
           ],
-          strokeColor: '#16a34a',
-          strokeWeight: 10,
+          strokeColor: '#16C47F',
+          strokeWeight: 13,
         }),
       )
     })
@@ -739,7 +934,7 @@ describe('TmapPanel', () => {
           { lat: 37, lng: 126.5 },
           { lat: 37, lng: 127 },
         ],
-        strokeColor: '#dc2626',
+        strokeColor: '#F04438',
       }),
     )
   })
@@ -777,7 +972,7 @@ describe('TmapPanel', () => {
             { lat: 37, lng: 126.5 },
             { lat: 37, lng: 127 },
           ],
-          strokeColor: '#2563eb',
+          strokeColor: '#00A2FE',
         }),
       )
     })
@@ -787,7 +982,7 @@ describe('TmapPanel', () => {
           { lat: 37, lng: 126 },
           { lat: 37, lng: 126.5 },
         ],
-        strokeColor: '#16a34a',
+        strokeColor: '#16C47F',
       }),
     )
   })
@@ -826,7 +1021,7 @@ describe('TmapPanel', () => {
             { lat: 37, lng: 126.5 },
             { lat: 37, lng: 127 },
           ],
-          strokeWeight: 10,
+          strokeWeight: 13,
         }),
       )
     })
@@ -847,7 +1042,7 @@ describe('TmapPanel', () => {
     const { rerender } = render(<TmapPanel route={route} />)
 
     await waitFor(() => {
-      expect(window.Tmapv3!.Polyline).toHaveBeenCalledTimes(1)
+      expect(window.Tmapv3!.Polyline).toHaveBeenCalledTimes(2)
     })
 
     rerender(
@@ -863,7 +1058,7 @@ describe('TmapPanel', () => {
         { lat: 37, lng: 127 },
       ])
     })
-    expect(window.Tmapv3!.Polyline).toHaveBeenCalledTimes(1)
+    expect(window.Tmapv3!.Polyline).toHaveBeenCalledTimes(2)
     expect(polylineSetMap).not.toHaveBeenCalledWith(null)
   })
 
@@ -882,7 +1077,7 @@ describe('TmapPanel', () => {
     const { rerender } = render(<TmapPanel route={route} />)
 
     await waitFor(() => {
-      expect(window.Tmapv3!.Polyline).toHaveBeenCalledTimes(1)
+      expect(window.Tmapv3!.Polyline).toHaveBeenCalledTimes(2)
     })
 
     rerender(
@@ -896,7 +1091,7 @@ describe('TmapPanel', () => {
       expect(setCenter).toHaveBeenCalled()
     })
 
-    expect(window.Tmapv3!.Polyline).toHaveBeenCalledTimes(1)
+    expect(window.Tmapv3!.Polyline).toHaveBeenCalledTimes(2)
     expect(polylineSetMap).not.toHaveBeenCalledWith(null)
   })
 
@@ -929,7 +1124,7 @@ describe('TmapPanel', () => {
     )
 
     await waitFor(() => {
-      expect(window.Tmapv3!.Polyline).toHaveBeenCalledTimes(2)
+      expect(window.Tmapv3!.Polyline).toHaveBeenCalledTimes(4)
     })
 
     rerender(
@@ -943,8 +1138,208 @@ describe('TmapPanel', () => {
       expect(setCenter).toHaveBeenCalled()
     })
 
-    expect(window.Tmapv3!.Polyline).toHaveBeenCalledTimes(2)
+    expect(window.Tmapv3!.Polyline).toHaveBeenCalledTimes(4)
     expect(polylineSetMap).not.toHaveBeenCalledWith(null)
+  })
+
+  it('keeps user zoom changes while simulation continues', async () => {
+    getZoom.mockReturnValue(17)
+    const route = {
+      coordinates: [
+        { lat: 37, lng: 126 },
+        { lat: 37, lng: 127 },
+      ],
+      summary: {
+        distanceMeters: 1000,
+        durationSeconds: 120,
+      },
+    }
+    const { rerender } = render(
+      <TmapPanel
+        route={route}
+        simulationPosition={{ lat: 37, lng: 126 }}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(setCenter).toHaveBeenCalledWith({ lat: 37, lng: 126 })
+    })
+
+    setZoom.mockClear()
+    fireEvent.click(screen.getByRole('button', { name: '지도 확대' }))
+
+    expect(setZoom).toHaveBeenCalledWith(18)
+
+    rerender(
+      <TmapPanel
+        route={route}
+        simulationPosition={{ lat: 37, lng: 126.2 }}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(setZoom).toHaveBeenCalledWith(18)
+    })
+  })
+
+  it('applies zoom controls immediately while following simulation camera', async () => {
+    getZoom.mockReturnValue(17)
+    const route = {
+      coordinates: [
+        { lat: 37, lng: 126 },
+        { lat: 37, lng: 127 },
+      ],
+      summary: {
+        distanceMeters: 1000,
+        durationSeconds: 120,
+      },
+    }
+
+    render(
+      <TmapPanel
+        route={route}
+        simulationPosition={{ lat: 37, lng: 126 }}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(setCenter).toHaveBeenCalledWith({ lat: 37, lng: 126 })
+    })
+
+    setZoom.mockClear()
+    fireEvent.click(screen.getByRole('button', { name: '지도 확대' }))
+
+    expect(setZoom).toHaveBeenCalledWith(18)
+  })
+
+  it('keeps wheel zoom changes while following simulation camera before the SDK reports the new zoom', async () => {
+    getZoom.mockReturnValue(17)
+    const route = {
+      coordinates: [
+        { lat: 37, lng: 126 },
+        { lat: 37, lng: 127 },
+      ],
+      summary: {
+        distanceMeters: 1000,
+        durationSeconds: 120,
+      },
+    }
+    const { rerender } = render(
+      <TmapPanel
+        route={route}
+        simulationPosition={{ lat: 37, lng: 126 }}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(setCenter).toHaveBeenCalledWith({ lat: 37, lng: 126 })
+    })
+
+    fireEvent.wheel(screen.getByTestId('tmap-canvas'), { deltaY: -100 })
+    setZoom.mockClear()
+
+    rerender(
+      <TmapPanel
+        route={route}
+        simulationPosition={{ lat: 37, lng: 126.2 }}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(setZoom).toHaveBeenCalledWith(18)
+    })
+  })
+
+  it('stops following the camera after map drag while the simulation marker keeps moving', async () => {
+    const route = {
+      coordinates: [
+        { lat: 37, lng: 126 },
+        { lat: 37, lng: 127 },
+      ],
+      summary: {
+        distanceMeters: 1000,
+        durationSeconds: 120,
+      },
+    }
+    const { rerender } = render(
+      <TmapPanel
+        route={route}
+        simulationPosition={{ lat: 37, lng: 126 }}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(setCenter).toHaveBeenCalledWith({ lat: 37, lng: 126 })
+    })
+
+    const mapElement = screen.getByTestId('tmap-canvas')
+
+    fireEvent.pointerDown(mapElement, { clientX: 10, clientY: 10 })
+    fireEvent.pointerMove(mapElement, { clientX: 34, clientY: 10 })
+    setCenter.mockClear()
+    markerSetPosition.mockClear()
+
+    rerender(
+      <TmapPanel
+        route={route}
+        simulationPosition={{ lat: 37, lng: 126.2 }}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(markerSetPosition).toHaveBeenCalledWith({ lat: 37, lng: 126.2 })
+    })
+    expect(setCenter).not.toHaveBeenCalled()
+  })
+
+  it('resumes camera following when current location is pressed after map drag', async () => {
+    const onRequestLocation = vi.fn()
+    const route = {
+      coordinates: [
+        { lat: 37, lng: 126 },
+        { lat: 37, lng: 127 },
+      ],
+      summary: {
+        distanceMeters: 1000,
+        durationSeconds: 120,
+      },
+    }
+    const { rerender } = render(
+      <TmapPanel
+        onRequestLocation={onRequestLocation}
+        route={route}
+        simulationPosition={{ lat: 37, lng: 126 }}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(setCenter).toHaveBeenCalledWith({ lat: 37, lng: 126 })
+    })
+
+    const mapElement = screen.getByTestId('tmap-canvas')
+
+    fireEvent.pointerDown(mapElement, { clientX: 10, clientY: 10 })
+    fireEvent.pointerMove(mapElement, { clientX: 34, clientY: 10 })
+    setCenter.mockClear()
+
+    rerender(
+      <TmapPanel
+        onRequestLocation={onRequestLocation}
+        route={route}
+        simulationPosition={{ lat: 37, lng: 126.2 }}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(setCenter).not.toHaveBeenCalled()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: '현재 위치' }))
+
+    expect(onRequestLocation).toHaveBeenCalled()
+    await waitFor(() => {
+      expect(setCenter).toHaveBeenCalledWith({ lat: 37, lng: 126.2 })
+    })
   })
 
   it('updates the existing route line path during simulation instead of recreating it', async () => {
@@ -967,7 +1362,7 @@ describe('TmapPanel', () => {
     )
 
     await waitFor(() => {
-      expect(window.Tmapv3!.Polyline).toHaveBeenCalledTimes(1)
+      expect(window.Tmapv3!.Polyline).toHaveBeenCalledTimes(2)
     })
 
     rerender(
@@ -984,7 +1379,7 @@ describe('TmapPanel', () => {
         { lat: 37, lng: 127 },
       ])
     })
-    expect(window.Tmapv3!.Polyline).toHaveBeenCalledTimes(1)
+    expect(window.Tmapv3!.Polyline).toHaveBeenCalledTimes(2)
     expect(polylineSetMap).not.toHaveBeenCalledWith(null)
   })
 
@@ -1075,7 +1470,7 @@ describe('TmapPanel', () => {
           path: expect.arrayContaining([
             { lat: 37, lng: 126.25 },
           ]),
-          strokeColor: '#16a34a',
+          strokeColor: '#16C47F',
         }),
       )
     })

@@ -244,17 +244,19 @@ describe('getRoadMatch', () => {
   it('calls the backend road match proxy and normalizes speed limit data', async () => {
     const post = vi.fn().mockResolvedValue({
       data: {
-        matchedPoints: [
-          {
-            sourceIndex: 0,
-            matchedLocation: {
-              latitude: '37.5665',
-              longitude: '126.978',
+        resultData: {
+          matchedPoints: [
+            {
+              sourceIndex: 0,
+              matchedLocation: {
+                latitude: '37.5665',
+                longitude: '126.978',
+              },
+              speed: 50,
+              roadCategory: 5,
             },
-            speed: 50,
-            roadCategory: 5,
-          },
-        ],
+          ],
+        },
       },
     })
 
