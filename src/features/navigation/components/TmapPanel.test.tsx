@@ -196,7 +196,8 @@ describe('TmapPanel', () => {
       (126.978 + 127.0276) / 2,
     )
     expect(setZoom).toHaveBeenLastCalledWith(expect.any(Number))
-    expect(setZoom.mock.calls[setZoom.mock.calls.length - 1]?.[0]).toBeLessThanOrEqual(14.5)
+    expect(Number.isInteger(setZoom.mock.calls[setZoom.mock.calls.length - 1]?.[0])).toBe(true)
+    expect(setZoom.mock.calls[setZoom.mock.calls.length - 1]?.[0]).toBeLessThanOrEqual(13)
 
     const routeOptionElement = document.createElement('div')
     routeOptionElement.dataset.routeOptionId = 'route-fastest'
@@ -1993,6 +1994,47 @@ describe('TmapPanel', () => {
 
     requestAnimationFrameSpy.mockRestore()
     cancelAnimationFrameSpy.mockRestore()
+  })
+
+  it('clips the visible route line in the same frame as the navigation marker', async () => {
+    let renderSimulationFrame: ((position: { lat: number; lng: number }) => void) | undefined
+
+    render(
+      <TmapPanel
+        route={{
+          coordinates: [
+            { lat: 37, lng: 126 },
+            { lat: 37, lng: 127 },
+          ],
+          summary: {
+            distanceMeters: 1000,
+            durationSeconds: 120,
+          },
+        }}
+        simulationPosition={{ lat: 37, lng: 126 }}
+        onSimulationFrameRendererReady={(renderFrame) => {
+          renderSimulationFrame = renderFrame
+        }}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(renderSimulationFrame).toBeDefined()
+      expect(window.Tmapv3!.Polyline).toHaveBeenCalled()
+    })
+
+    markerSetPosition.mockClear()
+    polylineSetPath.mockClear()
+
+    act(() => {
+      renderSimulationFrame?.({ lat: 37, lng: 126.5 })
+    })
+
+    expect(markerSetPosition).toHaveBeenLastCalledWith({ lat: 37, lng: 126.5 })
+    expect(polylineSetPath).toHaveBeenCalledWith([
+      { lat: 37, lng: 126.5 },
+      { lat: 37, lng: 127 },
+    ])
   })
 
   it('applies bearing before resolving the offset camera center to avoid lateral shake while turning', async () => {

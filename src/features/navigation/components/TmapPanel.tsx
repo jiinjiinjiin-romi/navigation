@@ -33,8 +33,9 @@ export interface MapCameraSettings {
 const MAP_OVERVIEW_ZOOM = 18.3
 const MAP_NAVIGATION_ZOOM = 18.3
 const MAP_TOP_DOWN_PITCH = 0
-const ROUTE_SELECTION_MIN_ZOOM = 10.5
-const ROUTE_SELECTION_MAX_ZOOM = 16.2
+const ROUTE_SELECTION_MIN_ZOOM = 10
+const ROUTE_SELECTION_MAX_ZOOM = 16
+const ROUTE_SELECTION_ZOOM_OUT_MARGIN = 0.9
 const CAMERA_FOLLOW_OFFSET_Y = 180
 const CAMERA_ANIMATION_MS = 220
 const MAP_MODE_TRANSITION_MS = 240
@@ -412,6 +413,47 @@ export function TmapPanel({
     currentMarkerRef.current?.setPosition?.(markerPosition)
     updateCurrentMarkerTransform(camera.markerBearing, camera.pitch)
   }, [resolveCameraCenter, syncCompassBearing, updateCurrentMarkerTransform, updateRouteDirectionMarkerBearings])
+
+  const updateVisibleRouteLineHead = useCallback((position: Coordinate) => {
+    if (!window.Tmapv3 || !mapRef.current || !routeLineSourceSegments.length) {
+      return
+    }
+
+    const nextSegments = getRemainingRouteLineSegments(routeLineSourceSegments, position)
+      .filter(isDrawableRouteSegment)
+
+    if (!nextSegments.length) {
+      routeLineRefs.current.forEach((line) => line?.setMap?.(null))
+      routeLineRefs.current = []
+      routeLineSignatureRef.current = undefined
+      routeLineStructureSignatureRef.current = undefined
+      return
+    }
+
+    const nextStructureSignature = getRouteLineStructureSignature(nextSegments)
+    const nextSignature = getRouteLineSignature(nextSegments)
+    const canClipExistingRouteHead = (
+      routeLineStructureSignatureRef.current === nextStructureSignature &&
+      routeLineRefs.current.length === nextSegments.length * 2 &&
+      routeLineRefs.current.every((line) => typeof line?.setPath === 'function')
+    )
+
+    if (canClipExistingRouteHead) {
+      const path = toTmapPath(nextSegments[0].coordinates)
+      routeLineRefs.current[0]?.setPath?.(path)
+      routeLineRefs.current[1]?.setPath?.(path)
+      routeLineSignatureRef.current = nextSignature
+      return
+    }
+
+    const map = mapRef.current
+    routeLineRefs.current.forEach((line) => line?.setMap?.(null))
+    routeLineRefs.current = nextSegments.flatMap((segment) => (
+      createRouteLinePolylines(segment, getNavigationRouteColor(), map)
+    ))
+    routeLineSignatureRef.current = nextSignature
+    routeLineStructureSignatureRef.current = nextStructureSignature
+  }, [routeLineSourceSegments])
 
   const stopCameraAnimation = useCallback(() => {
     if (cameraFrameRef.current !== undefined) {
@@ -1005,10 +1047,7 @@ export function TmapPanel({
     const routeLineChanged = routeLineSignatureRef.current !== routeLineSignature
 
     if (routeLineChanged) {
-      const routeColor = window
-        .getComputedStyle(document.documentElement)
-        .getPropertyValue('--nav-route')
-        .trim() || '#00A2FE'
+      const routeColor = getNavigationRouteColor()
 
       const routeLineStructureSignature = getRouteLineStructureSignature(drawableSegments)
       const canUpdateExistingRouteLines = (
@@ -1177,6 +1216,7 @@ export function TmapPanel({
           markerBearing,
         },
       )
+      updateVisibleRouteLineHead(displayPosition)
     })
 
     return () => onSimulationFrameRendererReady(undefined)
@@ -1187,6 +1227,7 @@ export function TmapPanel({
     onSimulationFrameRendererReady,
     route?.coordinates,
     status,
+    updateVisibleRouteLineHead,
   ])
 
   const resetMapOrientation = useCallback((position?: Coordinate) => {
@@ -1624,6 +1665,13 @@ function compactRouteCoordinates(coordinates: Coordinate[]) {
   ))
 }
 
+function getNavigationRouteColor() {
+  return window
+    .getComputedStyle(document.documentElement)
+    .getPropertyValue('--nav-route')
+    .trim() || '#00A2FE'
+}
+
 function createRouteLinePolylines(
   segment: RouteTrafficSegment,
   routeColor: string,
@@ -1992,7 +2040,10 @@ function getRouteSelectionCamera(
   const latZoom = Math.log2(availableHeight / 256 / latFraction)
   const zoom = Math.max(
     ROUTE_SELECTION_MIN_ZOOM,
-    Math.min(ROUTE_SELECTION_MAX_ZOOM, Number((Math.min(lngZoom, latZoom) - 0.25).toFixed(1))),
+    Math.min(
+      ROUTE_SELECTION_MAX_ZOOM,
+      Math.round(Math.min(lngZoom, latZoom) - ROUTE_SELECTION_ZOOM_OUT_MARGIN),
+    ),
   )
   const scale = 256 * (2 ** zoom)
   const centerMercatorX = (
@@ -2001,7 +2052,7 @@ function getRouteSelectionCamera(
   )
   const centerMercatorY = (
     (minMercatorY + maxMercatorY) / 2 +
-    (padding.top - padding.bottom) / (2 * scale)
+    (padding.bottom - padding.top) / (2 * scale)
   )
 
   return {
@@ -2028,15 +2079,15 @@ function getRouteSelectionSafeAreaPadding({ width, height }: { width: number; he
       left: 24,
       right: 24,
       top: 112,
-      bottom: Math.min(96, Math.max(72, height * 0.12)),
+      bottom: Math.min(136, Math.max(120, height * 0.14)),
     }
   }
 
   return {
-    left: 96,
-    right: 64,
-    top: 116,
-    bottom: 88,
+    left: 80,
+    right: 56,
+    top: 80,
+    bottom: 104,
   }
 }
 
