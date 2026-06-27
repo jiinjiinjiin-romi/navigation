@@ -805,18 +805,27 @@ export function NavigationShell() {
           showSuggestions={showSuggestions}
           onChangeOrigin={(value) => {
             setOriginKeyword(value)
-            setOrigin(undefined)
+            if (!routeSelectionMode) {
+              setOrigin(undefined)
+            }
             setActiveField('origin')
                     setHighlightedIndex(0)
                   }}
                   onChangeDestination={(value) => {
                     setDestinationKeyword(value)
-                    setDestination(undefined)
+                    if (!routeSelectionMode) {
+                      setDestination(undefined)
+                    }
                     setActiveField('destination')
                     setHighlightedIndex(0)
                   }}
                 onClose={() => {
                   clearPendingRouteSearchEditor()
+                  if (routeSelectionMode && activeField === 'destination' && !destinationKeyword.trim()) {
+                    setDestination(undefined)
+                    setSelectedRouteOptionId(undefined)
+                    guidanceDistanceDisplayRef.current.clear()
+                  }
                   setRouteSearchOpen(false)
                   setActiveField(null)
                 }}
