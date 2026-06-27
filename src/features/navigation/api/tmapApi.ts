@@ -382,20 +382,45 @@ function normalizeManeuvers(
       description: description ?? label,
       coordinate,
       distanceFromStartMeters: getDistanceFromStartMeters(routeCoordinates, coordinate),
+      ...getManeuverMeta(turnType),
     }]
   }).sort((a, b) => a.distanceFromStartMeters - b.distanceFromStartMeters)
 }
 
 function getManeuverType(turnType: number): RouteManeuver['type'] | undefined {
-  if ([12, 16, 17, 44, 52, 75, 76, 102, 105, 112, 115, 118, 137, 138, 139, 140, 141, 182].includes(turnType)) {
+  if ([119, 123].includes(turnType)) {
+    return turnType === 119 ? 'underpass' : 'side-underpass'
+  }
+
+  if ([120, 124].includes(turnType)) {
+    return turnType === 120 ? 'overpass' : 'side-overpass'
+  }
+
+  if (turnType === 121) return 'tunnel'
+  if (turnType === 122) return 'bridge'
+  if (turnType === 130) return 'box-tunnel'
+
+  if (turnType >= 131 && turnType <= 141) {
+    return 'clock-direction'
+  }
+
+  if ([101, 102, 103, 104, 105, 106].includes(turnType)) {
+    return turnType === 102 || turnType === 105 ? 'highway-exit' : 'highway-enter'
+  }
+
+  if ([111, 112, 113, 114, 115, 116].includes(turnType)) {
+    return turnType === 112 || turnType === 115 ? 'urban-express-exit' : 'urban-express-enter'
+  }
+
+  if ([12, 16, 17, 44, 52, 75, 76, 182].includes(turnType)) {
     return 'left'
   }
 
-  if ([13, 18, 19, 43, 53, 73, 74, 101, 104, 111, 114, 117, 131, 132, 133, 134, 135, 183].includes(turnType)) {
+  if ([13, 18, 19, 43, 53, 73, 74, 117, 183].includes(turnType)) {
     return 'right'
   }
 
-  if ([11, 51, 103, 106, 113, 116, 142, 233].includes(turnType)) {
+  if ([11, 51, 107, 108, 109, 110, 118, 142, 233].includes(turnType)) {
     return 'straight'
   }
 
@@ -403,7 +428,7 @@ function getManeuverType(turnType: number): RouteManeuver['type'] | undefined {
     return 'arrive'
   }
 
-  if ([119, 120, 121, 122, 130, 150, 151, 184, 185, 186, 187, 188, 189, 191, 192, 193, 194].includes(turnType)) {
+  if ([150, 151, 184, 185, 186, 187, 188, 189, 191, 192, 193, 194].includes(turnType)) {
     return 'caution'
   }
 
@@ -411,6 +436,11 @@ function getManeuverType(turnType: number): RouteManeuver['type'] | undefined {
 }
 
 function getManeuverLabel(type: RouteManeuver['type'], turnType: number) {
+  if (type === 'highway-enter') return '고속도로 진입'
+  if (type === 'highway-exit') return '고속도로 진출'
+  if (type === 'urban-express-enter') return '도시고속도로 진입'
+  if (type === 'urban-express-exit') return '도시고속도로 진출'
+  if (type === 'clock-direction') return `${getClockDirection(turnType)}시 방향`
   if (type === 'left') return '좌회전'
   if (type === 'right') return '우회전'
   if (type === 'straight') return '직진'
@@ -419,7 +449,56 @@ function getManeuverLabel(type: RouteManeuver['type'], turnType: number) {
   if (turnType === 120) return '고가도로'
   if (turnType === 121) return '터널'
   if (turnType === 122) return '교량'
+  if (turnType === 123) return '지하차도 옆차로'
+  if (turnType === 124) return '고가도로 옆차로'
+  if (turnType === 130) return '토끼굴'
   return '주의'
+}
+
+function getManeuverMeta(turnType: number): Partial<RouteManeuver> {
+  if (turnType >= 101 && turnType <= 106) {
+    return {
+      accessType: turnType === 102 || turnType === 105 ? 'exit' : 'enter',
+      roadClass: 'highway',
+      signCode: turnType,
+    }
+  }
+
+  if (turnType >= 111 && turnType <= 116) {
+    return {
+      accessType: turnType === 112 || turnType === 115 ? 'exit' : 'enter',
+      roadClass: 'urban-express',
+      signCode: turnType,
+    }
+  }
+
+  if (turnType >= 131 && turnType <= 141) {
+    return {
+      directionClock: getClockDirection(turnType),
+      signCode: turnType,
+    }
+  }
+
+  if ([119, 120, 121, 122, 123, 124, 130].includes(turnType)) {
+    return {
+      facilityType: getFacilityType(turnType),
+      signCode: turnType,
+    }
+  }
+
+  return {}
+}
+
+function getClockDirection(turnType: number): RouteManeuver['directionClock'] {
+  return ((turnType - 130) as RouteManeuver['directionClock'])
+}
+
+function getFacilityType(turnType: number): RouteManeuver['facilityType'] {
+  if (turnType === 119 || turnType === 123) return 'underpass'
+  if (turnType === 120 || turnType === 124) return 'overpass'
+  if (turnType === 121) return 'tunnel'
+  if (turnType === 122) return 'bridge'
+  return 'box-tunnel'
 }
 
 function getSafetyAlertType(turnType: number): SafetyAlert['type'] | undefined {

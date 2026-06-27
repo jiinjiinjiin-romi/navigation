@@ -89,6 +89,10 @@ describe('getRoute', () => {
             properties: { turnType: 191, description: '제한속도 안내' },
           },
           {
+            geometry: { type: 'Point', coordinates: [127.02, 37.53] },
+            properties: { turnType: 120, description: '고가도로 안내' },
+          },
+          {
             geometry: {
               type: 'LineString',
               coordinates: [
@@ -132,6 +136,13 @@ describe('getRoute', () => {
           type: 'caution',
           label: '주의',
           description: '제한속도 안내',
+        }),
+        expect.objectContaining({
+          type: 'overpass',
+          label: '고가도로',
+          description: '고가도로 안내',
+          facilityType: 'overpass',
+          signCode: 120,
         }),
       ],
       safetyAlerts: [

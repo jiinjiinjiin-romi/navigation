@@ -24,6 +24,18 @@ import { createRoundedRoutePath } from '../map/routeGeometry'
 import { createRouteSimulationPlan, getSimulatedRoutePosition } from '../simulation/routeSimulation'
 import { getSimulationDurationMs } from '../simulation/simulationTiming'
 import type { Coordinate, NavigationRoute, Place, RoadMatchPoint, RouteManeuver, SafetyAlert } from '../types'
+import accidentSignSrc from '../assets/road-signs/141.png'
+import bridgeSignSrc from '../assets/road-signs/122.png'
+import boxTunnelSignSrc from '../assets/road-signs/130.png'
+import cautionSignSrc from '../assets/road-signs/140.png'
+import curveSignSrc from '../assets/road-signs/113.png'
+import fallingRockSignSrc from '../assets/road-signs/130.png'
+import overpassSignSrc from '../assets/road-signs/120.png'
+import schoolZoneSignSrc from '../assets/road-signs/133.png'
+import sideOverpassSignSrc from '../assets/road-signs/124.png'
+import sideUnderpassSignSrc from '../assets/road-signs/123.png'
+import tunnelSignSrc from '../assets/road-signs/121.png'
+import underpassSignSrc from '../assets/road-signs/119.png'
 import { TmapPanel } from './TmapPanel'
 
 type SearchFieldId = 'origin' | 'destination'
@@ -61,13 +73,14 @@ const SAVED_PLACES: Place[] = [
     coordinate: { lat: 37.4979, lng: 127.0276 },
   },
 ]
-const DEBUG_DRIVING_ASSIST_SEQUENCE: DrivingAssistInfo[] = [
+const DEBUG_DRIVING_ASSIST_SEQUENCE = ([
   {
     alert: {
       type: 'caution',
       label: '어린이보호구역',
       distanceLabel: '40m',
       schoolZone: true,
+      active: false,
     },
   },
   { speedLimitKph: 30 },
@@ -77,6 +90,7 @@ const DEBUG_DRIVING_ASSIST_SEQUENCE: DrivingAssistInfo[] = [
       label: '단속구간',
       distanceLabel: '80m',
       schoolZone: false,
+      active: false,
     },
   },
   {
@@ -85,6 +99,7 @@ const DEBUG_DRIVING_ASSIST_SEQUENCE: DrivingAssistInfo[] = [
       label: '급커브',
       distanceLabel: '120m',
       schoolZone: false,
+      active: false,
     },
   },
   {
@@ -93,6 +108,7 @@ const DEBUG_DRIVING_ASSIST_SEQUENCE: DrivingAssistInfo[] = [
       label: '낙석주의',
       distanceLabel: '180m',
       schoolZone: false,
+      active: false,
     },
   },
   {
@@ -101,6 +117,7 @@ const DEBUG_DRIVING_ASSIST_SEQUENCE: DrivingAssistInfo[] = [
       label: '사고주의',
       distanceLabel: '240m',
       schoolZone: false,
+      active: false,
     },
   },
   {
@@ -109,9 +126,66 @@ const DEBUG_DRIVING_ASSIST_SEQUENCE: DrivingAssistInfo[] = [
       label: '주의',
       distanceLabel: '300m',
       schoolZone: false,
+      active: false,
     },
   },
-]
+  {
+    facility: {
+      type: 'underpass',
+      label: '지하차도',
+      distanceLabel: '120m',
+      signCode: 119,
+    },
+  },
+  {
+    facility: {
+      type: 'overpass',
+      label: '고가도로',
+      distanceLabel: '100m',
+      signCode: 120,
+    },
+  },
+  {
+    facility: {
+      type: 'tunnel',
+      label: '터널',
+      distanceLabel: '80m',
+      signCode: 121,
+    },
+  },
+  {
+    facility: {
+      type: 'bridge',
+      label: '교량',
+      distanceLabel: '70m',
+      signCode: 122,
+    },
+  },
+  {
+    facility: {
+      type: 'side-underpass',
+      label: '지하차도 옆차로',
+      distanceLabel: '60m',
+      signCode: 123,
+    },
+  },
+  {
+    facility: {
+      type: 'side-overpass',
+      label: '고가도로 옆차로',
+      distanceLabel: '50m',
+      signCode: 124,
+    },
+  },
+  {
+    facility: {
+      type: 'box-tunnel',
+      label: '토끼굴',
+      distanceLabel: '40m',
+      signCode: 130,
+    },
+  },
+] satisfies DrivingAssistInfo[]).map((assist) => ({ speedLimitKph: 30, ...assist }))
 
 export function NavigationShell() {
   const shouldReduceMotion = useReducedMotion()
@@ -141,6 +215,10 @@ export function NavigationShell() {
   )
   const weatherQueryCoordinate = useMemo(
     () => currentPosition ? roundCoordinate(currentPosition, WEATHER_COORDINATE_PRECISION) : undefined,
+    [currentPosition],
+  )
+  const currentRoadMatchCoordinates = useMemo(
+    () => currentPosition ? createCurrentRoadMatchCoordinates(currentPosition) : undefined,
     [currentPosition],
   )
 
@@ -176,6 +254,17 @@ export function NavigationShell() {
     queryFn: ({ signal }) => getRoadMatch(routeQuery.data!.coordinates, undefined, signal),
     enabled: Boolean(routeQuery.data?.coordinates.length),
     staleTime: 5 * 60 * 1000,
+    retry: false,
+  })
+  const currentRoadMatchQuery = useQuery({
+    queryKey: [
+      'current-road-match',
+      currentRoadMatchCoordinates?.[0].lat,
+      currentRoadMatchCoordinates?.[0].lng,
+    ],
+    queryFn: ({ signal }) => getRoadMatch(currentRoadMatchCoordinates!, undefined, signal),
+    enabled: locationStatus === 'granted' && Boolean(currentRoadMatchCoordinates) && !routeQuery.data,
+    staleTime: 60 * 1000,
     retry: false,
   })
 
@@ -240,7 +329,11 @@ export function NavigationShell() {
         route: activeRoute,
         travelledDistanceMeters,
       })
-    : undefined
+    : getDrivingAssistInfo({
+        position: currentPosition,
+        roadMatches: currentRoadMatchQuery.data ?? [],
+        travelledDistanceMeters: 0,
+      })
   const debugDrivingAssist = useDrivingAssistDebugSequence(Boolean(activeRoute))
   const maneuverGuidance = activeRoute
     ? getManeuverGuidance(
@@ -537,6 +630,12 @@ export function NavigationShell() {
                 />
               ) : null}
             </AnimatePresence>
+            {debugDrivingAssist ?? drivingAssist ? (
+              <DrivingAssistOverlay
+                assist={(debugDrivingAssist ?? drivingAssist)!}
+                motionTiming={motionTiming}
+              />
+            ) : null}
           </>
         ) : (
           <DrivingHud
@@ -996,15 +1095,7 @@ function DrivingHud({
       ) : null}
 
       {assist ? (
-        <motion.div
-          className="absolute left-4 top-[11rem] max-sm:left-2 max-sm:top-[9rem]"
-          data-testid="driving-assist-signs"
-          initial={{ opacity: 0, x: -12, y: -4 }}
-          animate={{ opacity: 1, x: 0, y: 0 }}
-          transition={{ ...motionTiming, delay: motionTiming.duration === 0 ? 0 : 0.08 }}
-        >
-          <DrivingAssistSigns assist={assist} />
-        </motion.div>
+        <DrivingAssistOverlay assist={assist} motionTiming={motionTiming} />
       ) : null}
 
       <motion.div
@@ -1028,6 +1119,26 @@ function DrivingHud({
         </motion.button>
       </motion.div>
 
+    </motion.div>
+  )
+}
+
+function DrivingAssistOverlay({
+  assist,
+  motionTiming,
+}: {
+  assist: DrivingAssistInfo
+  motionTiming: MotionTiming
+}) {
+  return (
+    <motion.div
+      className="pointer-events-none absolute left-4 top-[11rem] z-40 max-sm:left-2 max-sm:top-[9rem]"
+      data-testid="driving-assist-signs"
+      initial={{ opacity: 0, x: -12, y: -4 }}
+      animate={{ opacity: 1, x: 0, y: 0 }}
+      transition={{ ...motionTiming, delay: motionTiming.duration === 0 ? 0 : 0.08 }}
+    >
+      <DrivingAssistSigns assist={assist} />
     </motion.div>
   )
 }
@@ -1100,6 +1211,13 @@ interface DrivingAssistInfo {
     label: string
     distanceLabel: string
     schoolZone: boolean
+    active: boolean
+  }
+  facility?: {
+    type: RouteManeuver['type']
+    label: string
+    distanceLabel: string
+    signCode?: number
   }
   speedLimitKph?: number
 }
@@ -1129,7 +1247,7 @@ function getManeuverGuidance(
   travelledDistanceMeters: number,
   distanceDisplayStore: GuidanceDistanceDisplayStore,
 ): ManeuverGuidance | undefined {
-  const maneuvers = route.maneuvers ?? []
+  const maneuvers = (route.maneuvers ?? []).filter(isActionManeuver)
 
   if (maneuvers.length === 0) {
     return createFallbackManeuverGuidance(route, travelledDistanceMeters)
@@ -1163,6 +1281,22 @@ function getManeuverGuidance(
       )
       : undefined,
   }
+}
+
+function isActionManeuver(maneuver: RouteManeuver) {
+  return !isFacilityManeuver(maneuver)
+}
+
+function isFacilityManeuver(maneuver: RouteManeuver) {
+  return [
+    'underpass',
+    'overpass',
+    'tunnel',
+    'bridge',
+    'side-underpass',
+    'side-overpass',
+    'box-tunnel',
+  ].includes(maneuver.type)
 }
 
 function createFallbackManeuverGuidance(
@@ -1304,103 +1438,108 @@ function ManeuverIcon({
 }) {
   if (type === 'left') return <ArrowBendUpLeft className={className} weight="bold" />
   if (type === 'right') return <ArrowBendUpRight className={className} weight="bold" />
+  if (type === 'highway-exit' || type === 'urban-express-exit') return <ArrowBendUpRight className={className} weight="bold" />
+  if (type === 'clock-direction') return <ArrowBendUpRight className={className} weight="bold" />
   if (type === 'arrive' || type === 'caution') return <Warning className={className} weight="bold" />
   return <ArrowUp className={className} weight="bold" />
 }
 
 function DrivingAssistSigns({ assist }: { assist: DrivingAssistInfo }) {
+  const hasEventSign = Boolean(assist.alert || assist.facility)
+
   return (
-    <div className="grid w-30 gap-2 max-sm:w-24">
-      {assist.alert ? (
-        <div
-          aria-label={`${assist.alert.label} ${assist.alert.distanceLabel} 남음`}
-          className="grid justify-items-center"
-        >
-          {assist.alert.schoolZone ? (
-            <SchoolZoneSign />
-          ) : (
-            <WarningZoneSign label={assist.alert.label} type={assist.alert.type} />
-          )}
-          <DistancePlaque label={assist.alert.distanceLabel} tone="danger" />
+    <div className="grid w-30 justify-items-start gap-2 max-sm:w-24">
+      {assist.speedLimitKph ? (
+        <div className="grid justify-items-start" data-testid="speed-limit-slot">
+          <SpeedLimitSign speed={assist.speedLimitKph} />
         </div>
       ) : null}
-      {assist.speedLimitKph ? (
-        <SpeedLimitSign speed={assist.speedLimitKph} />
+
+      {hasEventSign ? (
+        <div className="grid w-full gap-2" data-testid="driving-event-signs">
+          {assist.alert ? (
+            <div
+              aria-label={[
+                assist.alert.label,
+                assist.alert.distanceLabel,
+                assist.alert.active ? '' : '남음',
+              ].filter(Boolean).join(' ')}
+              className="grid justify-items-center"
+            >
+              {assist.alert.schoolZone ? (
+                <WarningImageSign src={schoolZoneSignSrc} />
+              ) : (
+                <WarningImageSign src={getWarningSignSrc(assist.alert.type)} />
+              )}
+              <DistancePlaque label={assist.alert.distanceLabel} tone="danger" />
+            </div>
+          ) : null}
+          {assist.facility ? (
+            <div
+              aria-label={`${assist.facility.label} ${assist.facility.distanceLabel} 남음`}
+              className="grid justify-items-center"
+            >
+              <FacilitySign facility={assist.facility} />
+              <DistancePlaque label={assist.facility.distanceLabel} tone="info" />
+            </div>
+          ) : null}
+        </div>
       ) : null}
     </div>
   )
 }
 
-function SchoolZoneSign() {
+function WarningImageSign({ src }: { src: string }) {
   return (
-    <svg aria-hidden="true" className="h-auto w-full drop-shadow-[0_4px_8px_rgba(15,23,42,0.26)]" viewBox="0 0 128 112">
-      <path d="M64 4 124 108H4L64 4Z" fill="#E94B2F" />
-      <path d="M64 18 108 96H20L64 18Z" fill="#FFD940" />
-      <path d="M57 42a7 7 0 1 0-14 0 7 7 0 0 0 14 0ZM45 52h10l6 21h-8l-3-10-3 10h-8l6-21Z" fill="#050505" />
-      <path d="M82 52a5 5 0 1 0-10 0 5 5 0 0 0 10 0ZM73 60h8l5 18h-7l-2-8-2 8h-7l5-18Z" fill="#050505" />
-      <path d="M57 56c7 5 13 5 18 1" stroke="#050505" strokeLinecap="round" strokeWidth="5" />
-    </svg>
-  )
-}
-
-function WarningZoneSign({
-  label,
-  type,
-}: {
-  label: string
-  type?: SafetyAlert['type']
-}) {
-  const iconPath = getWarningSignIconPath(type)
-
-  return (
-    <svg
+    <img
+      alt=""
       aria-hidden="true"
       className="h-auto w-full drop-shadow-[0_4px_8px_rgba(15,23,42,0.26)]"
-      viewBox="0 0 128 112"
-    >
-      <path d="M64 4 124 108H4L64 4Z" fill="#E94B2F" />
-      <path d="M64 18 108 96H20L64 18Z" fill="#FFD940" />
-      <path d={iconPath} fill="#050505" />
-      <text
-        fill="#050505"
-        fontFamily="Pretendard, sans-serif"
-        fontSize="13"
-        fontWeight="900"
-        textAnchor="middle"
-        x="64"
-        y="91"
-      >
-        {label}
-      </text>
-    </svg>
+      draggable={false}
+      src={src}
+    />
   )
 }
 
-function getWarningSignIconPath(type?: SafetyAlert['type']) {
-  if (type === 'curve') {
-    return 'M44 37h16c18 0 30 12 30 30v5h-13v-5c0-11-6-18-17-18H44l9 9-9 9-24-24 24-24 9 9-9 9Z'
-  }
-
-  if (type === 'falling-rock') {
-    return 'M38 31h22l-8 14 14-7-9 18 18-7 13 26H40L28 54l10-23Zm43 5 9 5-5 9-9-5 5-9Zm-18-14 11 7-7 11-11-7 7-11Z'
-  }
-
-  if (type === 'accident') {
-    return 'M37 57h54l8 15v14h-9a10 10 0 0 1-20 0H58a10 10 0 0 1-20 0h-9V72l8-15Zm7 9-4 8h47l-4-8H44Zm5 26a6 6 0 1 0 0-12 6 6 0 0 0 0 12Zm31 0a6 6 0 1 0 0-12 6 6 0 0 0 0 12ZM43 29l9-5 8 15 8-15 9 5-10 19H53L43 29Z'
-  }
-
-  if (type === 'enforcement') {
-    return 'M38 39h52a8 8 0 0 1 8 8v30a8 8 0 0 1-8 8H38a8 8 0 0 1-8-8V47a8 8 0 0 1 8-8Zm26 10a15 15 0 1 0 0 30 15 15 0 0 0 0-30Zm0 10a5 5 0 1 1 0 10 5 5 0 0 1 0-10Zm-20-30h40l6 10H38l6-10Z'
-  }
-
-  return 'M58 33h12l-2 34H60l-2-34Zm6 44a7 7 0 1 0 0-14 7 7 0 0 0 0 14Z'
+function getWarningSignSrc(type?: SafetyAlert['type']) {
+  if (type === 'curve') return curveSignSrc
+  if (type === 'falling-rock') return fallingRockSignSrc
+  if (type === 'accident') return accidentSignSrc
+  return cautionSignSrc
 }
 
-function DistancePlaque({ label, tone }: { label: string; tone: 'danger' }) {
+function FacilitySign({ facility }: { facility: NonNullable<DrivingAssistInfo['facility']> }) {
+  const signSrc = getFacilitySignSrc(facility.signCode)
+
+  return (
+    <div className="grid w-full justify-items-center">
+      <img
+        alt=""
+        aria-hidden="true"
+        className="h-auto w-full drop-shadow-[0_4px_8px_rgba(15,23,42,0.24)]"
+        draggable={false}
+        src={signSrc}
+      />
+      <span className="sr-only">{facility.label}</span>
+    </div>
+  )
+}
+
+function getFacilitySignSrc(signCode?: number) {
+  if (signCode === 120) return overpassSignSrc
+  if (signCode === 121) return tunnelSignSrc
+  if (signCode === 122) return bridgeSignSrc
+  if (signCode === 123) return sideUnderpassSignSrc
+  if (signCode === 124) return sideOverpassSignSrc
+  if (signCode === 130) return boxTunnelSignSrc
+  return underpassSignSrc
+}
+
+function DistancePlaque({ label, tone }: { label: string; tone: 'danger' | 'info' }) {
   return (
     <div className={[
-      'mt-[-2px] w-[78%] rounded-md px-2 py-1 text-center text-2xl font-black leading-none text-white shadow-[0_4px_8px_rgba(15,23,42,0.22)] max-sm:text-xl',
-      tone === 'danger' ? 'bg-[#E84B2F]' : 'bg-[var(--nav-primary)]',
+      'mt-[-2px] w-full rounded-b-md px-2 py-1 text-center text-2xl font-black leading-none text-white shadow-[0_4px_8px_rgba(15,23,42,0.22)] max-sm:text-xl',
+      tone === 'danger' ? 'bg-[#E84B2F]' : 'bg-[#1267B1]',
     ].join(' ')}
     >
       {label}
@@ -1412,9 +1551,9 @@ function SpeedLimitSign({ speed }: { speed: number }) {
   return (
     <div
       aria-label={`제한속도 ${speed}km/h`}
-      className="grid h-20 w-20 place-items-center rounded-full border-[8px] border-[#E6462E] bg-white text-center font-black leading-none text-[#111] shadow-[0_4px_8px_rgba(15,23,42,0.22)] max-sm:h-16 max-sm:w-16 max-sm:border-[6px]"
+      className="grid size-24 place-items-center rounded-full border-[12px] border-[#E30613] bg-white text-center font-black leading-none text-[#1C1411] shadow-[0_4px_8px_rgba(15,23,42,0.22)] max-sm:size-20 max-sm:border-[10px]"
     >
-      <span className="text-3xl max-sm:text-2xl">{speed}</span>
+      <span className="text-[2.65rem] max-sm:text-[2.15rem]">{speed}</span>
     </div>
   )
 }
@@ -1427,37 +1566,54 @@ function getDrivingAssistInfo({
 }: {
   position?: Coordinate
   roadMatches: RoadMatchPoint[]
-  route: NavigationRoute
+  route?: NavigationRoute
   travelledDistanceMeters: number
 }): DrivingAssistInfo | undefined {
-  const upcomingAlert = (route.safetyAlerts ?? []).find((alert) => (
+  const alerts = route?.safetyAlerts ?? []
+  const activeAlert = alerts.find((alert) => isActiveSafetyAlert(alert, travelledDistanceMeters))
+  const upcomingAlert = alerts.find((alert) => (
     alert.distanceFromStartMeters >= travelledDistanceMeters &&
     alert.distanceFromStartMeters - travelledDistanceMeters <= 600
+  ))
+  const upcomingFacility = (route?.maneuvers ?? []).find((maneuver) => (
+    isFacilityManeuver(maneuver) &&
+    maneuver.distanceFromStartMeters >= travelledDistanceMeters &&
+    maneuver.distanceFromStartMeters - travelledDistanceMeters <= 600
   ))
   const nearestRoadMatch = position
     ? getNearestRoadMatch(roadMatches, position)
     : roadMatches[0]
   const speedLimitKph = nearestRoadMatch?.speedLimitKph
 
-  if (upcomingAlert) {
-    return {
-      alert: {
-        type: upcomingAlert.type,
-        label: upcomingAlert.label,
-        distanceLabel: formatMeters(upcomingAlert.distanceFromStartMeters - travelledDistanceMeters),
-        schoolZone: isSchoolZoneAlert(upcomingAlert),
-      },
-      speedLimitKph,
+  const assist: DrivingAssistInfo = {}
+
+  const displayAlert = activeAlert ?? upcomingAlert
+
+  if (displayAlert) {
+    const active = displayAlert === activeAlert
+    assist.alert = {
+      type: displayAlert.type,
+      label: displayAlert.label,
+      distanceLabel: active ? '구간 내' : formatMeters(displayAlert.distanceFromStartMeters - travelledDistanceMeters),
+      schoolZone: isSchoolZoneAlert(displayAlert),
+      active,
+    }
+  }
+
+  if (upcomingFacility) {
+    assist.facility = {
+      type: upcomingFacility.type,
+      label: upcomingFacility.label,
+      distanceLabel: formatMeters(upcomingFacility.distanceFromStartMeters - travelledDistanceMeters),
+      signCode: upcomingFacility.signCode,
     }
   }
 
   if (speedLimitKph) {
-    return {
-      speedLimitKph,
-    }
+    assist.speedLimitKph = speedLimitKph
   }
 
-  return undefined
+  return assist.alert || assist.facility || assist.speedLimitKph ? assist : undefined
 }
 
 function getNearestRoadMatch(roadMatches: RoadMatchPoint[], position: Coordinate) {
@@ -1475,6 +1631,26 @@ function getNearestRoadMatch(roadMatches: RoadMatchPoint[], position: Coordinate
 
 function isSchoolZoneAlert(alert: SafetyAlert) {
   return /어린이|보호구역|school/i.test(`${alert.label} ${alert.description}`)
+}
+
+function isActiveSafetyAlert(alert: SafetyAlert, travelledDistanceMeters: number) {
+  const activeDistanceMeters = getActiveSafetyAlertDistanceMeters(alert)
+
+  return (
+    activeDistanceMeters > 0 &&
+    travelledDistanceMeters >= alert.distanceFromStartMeters &&
+    travelledDistanceMeters <= alert.distanceFromStartMeters + activeDistanceMeters
+  )
+}
+
+function getActiveSafetyAlertDistanceMeters(alert: SafetyAlert) {
+  if (isSchoolZoneAlert(alert)) return 300
+  if (alert.type === 'enforcement') return 500
+  if (alert.type === 'accident') return 300
+  if (alert.type === 'curve') return 120
+  if (alert.type === 'falling-rock') return 150
+  if (alert.type === 'caution') return 150
+  return 0
 }
 
 function formatMeters(distanceMeters: number) {
@@ -1559,6 +1735,16 @@ function roundCoordinate(coordinate: Coordinate, precision: number): Coordinate 
     lat: roundNumber(coordinate.lat, precision),
     lng: roundNumber(coordinate.lng, precision),
   }
+}
+
+function createCurrentRoadMatchCoordinates(coordinate: Coordinate): Coordinate[] {
+  return [
+    coordinate,
+    {
+      lat: coordinate.lat,
+      lng: coordinate.lng + 0.0002,
+    },
+  ]
 }
 
 function roundNumber(value: number, precision: number) {

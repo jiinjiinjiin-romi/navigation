@@ -156,6 +156,7 @@ describe('NavigationShell', () => {
     await waitFor(() => {
       expect(screen.getByTestId('bottom-status-bar')).toHaveClass('grid-cols-3')
     })
+    expect(await screen.findByLabelText('제한속도 50km/h')).toBeInTheDocument()
     expect(await screen.findByText('서울특별시 중구 세종대로 110')).toBeInTheDocument()
   })
 
@@ -268,6 +269,16 @@ describe('NavigationShell', () => {
           coordinate: { lat: 37.55, lng: 126.99 },
           distanceFromStartMeters: 900,
         },
+        {
+          id: 'overpass-120',
+          type: 'overpass',
+          label: '고가도로',
+          description: '고가도로',
+          coordinate: { lat: 37.557, lng: 126.977 },
+          distanceFromStartMeters: 120,
+          facilityType: 'overpass',
+          signCode: 120,
+        },
       ],
       safetyAlerts: [
         {
@@ -328,8 +339,13 @@ describe('NavigationShell', () => {
     expect(screen.getByText('좌회전')).toBeInTheDocument()
     expect(screen.getByText('500')).toBeInTheDocument()
     const assistSigns = await screen.findByTestId('driving-assist-signs')
-    expect(assistSigns).toContainElement(screen.getByLabelText('어린이보호구역 40m 남음'))
-    expect(assistSigns).toContainElement(screen.getByLabelText('제한속도 50km/h'))
+    const speedLimitSlot = screen.getByTestId('speed-limit-slot')
+    const eventSigns = screen.getByTestId('driving-event-signs')
+    expect(eventSigns).toContainElement(screen.getByLabelText('어린이보호구역 40m 남음'))
+    expect(eventSigns).toContainElement(screen.getByLabelText('고가도로 120m 남음'))
+    expect(speedLimitSlot).toContainElement(screen.getByLabelText('제한속도 50km/h'))
+    expect(assistSigns).toContainElement(speedLimitSlot)
+    expect(assistSigns).toContainElement(eventSigns)
     const primaryManeuverCard = screen.getByTestId('primary-maneuver-card')
     const nextManeuverCard = screen.getByTestId('next-maneuver-card')
     expect(primaryManeuverCard).toHaveClass('w-fit')
@@ -374,6 +390,7 @@ describe('NavigationShell', () => {
     fireEvent.click(await screen.findByRole('button', { name: '도착지를 회사로 설정' }))
 
     expect(await screen.findByLabelText('어린이보호구역 40m 남음')).toBeInTheDocument()
+    expect(screen.getByLabelText('제한속도 30km/h')).toBeInTheDocument()
 
     await act(async () => {
       await new Promise((resolve) => window.setTimeout(resolve, debugSequenceWaitMs))
@@ -384,6 +401,7 @@ describe('NavigationShell', () => {
       await new Promise((resolve) => window.setTimeout(resolve, debugSequenceWaitMs))
     })
     expect(screen.getByLabelText('단속구간 80m 남음')).toBeInTheDocument()
+    expect(screen.getByLabelText('제한속도 30km/h')).toBeInTheDocument()
   })
 
   it('sets origin and destination from saved places without a POI search request', async () => {
@@ -745,6 +763,158 @@ describe('NavigationShell', () => {
     requestAnimationFrameSpy.mockRestore()
     cancelAnimationFrameSpy.mockRestore()
     randomSpy.mockRestore()
+  })
+
+  it('keeps a school-zone alert visible as active after the simulation passes the alert point', async () => {
+    const rafCallbacks: FrameRequestCallback[] = []
+    const requestAnimationFrameSpy = vi
+      .spyOn(window, 'requestAnimationFrame')
+      .mockImplementation((callback) => {
+        rafCallbacks.push(callback)
+        return rafCallbacks.length
+      })
+    const cancelAnimationFrameSpy = vi
+      .spyOn(window, 'cancelAnimationFrame')
+      .mockImplementation(() => undefined)
+
+    mockedSearchPlaces.mockResolvedValue([
+      {
+        id: 'destination',
+        name: '강남역',
+        address: '서울 강남구',
+        coordinate: { lat: 37.4979, lng: 127.0276 },
+      },
+    ])
+    mockedGetRoute.mockResolvedValue({
+      coordinates: [
+        { lat: 37.5665, lng: 126.978 },
+        { lat: 37.4979, lng: 127.0276 },
+      ],
+      summary: {
+        distanceMeters: 1000,
+        durationSeconds: 60,
+      },
+      safetyAlerts: [
+        {
+          id: 'school-zone-40',
+          type: 'caution',
+          label: '어린이보호구역',
+          description: '어린이보호구역 안내',
+          coordinate: { lat: 37.564, lng: 126.981 },
+          distanceFromStartMeters: 40,
+        },
+      ],
+    })
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell />
+      </QueryClientProvider>,
+    )
+
+    const destinationInput = await openDestinationEditor()
+    fireEvent.change(destinationInput, {
+      target: { value: '강남역' },
+    })
+    fireEvent.click(await screen.findByRole('option', { name: /강남역/ }))
+
+    expect(await screen.findByLabelText('어린이보호구역 40m 남음')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '시뮬레이션 시작' }))
+    await waitFor(() => {
+      expect(rafCallbacks.length).toBeGreaterThan(0)
+    })
+
+    await act(async () => {
+      rafCallbacks.shift()?.(0)
+    })
+    await act(async () => {
+      rafCallbacks.shift()?.(6000)
+    })
+
+    expect(await screen.findByLabelText('어린이보호구역 구간 내')).toBeInTheDocument()
+    expect(screen.queryByLabelText('어린이보호구역 40m 남음')).not.toBeInTheDocument()
+
+    requestAnimationFrameSpy.mockRestore()
+    cancelAnimationFrameSpy.mockRestore()
+  })
+
+  it('keeps non-school zone warning alerts visible briefly after passing their alert point', async () => {
+    const rafCallbacks: FrameRequestCallback[] = []
+    const requestAnimationFrameSpy = vi
+      .spyOn(window, 'requestAnimationFrame')
+      .mockImplementation((callback) => {
+        rafCallbacks.push(callback)
+        return rafCallbacks.length
+      })
+    const cancelAnimationFrameSpy = vi
+      .spyOn(window, 'cancelAnimationFrame')
+      .mockImplementation(() => undefined)
+
+    mockedSearchPlaces.mockResolvedValue([
+      {
+        id: 'destination',
+        name: '강남역',
+        address: '서울 강남구',
+        coordinate: { lat: 37.4979, lng: 127.0276 },
+      },
+    ])
+    mockedGetRoute.mockResolvedValue({
+      coordinates: [
+        { lat: 37.5665, lng: 126.978 },
+        { lat: 37.4979, lng: 127.0276 },
+      ],
+      summary: {
+        distanceMeters: 1000,
+        durationSeconds: 60,
+      },
+      safetyAlerts: [
+        {
+          id: 'accident-40',
+          type: 'accident',
+          label: '사고다발',
+          description: '사고다발구간 안내',
+          coordinate: { lat: 37.564, lng: 126.981 },
+          distanceFromStartMeters: 40,
+        },
+      ],
+    })
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell />
+      </QueryClientProvider>,
+    )
+
+    const destinationInput = await openDestinationEditor()
+    fireEvent.change(destinationInput, {
+      target: { value: '강남역' },
+    })
+    fireEvent.click(await screen.findByRole('option', { name: /강남역/ }))
+
+    expect(await screen.findByLabelText('사고다발 40m 남음')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '시뮬레이션 시작' }))
+    await waitFor(() => {
+      expect(rafCallbacks.length).toBeGreaterThan(0)
+    })
+
+    await act(async () => {
+      rafCallbacks.shift()?.(0)
+    })
+    await act(async () => {
+      rafCallbacks.shift()?.(6000)
+    })
+
+    expect(await screen.findByLabelText('사고다발 구간 내')).toBeInTheDocument()
+    expect(screen.queryByLabelText('사고다발 40m 남음')).not.toBeInTheDocument()
+
+    requestAnimationFrameSpy.mockRestore()
+    cancelAnimationFrameSpy.mockRestore()
   })
 
   it('passes a rounded driving path to the map instead of raw right-angle route vertices', async () => {

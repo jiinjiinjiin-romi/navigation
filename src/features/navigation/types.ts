@@ -31,11 +31,33 @@ export interface SafetyAlert {
 
 export interface RouteManeuver {
   id: string
-  type: 'left' | 'right' | 'straight' | 'arrive' | 'caution'
+  type:
+    | 'left'
+    | 'right'
+    | 'straight'
+    | 'arrive'
+    | 'caution'
+    | 'highway-enter'
+    | 'highway-exit'
+    | 'urban-express-enter'
+    | 'urban-express-exit'
+    | 'underpass'
+    | 'overpass'
+    | 'tunnel'
+    | 'bridge'
+    | 'side-underpass'
+    | 'side-overpass'
+    | 'box-tunnel'
+    | 'clock-direction'
   label: string
   description: string
   coordinate: Coordinate
   distanceFromStartMeters: number
+  directionClock?: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11
+  facilityType?: 'underpass' | 'overpass' | 'tunnel' | 'bridge' | 'box-tunnel'
+  roadClass?: 'highway' | 'urban-express'
+  accessType?: 'enter' | 'exit'
+  signCode?: number
 }
 
 export interface RoadMatchPoint {
