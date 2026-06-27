@@ -30,7 +30,6 @@ export interface MapCameraSettings {
 
 const MAP_OVERVIEW_ZOOM = 18.3
 const MAP_NAVIGATION_ZOOM = 18.3
-const MAP_NAVIGATION_PITCH = 0
 const MAP_TOP_DOWN_PITCH = 0
 const CAMERA_FOLLOW_OFFSET_Y = 180
 const CAMERA_ANIMATION_MS = 220
@@ -139,7 +138,7 @@ export function TmapPanel({
   const originMarkerRef = useRef<Window['Tmapv3Marker']>(undefined)
   const destinationMarkerRef = useRef<Window['Tmapv3Marker']>(undefined)
   const renderedBearingRef = useRef(0)
-  const renderedPitchRef = useRef(MAP_NAVIGATION_PITCH)
+  const renderedPitchRef = useRef(MAP_TOP_DOWN_PITCH)
   const renderedCameraRef = useRef<RenderedCamera>(undefined)
   const cameraAnimationRef = useRef<CameraAnimation>(undefined)
   const cameraFrameRef = useRef<number>(undefined)
@@ -378,10 +377,9 @@ export function TmapPanel({
     }
   }, [])
 
-  const applyMapPitch = useCallback((pitch: number) => {
+  const syncRenderedPitch = useCallback((pitch: number) => {
     const nextPitch = normalizeMarkerPitch(pitch)
 
-    mapRef.current?.setPitch?.(nextPitch)
     renderedPitchRef.current = nextPitch
     if (renderedCameraRef.current) {
       renderedCameraRef.current = {
@@ -391,6 +389,13 @@ export function TmapPanel({
     }
     updateCurrentMarkerTransform(currentMarkerBearingRef.current ?? 0, nextPitch)
   }, [updateCurrentMarkerTransform])
+
+  const applyMapPitch = useCallback((pitch: number) => {
+    const nextPitch = normalizeMarkerPitch(pitch)
+
+    mapRef.current?.setPitch?.(nextPitch)
+    syncRenderedPitch(nextPitch)
+  }, [syncRenderedPitch])
 
   const animateMapModePitch = useCallback((targetPitch: number) => {
     const map = mapRef.current
@@ -557,11 +562,11 @@ export function TmapPanel({
           height: '100%',
           zoom: MAP_OVERVIEW_ZOOM,
           bearing: 0,
-          pitch: MAP_NAVIGATION_PITCH,
+          pitch: MAP_TOP_DOWN_PITCH,
           mapType: 'ROAD',
           naviControl: false,
           rotateEnabled: true,
-          pitchEnabled: true,
+          pitchEnabled: false,
           zoomEnabled: true,
           zoomControl: false,
           scaleBar: false,
@@ -583,6 +588,19 @@ export function TmapPanel({
         }
       }
   }, [stopCameraAnimation, stopMapModePitchAnimation])
+
+  useEffect(() => {
+    if (!mapRef.current || status !== 'ready') {
+      return
+    }
+
+    mapRef.current.setInteractive?.({
+      dragEnabled: true,
+      rotateEnabled: true,
+      pitchEnabled: cameraSettings?.mode === '3d',
+      zoomEnabled: true,
+    })
+  }, [cameraSettings?.mode, status])
 
   useEffect(() => {
     setCameraFollowing(true)
@@ -673,7 +691,7 @@ export function TmapPanel({
 
   useEffect(() => {
     const mapElement = mapElementRef.current
-    if (!mapElement || status !== 'ready') {
+    if (!mapElement || status !== 'ready' || cameraSettings?.mode !== '3d') {
       return
     }
 
@@ -687,23 +705,9 @@ export function TmapPanel({
       frameId = window.requestAnimationFrame(() => {
         frameId = undefined
         const currentPitch = getCurrentMapPitch()
-        const pitch = cameraSettings?.mode === '2d' ? MAP_TOP_DOWN_PITCH : currentPitch
 
-        if (cameraSettings?.mode === '2d' && normalizeMarkerPitch(currentPitch) !== MAP_TOP_DOWN_PITCH) {
-          mapRef.current?.setPitch?.(MAP_TOP_DOWN_PITCH)
-        }
-
-        renderedPitchRef.current = normalizeMarkerPitch(pitch)
-        if (cameraSettings?.mode === '3d' || normalizeMarkerPitch(currentPitch) !== MAP_TOP_DOWN_PITCH) {
-          onCameraSettingsChange?.({ pitch: renderedPitchRef.current })
-        }
-        if (renderedCameraRef.current) {
-          renderedCameraRef.current = {
-            ...renderedCameraRef.current,
-            pitch: renderedPitchRef.current,
-          }
-        }
-        updateCurrentMarkerTransform(currentMarkerBearingRef.current ?? 0, pitch)
+        syncRenderedPitch(currentPitch)
+        onCameraSettingsChange?.({ pitch: renderedPitchRef.current })
       })
     }
 
@@ -719,7 +723,7 @@ export function TmapPanel({
       mapElement.removeEventListener('pointerup', syncMarkerPitchFromMap)
       mapElement.removeEventListener('wheel', syncMarkerPitchFromMap)
     }
-  }, [cameraSettings?.mode, getCurrentMapPitch, onCameraSettingsChange, status, updateCurrentMarkerTransform])
+  }, [cameraSettings?.mode, getCurrentMapPitch, onCameraSettingsChange, status, syncRenderedPitch])
 
   useEffect(() => {
     if (!mapRef.current || status !== 'ready' || !cameraSettings) {
@@ -736,16 +740,25 @@ export function TmapPanel({
     previousCameraModeRef.current = cameraSettings.mode
     navigationZoomRef.current = nextZoom
     setRouteDirectionZoom(nextZoom)
-    mapRef.current.setZoom?.(nextZoom)
 
     if (modeChanged) {
+      applyMapCameraSettings(mapRef.current, nextZoom, getCurrentMapPitch())
       animateMapModePitch(nextPitch)
       return
     }
 
     stopMapModePitchAnimation()
-    applyMapPitch(nextPitch)
-  }, [animateMapModePitch, applyMapPitch, cameraSettings, getSettingsMapPitch, status, stopMapModePitchAnimation])
+    applyMapCameraSettings(mapRef.current, nextZoom, nextPitch)
+    syncRenderedPitch(nextPitch)
+  }, [
+    animateMapModePitch,
+    cameraSettings,
+    getCurrentMapPitch,
+    getSettingsMapPitch,
+    status,
+    stopMapModePitchAnimation,
+    syncRenderedPitch,
+  ])
 
   useEffect(() => {
     if (!window.Tmapv3 || !mapRef.current || status !== 'ready' || !currentPosition) {
@@ -863,20 +876,19 @@ export function TmapPanel({
       const firstCameraCenter = resolveCameraCenter(firstCoordinate)
 
       if (!progressPosition) {
-        mapRef.current.setZoom?.(MAP_OVERVIEW_ZOOM)
-        mapRef.current.setCenter?.(firstCameraCenter)
-        mapRef.current.setPitch?.(MAP_NAVIGATION_PITCH)
-        mapRef.current.setBearing?.(bearing)
-        renderedBearingRef.current = bearing
-        renderedPitchRef.current = MAP_NAVIGATION_PITCH
-        syncCompassBearing(bearing)
-        updateRouteDirectionMarkerBearings(bearing)
-        renderedCameraRef.current = {
+        const overviewCamera = {
           position: firstCoordinate,
           bearing,
           markerBearing: 0,
-          pitch: MAP_NAVIGATION_PITCH,
+          pitch: MAP_TOP_DOWN_PITCH,
         }
+
+        applyMapCamera(mapRef.current, overviewCamera, firstCameraCenter, MAP_OVERVIEW_ZOOM)
+        renderedBearingRef.current = bearing
+        renderedPitchRef.current = MAP_TOP_DOWN_PITCH
+        syncCompassBearing(bearing)
+        updateRouteDirectionMarkerBearings(bearing)
+        renderedCameraRef.current = overviewCamera
       }
     }
   }, [
@@ -1108,7 +1120,7 @@ export function TmapPanel({
     <div className="relative z-0 h-full w-full overflow-hidden bg-[var(--nav-frame)]">
       <div ref={mapElementRef} className="h-full w-full" data-testid="tmap-canvas" />
       {status === 'ready' ? (
-        <div className="absolute bottom-5 left-5 z-10 flex flex-col items-center gap-3 max-sm:left-3">
+        <div className="absolute bottom-16 left-5 z-10 flex flex-col items-center gap-3 max-sm:bottom-15 max-sm:left-3">
           <MapControlButton label="나침반 원위치" onClick={() => resetMapOrientation()}>
             <span
               className="relative grid size-11 place-items-center"
@@ -1264,12 +1276,59 @@ function applyMapCamera(
   map.setCenter?.(center)
 }
 
+function applyMapCameraSettings(
+  map: Window['Tmapv3Map'] | undefined,
+  zoom: number,
+  pitch: number,
+) {
+  if (!map) {
+    return
+  }
+
+  const nativeCamera = getNativeMapCamera(map)
+  const centerArray = getLngLatArray(map.getCenter?.())
+    ?? getLngLatArray(nativeCamera?.getCenter?.())
+  const mapBearing = map.getBearing?.()
+  const nativeBearing = nativeCamera?.getBearing?.()
+  const bearing = Number.isFinite(mapBearing)
+    ? mapBearing!
+    : Number.isFinite(nativeBearing)
+      ? nativeBearing!
+      : 0
+
+  if (nativeCamera?.jumpTo && centerArray) {
+    nativeCamera.jumpTo(
+      {
+        zoom,
+        center: centerArray,
+        bearing,
+        pitch,
+      },
+      { animate: false },
+      { moveByProgram: true },
+    )
+    return
+  }
+
+  map.setZoom?.(zoom)
+  map.setPitch?.(pitch)
+}
+
 function getNativeMapCamera(map: NonNullable<Window['Tmapv3Map']>) {
   const vsmMap = map.vsmMap?.()
   return vsmMap?.getCamera?.()
 }
 
 function getLngLatArray(latLng: unknown): [number, number] | undefined {
+  if (Array.isArray(latLng) && latLng.length >= 2) {
+    const lng = Number(latLng[0])
+    const lat = Number(latLng[1])
+
+    return Number.isFinite(lat) && Number.isFinite(lng)
+      ? [lng, lat]
+      : undefined
+  }
+
   if (!latLng || typeof latLng !== 'object') {
     return undefined
   }

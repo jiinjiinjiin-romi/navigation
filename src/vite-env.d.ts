@@ -2,6 +2,7 @@
 
 interface Window {
   Tmapv3Map?: {
+    getCenter?: () => unknown
     getZoom?: () => number
     getBearing?: () => number
     getPitch?: () => number
@@ -9,8 +10,13 @@ interface Window {
     setZoom?: (zoom: number) => void
     setBearing?: (bearing: number) => void
     setPitch?: (pitch: number) => void
+    setInteractive?: (options: Record<string, unknown>) => void
     vsmMap?: () => {
       getCamera?: () => {
+        getCenter?: () => unknown
+        getBearing?: () => number
+        getPitch?: () => number
+        getZoom?: () => number
         jumpTo?: (
           options: Record<string, unknown>,
           animationOptions?: Record<string, unknown>,

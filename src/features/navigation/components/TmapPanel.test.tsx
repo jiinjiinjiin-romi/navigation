@@ -12,6 +12,7 @@ const mockedLoadTmapSdk = vi.mocked(loadTmapSdk)
 
 describe('TmapPanel', () => {
   const setCenter = vi.fn()
+  const getCenter = vi.fn()
   const setZoom = vi.fn()
   const getZoom = vi.fn()
   const getBearing = vi.fn()
@@ -25,11 +26,14 @@ describe('TmapPanel', () => {
   const polylineSetMap = vi.fn()
   const polylineSetPath = vi.fn()
   const nativeCameraJumpTo = vi.fn()
+  const setInteractive = vi.fn()
 
   beforeEach(() => {
     vi.unstubAllGlobals()
     mockedLoadTmapSdk.mockResolvedValue()
     setCenter.mockReset()
+    getCenter.mockReset()
+    getCenter.mockReturnValue({ lat: 37.5665, lng: 126.978 })
     setZoom.mockReset()
     getZoom.mockReset()
     getZoom.mockReturnValue(19)
@@ -46,10 +50,12 @@ describe('TmapPanel', () => {
     polylineSetMap.mockReset()
     polylineSetPath.mockReset()
     nativeCameraJumpTo.mockReset()
+    setInteractive.mockReset()
 
     window.Tmapv3 = {
       Map: vi.fn(function () {
         return {
+          getCenter,
           getBearing,
           getPitch,
           getZoom,
@@ -57,6 +63,7 @@ describe('TmapPanel', () => {
           setZoom,
           setBearing,
           setPitch,
+          setInteractive,
           zoomIn,
           zoomOut,
         }
@@ -128,7 +135,12 @@ describe('TmapPanel', () => {
   })
 
   it('tilts the current marker with the map pitch after a manual map gesture', async () => {
-    render(<TmapPanel currentPosition={{ lat: 37.5665, lng: 126.978 }} />)
+    render(
+      <TmapPanel
+        cameraSettings={{ mode: '3d', zoom: 18.3, pitch: 0 }}
+        currentPosition={{ lat: 37.5665, lng: 126.978 }}
+      />,
+    )
 
     await waitFor(() => {
       expect(window.Tmapv3!.Marker).toHaveBeenCalledWith(
@@ -168,6 +180,71 @@ describe('TmapPanel', () => {
         iconHTML: expect.stringContaining('--vehicle-marker-pitch:35deg'),
       }),
     )
+  })
+
+  it('uses the native camera for external settings to preserve fractional zoom', async () => {
+    window.Tmapv3!.Map = vi.fn(function () {
+      return {
+        getCenter,
+        getBearing,
+        getPitch,
+        getZoom,
+        setCenter,
+        setZoom,
+        setBearing,
+        setPitch,
+        setInteractive,
+        vsmMap: () => ({
+          getCamera: () => ({
+            jumpTo: nativeCameraJumpTo,
+          }),
+        }),
+      }
+    }) as unknown as NonNullable<Window['Tmapv3']>['Map']
+
+    render(
+      <TmapPanel
+        cameraSettings={{ mode: '3d', zoom: 18.3, pitch: 45 }}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(nativeCameraJumpTo).toHaveBeenCalledWith(
+        expect.objectContaining({
+          zoom: 18.3,
+          center: [126.978, 37.5665],
+          bearing: 0,
+          pitch: 45,
+        }),
+        { animate: false },
+        { moveByProgram: true },
+      )
+    })
+    expect(setZoom).not.toHaveBeenCalledWith(18.3)
+  })
+
+  it('toggles map pitch gestures by map mode', async () => {
+    const { rerender } = render(
+      <TmapPanel cameraSettings={{ mode: '2d', zoom: 18.3, pitch: 0 }} />,
+    )
+
+    await waitFor(() => {
+      expect(setInteractive).toHaveBeenCalledWith(
+        expect.objectContaining({
+          pitchEnabled: false,
+        }),
+      )
+    })
+
+    rerender(<TmapPanel cameraSettings={{ mode: '3d', zoom: 18.3, pitch: 45 }} />)
+
+    await waitFor(() => {
+      expect(setInteractive).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          pitchEnabled: true,
+        }),
+      )
+    })
   })
 
   it('animates pitch when switching between 2d and 3d map modes', async () => {
@@ -286,6 +363,42 @@ describe('TmapPanel', () => {
       expect(setCenter).toHaveBeenCalledWith({ lat: 37.55, lng: 127.01 })
     })
     expect(setZoom).toHaveBeenCalledWith(18.3)
+  })
+
+  it('shows route overview top-down before returning to the configured 3d pitch during guidance', async () => {
+    const route = {
+      coordinates: [
+        { lat: 37, lng: 126 },
+        { lat: 37, lng: 127 },
+      ],
+      summary: {
+        distanceMeters: 1000,
+        durationSeconds: 120,
+      },
+    }
+    const { rerender } = render(
+      <TmapPanel
+        cameraSettings={{ mode: '3d', zoom: 18.3, pitch: 45 }}
+        route={route}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(setPitch).toHaveBeenLastCalledWith(0)
+    })
+
+    setPitch.mockClear()
+    rerender(
+      <TmapPanel
+        cameraSettings={{ mode: '3d', zoom: 18.3, pitch: 45 }}
+        route={route}
+        simulationPosition={{ lat: 37, lng: 126.2 }}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(setPitch).toHaveBeenLastCalledWith(45)
+    })
   })
 
   it('rotates the map camera to the active route bearing', async () => {
