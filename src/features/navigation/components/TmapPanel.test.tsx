@@ -198,6 +198,9 @@ describe('TmapPanel', () => {
     expect(setCenter.mock.calls[setCenter.mock.calls.length - 1]?.[0].lng).toBeLessThan(
       (126.978 + 127.0276) / 2,
     )
+    expect(setCenter.mock.calls[setCenter.mock.calls.length - 1]?.[0].lat).toBeLessThan(
+      (37.5665 + 37.4979) / 2,
+    )
     expect(setZoom).toHaveBeenLastCalledWith(expect.any(Number))
     expect(Number.isInteger(setZoom.mock.calls[setZoom.mock.calls.length - 1]?.[0])).toBe(true)
     expect(setZoom.mock.calls[setZoom.mock.calls.length - 1]?.[0]).toBeLessThanOrEqual(13)
@@ -2185,6 +2188,24 @@ describe('TmapPanel', () => {
   })
 
   it('applies bearing before resolving the offset camera center to avoid lateral shake while turning', async () => {
+    const realToScreen = vi.fn(() => ({ getX: () => 720, getY: () => 470 }))
+    const screenToReal = vi.fn(() => ({ lat: 37.5016, lng: 126 }))
+    window.Tmapv3!.Map = vi.fn(function () {
+      return {
+        getCenter,
+        getBearing,
+        getPitch,
+        getZoom,
+        setCenter,
+        setZoom,
+        setBearing,
+        setPitch,
+        setInteractive,
+        realToScreen,
+        screenToReal,
+      }
+    }) as unknown as NonNullable<Window['Tmapv3']>['Map']
+
     render(
       <TmapPanel
         route={{
@@ -2208,10 +2229,20 @@ describe('TmapPanel', () => {
     const lastBearingCallOrder = setBearing.mock.invocationCallOrder[
       setBearing.mock.invocationCallOrder.length - 1
     ]
+    const lastPitchCallOrder = setPitch.mock.invocationCallOrder[
+      setPitch.mock.invocationCallOrder.length - 1
+    ]
+    const lastOffsetProjectionCallOrder = realToScreen.mock.invocationCallOrder[
+      realToScreen.mock.invocationCallOrder.length - 1
+    ]
     const lastCenterCallOrder = setCenter.mock.invocationCallOrder[
       setCenter.mock.invocationCallOrder.length - 1
     ]
 
     expect(lastBearingCallOrder).toBeLessThan(lastCenterCallOrder)
+    expect(lastBearingCallOrder).toBeLessThan(lastOffsetProjectionCallOrder)
+    expect(lastPitchCallOrder).toBeLessThan(lastOffsetProjectionCallOrder)
+    expect(lastOffsetProjectionCallOrder).toBeLessThan(lastCenterCallOrder)
+    expect(setCenter).toHaveBeenLastCalledWith({ lat: 37.5016, lng: 126 })
   })
 })

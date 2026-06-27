@@ -323,7 +323,14 @@ export function NavigationShell() {
     [activeRoute],
   )
   const routeSelectionMode = Boolean(origin && destination && !selectedRouteOptionId)
-  const routeOptions = routeSelectionMode ? routeOptionsQuery.data ?? [] : undefined
+  const routeSelectionModeRef = useRef(routeSelectionMode)
+  const hasRouteSearchDraftMismatch = routeSelectionMode && routeSearchOpen && (
+    isRouteKeywordDraftMismatched(originKeyword, origin) ||
+    isRouteKeywordDraftMismatched(destinationKeyword, destination)
+  )
+  const routeOptions = routeSelectionMode && !hasRouteSearchDraftMismatch
+    ? routeOptionsQuery.data ?? []
+    : undefined
   const roadMatchQuery = useQuery({
     queryKey: ['road-match', selectedRouteOptionId, activeRoute?.coordinates.length],
     queryFn: ({ signal }) => getRoadMatch(activeRoute!.coordinates, undefined, signal),
@@ -346,6 +353,9 @@ export function NavigationShell() {
   useEffect(() => {
     guidanceDistanceDisplayRef.current.clear()
   }, [activeRoute])
+  useEffect(() => {
+    routeSelectionModeRef.current = routeSelectionMode
+  }, [routeSelectionMode])
   const remainingDurationSeconds = simulationRunning
     ? simulationRemainingDuration
     : activeRoute?.summary.durationSeconds ?? 0
@@ -545,6 +555,7 @@ export function NavigationShell() {
       return
     }
 
+    setSettingsOpen(false)
     setRouteSearchOpen(false)
     setActiveField(null)
     setHighlightedIndex(0)
@@ -754,6 +765,7 @@ export function NavigationShell() {
         />
         <AppIconDock
           motionTiming={motionTiming}
+          settingsDisabled={routeSelectionMode}
           settingsOpen={settingsOpen}
           onToggleSettings={() => setSettingsOpen((open) => !open)}
         />
@@ -780,12 +792,12 @@ export function NavigationShell() {
               />
             ) : (
               <RouteSelectionSummary
-                destinationLabel={destinationKeyword || destination?.name || '목적지'}
+                destinationLabel={destination?.name || destinationKeyword || '목적지'}
                 error={routeOptionsQuery.isError}
                 loading={routeOptionsQuery.isFetching && !routeOptions?.length}
                 motionTiming={motionTiming}
                 optionCount={routeOptions?.length ?? 0}
-                originLabel={originKeyword || origin?.name || currentOriginLabel}
+                originLabel={origin?.name || originKeyword || currentOriginLabel}
                 onEditRoute={() => {
                   openRouteSearchEditor('destination')
                 }}
@@ -793,60 +805,60 @@ export function NavigationShell() {
             )}
             <AnimatePresence initial={false}>
               {routeSearchOpen ? (
-        <RouteSearchSheet
-          activeField={activeField}
-          activeIndex={highlightedIndex}
-          activeLabel={activeLabel}
-          destinationKeyword={destinationKeyword}
-          motionTiming={motionTiming}
-          originKeyword={originKeyword}
-          places={activePlaces}
-          savedPlaces={SAVED_PLACES}
-          showSuggestions={showSuggestions}
-          onChangeOrigin={(value) => {
-            setOriginKeyword(value)
-            if (!routeSelectionMode) {
-              setOrigin(undefined)
-            }
-            setActiveField('origin')
+                <RouteSearchSheet
+                  activeField={activeField}
+                  activeIndex={highlightedIndex}
+                  activeLabel={activeLabel}
+                  destinationKeyword={destinationKeyword}
+                  motionTiming={motionTiming}
+                  originKeyword={originKeyword}
+                  places={activePlaces}
+                  savedPlaces={SAVED_PLACES}
+                  showSuggestions={showSuggestions}
+                  onChangeOrigin={(value) => {
+                    setOriginKeyword(value)
+                    if (!routeSelectionModeRef.current) {
+                      setOrigin(undefined)
+                    }
+                    setActiveField('origin')
                     setHighlightedIndex(0)
                   }}
                   onChangeDestination={(value) => {
                     setDestinationKeyword(value)
-                    if (!routeSelectionMode) {
+                    if (!routeSelectionModeRef.current) {
                       setDestination(undefined)
                     }
                     setActiveField('destination')
                     setHighlightedIndex(0)
                   }}
-                onClose={() => {
-                  clearPendingRouteSearchEditor()
-                  if (routeSelectionMode) {
-                    setDestination(undefined)
-                    setDestinationKeyword('')
-                    setSelectedRouteOptionId(undefined)
-                    guidanceDistanceDisplayRef.current.clear()
-                  }
-                  setRouteSearchOpen(false)
-                  setActiveField(null)
-                }}
-                onBackToSummary={() => {
-                  clearPendingRouteSearchEditor()
-                  setActiveField(null)
-                  setHighlightedIndex(0)
-                }}
-                onFocusOrigin={() => {
-                  clearPendingRouteSearchEditor()
-                  setActiveField('origin')
-                }}
-                onFocusDestination={() => {
-                  clearPendingRouteSearchEditor()
-                  setActiveField('destination')
-                }}
-                onKeyDown={(field, event) => handleSearchKeyDown(field, event)}
-                onSelectPlace={(place) => selectPlace(activeField ?? 'destination', place)}
-                onSelectSavedPlace={selectSavedPlace}
-                onFillOriginWithCurrentLocation={fillOriginWithCurrentLocation}
+                  onClose={() => {
+                    clearPendingRouteSearchEditor()
+                    if (routeSelectionMode) {
+                      setDestination(undefined)
+                      setDestinationKeyword('')
+                      setSelectedRouteOptionId(undefined)
+                      guidanceDistanceDisplayRef.current.clear()
+                    }
+                    setRouteSearchOpen(false)
+                    setActiveField(null)
+                  }}
+                  onBackToSummary={() => {
+                    clearPendingRouteSearchEditor()
+                    setActiveField(null)
+                    setHighlightedIndex(0)
+                  }}
+                  onFocusOrigin={() => {
+                    clearPendingRouteSearchEditor()
+                    setActiveField('origin')
+                  }}
+                  onFocusDestination={() => {
+                    clearPendingRouteSearchEditor()
+                    setActiveField('destination')
+                  }}
+                  onKeyDown={(field, event) => handleSearchKeyDown(field, event)}
+                  onSelectPlace={selectPlace}
+                  onSelectSavedPlace={selectSavedPlace}
+                  onFillOriginWithCurrentLocation={fillOriginWithCurrentLocation}
                 />
               ) : null}
             </AnimatePresence>
@@ -886,10 +898,12 @@ export function NavigationShell() {
 
 function AppIconDock({
   motionTiming,
+  settingsDisabled,
   settingsOpen,
   onToggleSettings,
 }: {
   motionTiming: MotionTiming
+  settingsDisabled: boolean
   settingsOpen: boolean
   onToggleSettings: () => void
 }) {
@@ -908,7 +922,8 @@ function AppIconDock({
       <button
         aria-label="설정"
         aria-pressed={settingsOpen}
-        className="pointer-events-auto relative grid size-8 place-items-center rounded-full text-[var(--nav-ink)] transition hover:bg-[var(--nav-panel)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)] active:bg-[var(--nav-selection)]"
+        className="pointer-events-auto relative grid size-8 place-items-center rounded-full text-[var(--nav-ink)] transition hover:bg-[var(--nav-panel)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)] active:bg-[var(--nav-selection)] disabled:pointer-events-none disabled:opacity-40"
+        disabled={settingsDisabled}
         onClick={onToggleSettings}
         type="button"
       >
@@ -1187,6 +1202,16 @@ function isSameMapCameraSettings(currentSettings: MapCameraSettings, nextSetting
   )
 }
 
+function isRouteKeywordDraftMismatched(keyword: string, place: Place | undefined) {
+  const trimmedKeyword = keyword.trim()
+
+  if (!trimmedKeyword || !place) {
+    return false
+  }
+
+  return trimmedKeyword !== place.name && trimmedKeyword !== place.address
+}
+
 function RouteSearchSheet({
   activeField,
   activeIndex,
@@ -1224,7 +1249,7 @@ function RouteSearchSheet({
   onFocusOrigin: () => void
   onFocusDestination: () => void
   onKeyDown: (field: SearchFieldId, event: KeyboardEvent<HTMLInputElement>) => void
-  onSelectPlace: (place: Place) => void
+  onSelectPlace: (field: SearchFieldId, place: Place) => void
   onSelectSavedPlace: (field: SearchFieldId, place: Place) => void
   onFillOriginWithCurrentLocation: () => void
 }) {
@@ -1287,7 +1312,7 @@ function RouteSearchSheet({
               listId={activeListId}
               motionTiming={motionTiming}
               places={places}
-              onSelect={onSelectPlace}
+              onSelect={(place) => onSelectPlace(field, place)}
             />
           ) : (
             <motion.div

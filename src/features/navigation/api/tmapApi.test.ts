@@ -353,6 +353,67 @@ describe('getRoute', () => {
     ])
   })
 
+  it('reads route summary from the start point feature even when it is not first', async () => {
+    const post = vi.fn().mockResolvedValue({
+      data: {
+        features: [
+          {
+            geometry: {
+              type: 'LineString',
+              coordinates: [
+                [126.978, 37.5665],
+                [127.0276, 37.4979],
+              ],
+            },
+            properties: {},
+          },
+          {
+            geometry: { type: 'Point', coordinates: [126.978, 37.5665] },
+            properties: {
+              pointType: 'S',
+              totalDistance: '12340',
+              totalTime: '1320',
+            },
+          },
+        ],
+      },
+    })
+
+    const route = await getRoute(
+      { lat: 37.5665, lng: 126.978 },
+      { lat: 37.4979, lng: 127.0276 },
+      { post },
+    )
+
+    expect(route.summary).toEqual({
+      distanceMeters: 12340,
+      durationSeconds: 1320,
+    })
+  })
+
+  it('rejects route responses without drawable coordinates', async () => {
+    const post = vi.fn().mockResolvedValue({
+      data: {
+        features: [
+          {
+            geometry: { type: 'Point', coordinates: [126.978, 37.5665] },
+            properties: {
+              pointType: 'S',
+              totalDistance: '12340',
+              totalTime: '1320',
+            },
+          },
+        ],
+      },
+    })
+
+    await expect(getRoute(
+      { lat: 37.5665, lng: 126.978 },
+      { lat: 37.4979, lng: 127.0276 },
+      { post },
+    )).rejects.toThrow('Invalid TMAP route response')
+  })
+
   it('posts a custom route search option to the backend proxy', async () => {
     const post = vi.fn().mockResolvedValue({
       data: routeResponse([

@@ -274,19 +274,51 @@ function normalizePlaces(data: TmapPoiSearchResponse): Place[] {
 function normalizeRoute(data: TmapRouteResponse): NavigationRoute {
   const features = data.features ?? []
   const coordinates = features.flatMap((feature) => extractLineCoordinates(feature.geometry))
-  const firstProperties = features[0]?.properties
+  const summaryProperties = getRouteSummaryProperties(features)
+  const distanceMeters = Number(summaryProperties?.totalDistance)
+  const durationSeconds = Number(summaryProperties?.totalTime)
   const trafficSegments = mergeTrafficSegments(normalizeTrafficSegments(features))
+
+  if (
+    coordinates.length < 2 ||
+    !Number.isFinite(distanceMeters) ||
+    !Number.isFinite(durationSeconds) ||
+    distanceMeters <= 0 ||
+    durationSeconds <= 0
+  ) {
+    throw new Error('Invalid TMAP route response')
+  }
 
   return {
     coordinates,
     summary: {
-      distanceMeters: Number(firstProperties?.totalDistance ?? 0),
-      durationSeconds: Number(firstProperties?.totalTime ?? 0),
+      distanceMeters,
+      durationSeconds,
     },
     maneuvers: normalizeManeuvers(features, coordinates),
     safetyAlerts: normalizeSafetyAlerts(features, coordinates),
     ...(trafficSegments.length ? { trafficSegments } : {}),
   }
+}
+
+function getRouteSummaryProperties(features: TmapFeature[]) {
+  return features.find((feature) => (
+    feature.properties?.pointType === 'S' &&
+    hasRouteSummaryProperties(feature.properties)
+  ))?.properties ?? features.find((feature) => (
+    hasRouteSummaryProperties(feature.properties)
+  ))?.properties
+}
+
+function hasRouteSummaryProperties(properties: TmapFeature['properties']) {
+  if (!properties) {
+    return false
+  }
+
+  return (
+    Number.isFinite(Number(properties.totalDistance)) &&
+    Number.isFinite(Number(properties.totalTime))
+  )
 }
 
 function extractLineCoordinates(geometry?: TmapFeature['geometry']): Coordinate[] {

@@ -402,8 +402,12 @@ export function TmapPanel({
     const markerPosition = new window.Tmapv3.LatLng(camera.position.lat, camera.position.lng)
 
     if (applyMap) {
-      const centeredLatLng = resolveCameraCenter(camera.position)
-      applyMapCamera(mapRef.current, camera, centeredLatLng, navigationZoomRef.current)
+      applyMapCamera(
+        mapRef.current,
+        camera,
+        () => resolveCameraCenter(camera.position),
+        navigationZoomRef.current,
+      )
       renderedBearingRef.current = camera.bearing
       renderedPitchRef.current = camera.pitch
       renderedCameraRef.current = camera
@@ -1313,7 +1317,6 @@ export function TmapPanel({
       pitch,
     }
     const markerPosition = new window.Tmapv3.LatLng(currentPosition.lat, currentPosition.lng)
-    const centeredLatLng = resolveCameraCenter(currentPosition)
     const nextZoom = resetZoom
       ? MAP_OVERVIEW_ZOOM
       : mapRef.current.getZoom?.() ?? navigationZoomRef.current
@@ -1326,7 +1329,13 @@ export function TmapPanel({
       navigationZoomRef.current = nextZoom
     }
 
-    applyMapCamera(mapRef.current, camera, centeredLatLng, nextZoom, { preserveZoom: !resetZoom })
+    applyMapCamera(
+      mapRef.current,
+      camera,
+      () => resolveCameraCenter(currentPosition),
+      nextZoom,
+      { preserveZoom: !resetZoom },
+    )
     renderedBearingRef.current = bearing
     renderedPitchRef.current = pitch
     renderedCameraRef.current = camera
@@ -1509,14 +1518,18 @@ function easeOutQuart(progress: number) {
 function applyMapCamera(
   map: NonNullable<Window['Tmapv3Map']>,
   camera: RenderedCamera,
-  center: unknown,
+  center: unknown | (() => unknown),
   zoom: number,
   options: { preserveZoom?: boolean } = {},
 ) {
   const nativeCamera = getNativeMapCamera(map)
-  const centerArray = getLngLatArray(center)
+  const resolveCenter = () => (typeof center === 'function' ? center() : center)
 
-  if (nativeCamera?.jumpTo && centerArray) {
+  if (nativeCamera?.jumpTo) {
+    const centerArray = getLngLatArray(resolveCenter())
+    if (!centerArray) {
+      return
+    }
     const cameraOptions = options.preserveZoom
       ? {
           center: centerArray,
@@ -1543,7 +1556,7 @@ function applyMapCamera(
   }
   map.setPitch?.(camera.pitch)
   map.setBearing?.(camera.bearing)
-  map.setCenter?.(center)
+  map.setCenter?.(resolveCenter())
 }
 
 function applyMapCameraSettings(
@@ -2103,7 +2116,7 @@ function getRouteSelectionCamera(
   )
   const centerMercatorY = (
     (minMercatorY + maxMercatorY) / 2 +
-    (padding.bottom - padding.top) / (2 * scale)
+    (padding.top - padding.bottom) / (2 * scale)
   )
 
   return {
