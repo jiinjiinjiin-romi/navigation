@@ -821,8 +821,9 @@ export function NavigationShell() {
                   }}
                 onClose={() => {
                   clearPendingRouteSearchEditor()
-                  if (routeSelectionMode && activeField === 'destination' && !destinationKeyword.trim()) {
+                  if (routeSelectionMode) {
                     setDestination(undefined)
+                    setDestinationKeyword('')
                     setSelectedRouteOptionId(undefined)
                     guidanceDistanceDisplayRef.current.clear()
                   }

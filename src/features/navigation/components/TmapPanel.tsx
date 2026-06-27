@@ -176,6 +176,7 @@ export function TmapPanel({
   const [routeDirectionZoom, setRouteDirectionZoom] = useState(MAP_NAVIGATION_ZOOM)
   const hasGuidanceRoute = Boolean(route?.coordinates.length)
   const hasRouteSelectionOptions = Boolean(!route?.coordinates.length && routeOptions?.length)
+  const previousRouteSelectionOptionsRef = useRef(hasRouteSelectionOptions)
   const progressPosition = useMemo(() => {
     if (!simulationPosition || !route?.coordinates.length) {
       return simulationPosition
@@ -889,7 +890,7 @@ export function TmapPanel({
       cameraBearing.mapBearing,
       {
         animated: Boolean(route?.coordinates.length),
-        applyMap: shouldFollowCamera && !hasRouteSelectionOptions,
+        applyMap: !hasRouteSelectionOptions && (!route?.coordinates.length || shouldFollowCamera),
         markerBearing,
       },
     )
@@ -1302,20 +1303,61 @@ export function TmapPanel({
       return
     }
 
-    const position = new window.Tmapv3.LatLng(currentPosition.lat, currentPosition.lng)
     const pitch = getSettingsMapPitch()
-    mapRef.current.setCenter?.(position)
-    mapRef.current.setPitch?.(pitch)
-    renderedPitchRef.current = pitch
-    updateCurrentMarkerTransform(currentMarkerBearingRef.current ?? 0, pitch)
+    const bearing = getCurrentMapBearing()
+    const markerBearing = currentMarkerBearingRef.current ?? 0
+    const camera = {
+      position: currentPosition,
+      bearing,
+      markerBearing,
+      pitch,
+    }
+    const markerPosition = new window.Tmapv3.LatLng(currentPosition.lat, currentPosition.lng)
+    const centeredLatLng = resolveCameraCenter(currentPosition)
+    const nextZoom = resetZoom
+      ? MAP_OVERVIEW_ZOOM
+      : mapRef.current.getZoom?.() ?? navigationZoomRef.current
 
     if (resetZoom) {
       navigationZoomRef.current = MAP_OVERVIEW_ZOOM
       setRouteDirectionZoom(MAP_OVERVIEW_ZOOM)
-      mapRef.current.setZoom?.(MAP_OVERVIEW_ZOOM)
       onCameraSettingsChange?.({ zoom: MAP_OVERVIEW_ZOOM })
+    } else {
+      navigationZoomRef.current = nextZoom
     }
-  }, [currentPosition, getSettingsMapPitch, onCameraSettingsChange, updateCurrentMarkerTransform])
+
+    applyMapCamera(mapRef.current, camera, centeredLatLng, nextZoom, { preserveZoom: !resetZoom })
+    renderedBearingRef.current = bearing
+    renderedPitchRef.current = pitch
+    renderedCameraRef.current = camera
+    syncCompassBearing(bearing)
+    updateRouteDirectionMarkerBearings(bearing)
+    currentMarkerRef.current?.setPosition?.(markerPosition)
+    updateCurrentMarkerTransform(markerBearing, pitch)
+  }, [
+    currentPosition,
+    getCurrentMapBearing,
+    getSettingsMapPitch,
+    onCameraSettingsChange,
+    resolveCameraCenter,
+    syncCompassBearing,
+    updateCurrentMarkerTransform,
+    updateRouteDirectionMarkerBearings,
+  ])
+
+  useEffect(() => {
+    const hadRouteSelectionOptions = previousRouteSelectionOptionsRef.current
+    previousRouteSelectionOptionsRef.current = hasRouteSelectionOptions
+
+    if (
+      hadRouteSelectionOptions &&
+      !hasRouteSelectionOptions &&
+      !route?.coordinates.length &&
+      !simulationPosition
+    ) {
+      centerCurrentLocationInRegularMode(true)
+    }
+  }, [centerCurrentLocationInRegularMode, hasRouteSelectionOptions, route?.coordinates.length, simulationPosition])
 
   const handleRequestLocation = () => {
     onRequestLocation?.()
@@ -1469,25 +1511,36 @@ function applyMapCamera(
   camera: RenderedCamera,
   center: unknown,
   zoom: number,
+  options: { preserveZoom?: boolean } = {},
 ) {
   const nativeCamera = getNativeMapCamera(map)
   const centerArray = getLngLatArray(center)
 
   if (nativeCamera?.jumpTo && centerArray) {
+    const cameraOptions = options.preserveZoom
+      ? {
+          center: centerArray,
+          bearing: camera.bearing,
+          pitch: camera.pitch,
+        }
+      : {
+          zoom,
+          center: centerArray,
+          bearing: camera.bearing,
+          pitch: camera.pitch,
+        }
+
     nativeCamera.jumpTo(
-      {
-        zoom,
-        center: centerArray,
-        bearing: camera.bearing,
-        pitch: camera.pitch,
-      },
+      cameraOptions,
       { animate: false },
       { moveByProgram: true },
     )
     return
   }
 
-  map.setZoom?.(zoom)
+  if (!options.preserveZoom) {
+    map.setZoom?.(zoom)
+  }
   map.setPitch?.(camera.pitch)
   map.setBearing?.(camera.bearing)
   map.setCenter?.(center)

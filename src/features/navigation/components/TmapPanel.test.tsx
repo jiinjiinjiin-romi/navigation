@@ -76,6 +76,9 @@ describe('TmapPanel', () => {
       Size: vi.fn(function (_width: number, _height: number) {
         return { width: _width, height: _height }
       }),
+      Point: vi.fn(function (_x: number, _y: number) {
+        return { x: _x, y: _y }
+      }),
       Marker: vi.fn(function () {
         return {
           setMap: vi.fn(),
@@ -216,6 +219,76 @@ describe('TmapPanel', () => {
         iconHTML: expect.stringContaining('data-route-option-id="route-fastest"'),
       }),
     )
+  })
+
+  it('recenters on the current location after route option selection is cancelled', async () => {
+    const realToScreen = vi.fn(() => ({ x: 720, y: 470 }))
+    const screenToReal = vi.fn(() => ({ lat: 37.552, lng: 127.073 }))
+    window.Tmapv3!.Map = vi.fn(function () {
+      return {
+        getCenter,
+        getBearing,
+        getPitch,
+        getZoom,
+        setCenter,
+        setZoom,
+        setBearing,
+        setPitch,
+        setInteractive,
+        realToScreen,
+        screenToReal,
+      }
+    }) as unknown as NonNullable<Window['Tmapv3']>['Map']
+
+    const { rerender } = render(
+      <TmapPanel
+        currentPosition={{ lat: 37.5502, lng: 127.073 }}
+        routeOptions={[
+          {
+            id: 'route-recommended',
+            label: '추천',
+            searchOption: '0',
+            color: '#0EA5E9',
+            isRecommended: true,
+            route: {
+              coordinates: [
+                { lat: 37.5502, lng: 127.073 },
+                { lat: 37.4979, lng: 127.0276 },
+              ],
+              summary: {
+                distanceMeters: 12340,
+                durationSeconds: 1320,
+              },
+            },
+          },
+        ]}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(window.Tmapv3!.Marker).toHaveBeenCalledWith(
+        expect.objectContaining({
+          iconHTML: expect.stringContaining('여기서 경로 선택'),
+        }),
+      )
+    })
+    expect(setCenter.mock.calls[setCenter.mock.calls.length - 1]?.[0]).not.toEqual({
+      lat: 37.5502,
+      lng: 127.073,
+    })
+
+    setCenter.mockClear()
+
+    rerender(
+      <TmapPanel
+        currentPosition={{ lat: 37.5502, lng: 127.073 }}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(setCenter).toHaveBeenCalledWith({ lat: 37.552, lng: 127.073 })
+    })
+    expect(screenToReal).toHaveBeenCalledWith({ x: 720, y: 290 })
   })
 
   it('draws route option candidates with traffic congestion colors', async () => {
@@ -733,6 +806,23 @@ describe('TmapPanel', () => {
 
   it('keeps zoom while centering on current location in regular map mode', async () => {
     const onRequestLocation = vi.fn()
+    const realToScreen = vi.fn(() => ({ getX: () => 720, getY: () => 470 }))
+    const screenToReal = vi.fn(() => ({ lat: 37.5681, lng: 126.978 }))
+    window.Tmapv3!.Map = vi.fn(function () {
+      return {
+        getCenter,
+        getBearing,
+        getPitch,
+        getZoom,
+        setCenter,
+        setZoom,
+        setBearing,
+        setPitch,
+        setInteractive,
+        realToScreen,
+        screenToReal,
+      }
+    }) as unknown as NonNullable<Window['Tmapv3']>['Map']
 
     render(
       <TmapPanel
@@ -750,7 +840,8 @@ describe('TmapPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: '현재 위치' }))
 
     expect(onRequestLocation).toHaveBeenCalled()
-    expect(setCenter).toHaveBeenCalledWith({ lat: 37.5665, lng: 126.978 })
+    expect(setCenter).toHaveBeenCalledWith({ lat: 37.5681, lng: 126.978 })
+    expect(screenToReal).toHaveBeenCalledWith({ x: 720, y: 290 })
     expect(setZoom).not.toHaveBeenCalled()
   })
 
