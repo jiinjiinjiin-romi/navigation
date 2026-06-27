@@ -187,6 +187,16 @@ describe('TmapPanel', () => {
         iconHTML: expect.stringContaining('여기서 경로 선택'),
       }),
     )
+    expect(setCenter).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        lng: expect.any(Number),
+      }),
+    )
+    expect(setCenter.mock.calls[setCenter.mock.calls.length - 1]?.[0].lng).toBeLessThan(
+      (126.978 + 127.0276) / 2,
+    )
+    expect(setZoom).toHaveBeenLastCalledWith(expect.any(Number))
+    expect(setZoom.mock.calls[setZoom.mock.calls.length - 1]?.[0]).toBeLessThanOrEqual(14.5)
 
     const routeOptionElement = document.createElement('div')
     routeOptionElement.dataset.routeOptionId = 'route-fastest'
@@ -203,6 +213,63 @@ describe('TmapPanel', () => {
     expect(markerSetOptions).toHaveBeenCalledWith(
       expect.objectContaining({
         iconHTML: expect.stringContaining('data-route-option-id="route-fastest"'),
+      }),
+    )
+  })
+
+  it('draws route option candidates with traffic congestion colors', async () => {
+    render(
+      <TmapPanel
+        routeOptions={[
+          {
+            id: 'route-recommended',
+            label: '추천',
+            searchOption: '0',
+            color: '#0EA5E9',
+            isRecommended: true,
+            route: {
+              coordinates: [
+                { lat: 37, lng: 126 },
+                { lat: 37, lng: 126.5 },
+                { lat: 37, lng: 127 },
+              ],
+              summary: {
+                distanceMeters: 1000,
+                durationSeconds: 120,
+              },
+              trafficSegments: [
+                {
+                  coordinates: [
+                    { lat: 37, lng: 126 },
+                    { lat: 37, lng: 126.5 },
+                  ],
+                  congestion: 1,
+                },
+                {
+                  coordinates: [
+                    { lat: 37, lng: 126.5 },
+                    { lat: 37, lng: 127 },
+                  ],
+                  congestion: 4,
+                },
+              ],
+            },
+          },
+        ]}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(window.Tmapv3!.Polyline).toHaveBeenCalledTimes(4)
+    })
+    expect(window.Tmapv3!.Polyline).toHaveBeenCalledWith(
+      expect.objectContaining({
+        strokeColor: '#16C47F',
+      }),
+    )
+    expect(window.Tmapv3!.Polyline).toHaveBeenCalledWith(
+      expect.objectContaining({
+        strokeColor: '#F04438',
       }),
     )
   })

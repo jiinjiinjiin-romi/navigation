@@ -33,6 +33,8 @@ export interface MapCameraSettings {
 const MAP_OVERVIEW_ZOOM = 18.3
 const MAP_NAVIGATION_ZOOM = 18.3
 const MAP_TOP_DOWN_PITCH = 0
+const ROUTE_SELECTION_MIN_ZOOM = 10.5
+const ROUTE_SELECTION_MAX_ZOOM = 16.2
 const CAMERA_FOLLOW_OFFSET_Y = 180
 const CAMERA_ANIMATION_MS = 220
 const MAP_MODE_TRANSITION_MS = 240
@@ -114,9 +116,14 @@ interface RouteDirectionMarker {
 interface RouteOptionOverlay {
   id: string
   index: number
-  lines: NonNullable<Window['Tmapv3Polyline']>[]
+  lines: RouteOptionOverlayLine[]
   marker: NonNullable<Window['Tmapv3Marker']>
   option: NavigationRouteOption
+}
+
+interface RouteOptionOverlayLine {
+  kind: 'border' | 'route'
+  line: NonNullable<Window['Tmapv3Polyline']>
 }
 
 interface RouteDirectionArrowDensity {
@@ -167,6 +174,7 @@ export function TmapPanel({
   const [northUpLocked, setNorthUpLocked] = useState(false)
   const [routeDirectionZoom, setRouteDirectionZoom] = useState(MAP_NAVIGATION_ZOOM)
   const hasGuidanceRoute = Boolean(route?.coordinates.length)
+  const hasRouteSelectionOptions = Boolean(!route?.coordinates.length && routeOptions?.length)
   const progressPosition = useMemo(() => {
     if (!simulationPosition || !route?.coordinates.length) {
       return simulationPosition
@@ -357,7 +365,7 @@ export function TmapPanel({
 
   const clearRouteOptionOverlays = useCallback(() => {
     routeOptionOverlayRefs.current.forEach((overlay) => {
-      overlay.lines.forEach((line) => line.setMap(null))
+      overlay.lines.forEach(({ line }) => line.setMap(null))
       overlay.marker.setMap(null)
     })
     routeOptionOverlayRefs.current = []
@@ -372,13 +380,11 @@ export function TmapPanel({
       const isActive = overlay.id === activeOptionId
       const lineStyle = getRouteOptionOverlayLineStyle(isActive)
 
-      overlay.lines[0]?.setOptions?.({
-        strokeOpacity: lineStyle.borderOpacity,
-        strokeWeight: lineStyle.borderWeight,
-      })
-      overlay.lines[1]?.setOptions?.({
-        strokeOpacity: lineStyle.strokeOpacity,
-        strokeWeight: lineStyle.strokeWeight,
+      overlay.lines.forEach(({ kind, line }) => {
+        line.setOptions?.({
+          strokeOpacity: kind === 'border' ? lineStyle.borderOpacity : lineStyle.strokeOpacity,
+          strokeWeight: kind === 'border' ? lineStyle.borderWeight : lineStyle.strokeWeight,
+        })
       })
       overlay.marker.setOptions?.({
         iconHTML: createRouteOptionBubbleHtml(overlay.option, overlay.index, isActive),
@@ -843,11 +849,11 @@ export function TmapPanel({
       cameraBearing.mapBearing,
       {
         animated: Boolean(route?.coordinates.length),
-        applyMap: shouldFollowCamera,
+        applyMap: shouldFollowCamera && !hasRouteSelectionOptions,
         markerBearing,
       },
     )
-  }, [applyNavigationCamera, currentPosition, getCurrentMapBearing, getDisplayMapPitch, getSettingsMapPitch, northUpLocked, route?.coordinates, status])
+  }, [applyNavigationCamera, currentPosition, getCurrentMapBearing, getDisplayMapPitch, getSettingsMapPitch, hasRouteSelectionOptions, northUpLocked, route?.coordinates, status])
 
   useEffect(() => {
     const mapElement = mapElementRef.current
@@ -937,17 +943,29 @@ export function TmapPanel({
     ))
     routeOptionOverlaySignatureRef.current = overlaySignature
 
-    const overviewCenter = getRouteOptionsCenter(routeOptions)
-    if (overviewCenter) {
-      const centerLatLng = new window.Tmapv3.LatLng(overviewCenter.lat, overviewCenter.lng)
+    const routeOptionBoundsCoordinates = getRouteOptionBoundsCoordinates(routeOptions, [
+      origin?.coordinate,
+      destination?.coordinate,
+    ])
+    const routeSelectionCamera = getRouteSelectionCamera(routeOptionBoundsCoordinates, mapElementRef.current)
+    if (routeSelectionCamera) {
+      const centerLatLng = new window.Tmapv3.LatLng(
+        routeSelectionCamera.center.lat,
+        routeSelectionCamera.center.lng,
+      )
       const overviewCamera = {
-        position: overviewCenter,
+        position: routeSelectionCamera.center,
         bearing: 0,
         markerBearing: 0,
         pitch: MAP_TOP_DOWN_PITCH,
       }
 
-      applyMapCamera(mapRef.current, overviewCamera, centerLatLng, getRouteOptionsOverviewZoom(routeOptions))
+      applyMapCamera(
+        mapRef.current,
+        overviewCamera,
+        centerLatLng,
+        routeSelectionCamera.zoom,
+      )
       renderedBearingRef.current = 0
       renderedPitchRef.current = MAP_TOP_DOWN_PITCH
       renderedCameraRef.current = overviewCamera
@@ -955,6 +973,8 @@ export function TmapPanel({
     }
   }, [
     clearRouteOptionOverlays,
+    destination?.coordinate,
+    origin?.coordinate,
     route?.coordinates.length,
     routeOptions,
     status,
@@ -1278,7 +1298,7 @@ export function TmapPanel({
     <div className="relative z-0 h-full w-full overflow-hidden bg-[var(--nav-frame)]">
       <div ref={mapElementRef} className="h-full w-full" data-testid="tmap-canvas" />
       {status === 'ready' ? (
-        <div className="absolute bottom-16 left-5 z-10 flex flex-col items-center gap-3 max-sm:bottom-15 max-sm:left-3">
+        <div className="absolute bottom-[4.25rem] left-5 z-10 flex flex-col items-center gap-3 max-sm:bottom-16 max-sm:left-3">
           <MapControlButton label="나침반 원위치" onClick={() => resetMapOrientation()}>
             <span
               className="relative grid size-11 place-items-center"
@@ -1636,8 +1656,8 @@ function createRouteOptionOverlay(
   map: Window['Tmapv3Map'],
 ): RouteOptionOverlay {
   const isActive = option.id === activeOptionId
-  const path = toTmapPath(option.route.coordinates)
   const lineStyle = getRouteOptionOverlayLineStyle(isActive)
+  const segments = getRouteOptionLineSegments(option.route)
   const labelCoordinate = getRouteCoordinateAtRatio(option.route.coordinates, getRouteOptionLabelRatio(index))
     ?? option.route.coordinates[Math.floor(option.route.coordinates.length / 2)]
     ?? option.route.coordinates[0]
@@ -1648,22 +1668,32 @@ function createRouteOptionOverlay(
     map,
     zIndex: isActive ? 240 : 220,
   })
-  const lines = [
-    new window.Tmapv3!.Polyline({
-      path,
-      strokeColor: '#ffffff',
-      strokeOpacity: lineStyle.borderOpacity,
-      strokeWeight: lineStyle.borderWeight,
-      map,
-    }),
-    new window.Tmapv3!.Polyline({
-      path,
-      strokeColor: option.color,
-      strokeOpacity: lineStyle.strokeOpacity,
-      strokeWeight: lineStyle.strokeWeight,
-      map,
-    }),
-  ]
+  const lines = segments.flatMap((segment) => {
+    const path = toTmapPath(segment.coordinates)
+
+    return [
+      {
+        kind: 'border' as const,
+        line: new window.Tmapv3!.Polyline({
+          path,
+          strokeColor: '#ffffff',
+          strokeOpacity: lineStyle.borderOpacity,
+          strokeWeight: lineStyle.borderWeight,
+          map,
+        }),
+      },
+      {
+        kind: 'route' as const,
+        line: new window.Tmapv3!.Polyline({
+          path,
+          strokeColor: getRouteLineColor(segment.congestion, option.color),
+          strokeOpacity: lineStyle.strokeOpacity,
+          strokeWeight: lineStyle.strokeWeight,
+          map,
+        }),
+      },
+    ]
+  })
 
   return {
     id: option.id,
@@ -1672,6 +1702,17 @@ function createRouteOptionOverlay(
     marker,
     option,
   }
+}
+
+function getRouteOptionLineSegments(route: NavigationRoute): RouteTrafficSegment[] {
+  if (route.trafficSegments?.length) {
+    return getRouteAlignedTrafficSegments(route.coordinates, route.trafficSegments)
+  }
+
+  return [{
+    congestion: 0,
+    coordinates: route.coordinates,
+  }]
 }
 
 function getRouteOptionOverlayLineStyle(active: boolean) {
@@ -1892,7 +1933,12 @@ function getRouteDirectionMarkerSignature(coordinates: Coordinate[], zoom: numbe
 function getRouteOptionOverlaySignature(options: NavigationRouteOption[]) {
   return options.map((option) => (
     `${option.id}:${option.color}:${option.route.summary.durationSeconds}:${option.route.summary.distanceMeters}:` +
-    option.route.coordinates.map((coordinate) => `${coordinate.lat.toFixed(5)},${coordinate.lng.toFixed(5)}`).join('|')
+    option.route.coordinates.map((coordinate) => `${coordinate.lat.toFixed(5)},${coordinate.lng.toFixed(5)}`).join('|') +
+    ':' +
+    (option.route.trafficSegments ?? []).map((segment) => (
+      `${segment.congestion}:` +
+      segment.coordinates.map((coordinate) => `${coordinate.lat.toFixed(5)},${coordinate.lng.toFixed(5)}`).join('|')
+    )).join(',')
   )).join(';')
 }
 
@@ -1913,37 +1959,85 @@ function getRouteCoordinateAtRatio(coordinates: Coordinate[], ratio: number) {
   return getRouteAnchorAtDistance(coordinates, routeDistance * ratio)?.coordinate
 }
 
-function getRouteOptionsCenter(options: NavigationRouteOption[]) {
-  const coordinates = options.flatMap((option) => option.route.coordinates)
+function getRouteOptionBoundsCoordinates(
+  options: NavigationRouteOption[],
+  anchors: Array<Coordinate | undefined>,
+) {
+  return [
+    ...anchors.filter((coordinate): coordinate is Coordinate => Boolean(coordinate)),
+    ...options.flatMap((option) => option.route.coordinates),
+  ]
+}
+
+function getRouteSelectionCamera(
+  coordinates: Coordinate[],
+  mapElement: HTMLElement | null,
+) {
   if (!coordinates.length) {
     return undefined
   }
 
   const bounds = getCoordinateBounds(coordinates)
+  const viewport = getRouteSelectionViewport(mapElement)
+  const padding = getRouteSelectionSafeAreaPadding(viewport)
+  const availableWidth = Math.max(260, viewport.width - padding.left - padding.right)
+  const availableHeight = Math.max(220, viewport.height - padding.top - padding.bottom)
+  const minMercatorX = bounds.minLng / 360
+  const maxMercatorX = bounds.maxLng / 360
+  const minMercatorY = getMercatorY(bounds.minLat) / (Math.PI * 2)
+  const maxMercatorY = getMercatorY(bounds.maxLat) / (Math.PI * 2)
+  const lngFraction = Math.max(maxMercatorX - minMercatorX, 0.000001)
+  const latFraction = Math.max(maxMercatorY - minMercatorY, 0.000001)
+  const lngZoom = Math.log2(availableWidth / 256 / lngFraction)
+  const latZoom = Math.log2(availableHeight / 256 / latFraction)
+  const zoom = Math.max(
+    ROUTE_SELECTION_MIN_ZOOM,
+    Math.min(ROUTE_SELECTION_MAX_ZOOM, Number((Math.min(lngZoom, latZoom) - 0.25).toFixed(1))),
+  )
+  const scale = 256 * (2 ** zoom)
+  const centerMercatorX = (
+    (minMercatorX + maxMercatorX) / 2 +
+    (padding.right - padding.left) / (2 * scale)
+  )
+  const centerMercatorY = (
+    (minMercatorY + maxMercatorY) / 2 +
+    (padding.top - padding.bottom) / (2 * scale)
+  )
+
   return {
-    lat: (bounds.minLat + bounds.maxLat) / 2,
-    lng: (bounds.minLng + bounds.maxLng) / 2,
+    center: {
+      lat: getLatitudeFromMercatorY(centerMercatorY * Math.PI * 2),
+      lng: centerMercatorX * 360,
+    },
+    zoom,
   }
 }
 
-function getRouteOptionsOverviewZoom(options: NavigationRouteOption[]) {
-  const coordinates = options.flatMap((option) => option.route.coordinates)
-  if (coordinates.length < 2) {
-    return MAP_OVERVIEW_ZOOM
+function getRouteSelectionViewport(mapElement: HTMLElement | null) {
+  const mapRect = mapElement?.getBoundingClientRect()
+
+  return {
+    width: mapRect?.width && mapRect.width > 0 ? mapRect.width : 1024,
+    height: mapRect?.height && mapRect.height > 0 ? mapRect.height : 640,
+  }
+}
+
+function getRouteSelectionSafeAreaPadding({ width, height }: { width: number; height: number }) {
+  if (width < 720) {
+    return {
+      left: 24,
+      right: 24,
+      top: 112,
+      bottom: Math.min(96, Math.max(72, height * 0.12)),
+    }
   }
 
-  const bounds = getCoordinateBounds(coordinates)
-  const diagonalMeters = getApproximateDistanceMeters(
-    { lat: bounds.minLat, lng: bounds.minLng },
-    { lat: bounds.maxLat, lng: bounds.maxLng },
-  )
-
-  if (diagonalMeters > 30_000) return 11.8
-  if (diagonalMeters > 18_000) return 12.8
-  if (diagonalMeters > 10_000) return 13.8
-  if (diagonalMeters > 5_000) return 14.8
-  if (diagonalMeters > 2_000) return 15.8
-  return 16.8
+  return {
+    left: 96,
+    right: 64,
+    top: 116,
+    bottom: 88,
+  }
 }
 
 function getCoordinateBounds(coordinates: Coordinate[]) {
@@ -1958,6 +2052,17 @@ function getCoordinateBounds(coordinates: Coordinate[]) {
     minLng: Number.POSITIVE_INFINITY,
     maxLng: Number.NEGATIVE_INFINITY,
   })
+}
+
+function getMercatorY(lat: number) {
+  const constrainedLat = Math.max(-85.05112878, Math.min(85.05112878, lat))
+  const sin = Math.sin((constrainedLat * Math.PI) / 180)
+
+  return Math.log((1 + sin) / (1 - sin)) / 2
+}
+
+function getLatitudeFromMercatorY(mercatorY: number) {
+  return (Math.atan(Math.sinh(mercatorY)) * 180) / Math.PI
 }
 
 function toTmapPath(coordinates: Coordinate[]) {

@@ -1582,10 +1582,11 @@ function RouteSelectionSummary({
 
   return (
     <motion.div
-      className="pointer-events-none absolute left-5 top-5 z-20 w-[min(30rem,calc(100%-6rem))] text-[var(--nav-ink)] max-sm:left-3 max-sm:top-3 max-sm:w-[calc(100%-4.5rem)]"
-      initial={{ opacity: 0, y: -14, scale: 0.985 }}
+      className="pointer-events-none absolute bottom-20 left-1/2 z-20 w-[min(32rem,calc(100%-2rem))] -translate-x-1/2 text-[var(--nav-ink)] max-sm:bottom-[4.5rem] max-sm:w-[calc(100%-1.5rem)]"
+      data-testid="route-selection-summary"
+      initial={{ opacity: 0, y: 14, scale: 0.985 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: -10, scale: 0.985 }}
+      exit={{ opacity: 0, y: 10, scale: 0.985 }}
       transition={motionTiming}
     >
       <div className="pointer-events-auto flex items-center gap-3 rounded-2xl bg-white/96 px-4 py-3 shadow-[0_8px_22px_rgba(15,23,42,0.14)] backdrop-blur">
@@ -1755,9 +1756,9 @@ function BottomStatusBar({
   const items = hasRoute
     ? [
         { label: '도착', value: `${arrivalLabel} 예정`, icon: <Clock className="h-4 w-4" weight="bold" /> },
-        { label: '남은거리', value: distanceLabel, icon: <RoadHorizon className="h-4 w-4" weight="bold" /> },
-        { label: '남은 시간', value: durationLabel, icon: <Timer className="h-4 w-4" weight="bold" /> },
+        { label: '남은시간', value: durationLabel, icon: <Timer className="h-4 w-4" weight="bold" /> },
         { label: '목적지', value: destinationLabel, icon: <MapPin className="h-4 w-4" weight="bold" /> },
+        { label: '남은거리', value: distanceLabel, icon: <RoadHorizon className="h-4 w-4" weight="bold" /> },
         { label: '날씨', value: weatherLabel, icon: <CloudSun className="h-4 w-4" weight="bold" /> },
       ]
     : [
