@@ -1139,6 +1139,7 @@ describe('TmapPanel', () => {
     })
 
     expect(window.Tmapv3!.Polyline).toHaveBeenCalledTimes(4)
+    expect(polylineSetPath).not.toHaveBeenCalled()
     expect(polylineSetMap).not.toHaveBeenCalledWith(null)
   })
 

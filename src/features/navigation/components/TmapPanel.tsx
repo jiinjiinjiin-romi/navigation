@@ -16,6 +16,7 @@ interface TmapPanelProps {
   origin?: Place
   destination?: Place
   simulationPosition?: Coordinate
+  onSimulationFrameRendererReady?: (renderFrame: ((position: Coordinate) => void) | undefined) => void
   onRequestLocation?: () => void
 }
 
@@ -31,6 +32,7 @@ const ROUTE_DIRECTION_ARROW_SIZE = 18
 const ROUTE_DIRECTION_ARROW_END_OFFSET_METERS = 70
 const ROUTE_DIRECTION_ARROW_MIN_EDGE_GAP_METERS = 40
 const MAX_TRAFFIC_SEGMENT_MATCH_DISTANCE_SQUARED = 0.000001
+const ROUTE_LINE_SIGNATURE_COORDINATE_PRECISION = 5
 const CURRENT_LOCATION_PLACE_ID = 'current-location'
 const NAVIGATION_MARKER_BEARING_PRECISION = 0.05
 const NAVIGATION_MARKER_SIZE = 58
@@ -104,6 +106,7 @@ export function TmapPanel({
   origin,
   destination,
   simulationPosition,
+  onSimulationFrameRendererReady,
   onRequestLocation,
 }: TmapPanelProps) {
   const mapElementRef = useRef<HTMLDivElement>(null)
@@ -136,7 +139,12 @@ export function TmapPanel({
     return projectCoordinateToRoute(route.coordinates, simulationPosition)
   }, [route?.coordinates, simulationPosition])
   const syncCompassBearing = useCallback((bearing: number) => {
-    setMapBearing((currentBearing) => getContinuousBearing(currentBearing, bearing))
+    setMapBearing((currentBearing) => {
+      const nextBearing = getContinuousBearing(currentBearing, bearing)
+      return Math.abs(normalizeSignedBearing(nextBearing - currentBearing)) < NAVIGATION_MARKER_BEARING_PRECISION
+        ? currentBearing
+        : nextBearing
+    })
   }, [])
 
   const resolveCameraCenter = useCallback((position: Coordinate) => {
@@ -211,8 +219,8 @@ export function TmapPanel({
     return [coordinate, ...route.coordinates.slice(segmentIndex + 1)]
   }, [progressPosition, route?.coordinates])
 
-  const routeLineSegments = useMemo(() => {
-    const coordinates = compactRouteCoordinates(remainingRouteCoordinates)
+  const routeLineSourceSegments = useMemo(() => {
+    const coordinates = compactRouteCoordinates(route?.coordinates ?? [])
 
     if (coordinates.length < 2) {
       return []
@@ -226,7 +234,14 @@ export function TmapPanel({
       coordinates,
       congestion: 0 as const,
     }]
-  }, [progressPosition, remainingRouteCoordinates, route?.trafficSegments])
+  }, [route?.coordinates, route?.trafficSegments])
+  const routeLineSegments = useMemo(() => {
+    if (!progressPosition) {
+      return routeLineSourceSegments
+    }
+
+    return getRemainingRouteLineSegments(routeLineSourceSegments, progressPosition)
+  }, [progressPosition, routeLineSourceSegments])
   const routeDirectionCoordinates = useMemo(
     () => compactRouteCoordinates(remainingRouteCoordinates),
     [remainingRouteCoordinates],
@@ -737,6 +752,47 @@ export function TmapPanel({
       },
     )
   }, [applyNavigationCamera, getCurrentMapBearing, northUpLocked, progressPosition, route?.coordinates, simulationPosition, status])
+
+  useEffect(() => {
+    if (!onSimulationFrameRendererReady || !window.Tmapv3 || !mapRef.current || status !== 'ready') {
+      onSimulationFrameRendererReady?.(undefined)
+      return
+    }
+
+    onSimulationFrameRendererReady((position) => {
+      const displayPosition = route?.coordinates.length
+        ? projectCoordinateToRoute(route.coordinates, position)
+        : position
+      const cameraBearing = getNavigationCameraBearing(
+        route?.coordinates,
+        displayPosition,
+        northUpLocked,
+      )
+      const shouldFollowCamera = cameraFollowingRef.current
+      const markerBearing = shouldFollowCamera
+        ? cameraBearing.markerBearing
+        : getNavigationMarkerBearing(route?.coordinates, displayPosition, getCurrentMapBearing())
+
+      applyNavigationCamera(
+        displayPosition,
+        cameraBearing.mapBearing,
+        {
+          animated: false,
+          applyMap: shouldFollowCamera,
+          markerBearing,
+        },
+      )
+    })
+
+    return () => onSimulationFrameRendererReady(undefined)
+  }, [
+    applyNavigationCamera,
+    getCurrentMapBearing,
+    northUpLocked,
+    onSimulationFrameRendererReady,
+    route?.coordinates,
+    status,
+  ])
 
   const applyCompassMode = useCallback((nextNorthUpLocked: boolean, position?: Coordinate) => {
     setNorthUpLocked(nextNorthUpLocked)
@@ -1287,7 +1343,7 @@ function toTmapPath(coordinates: Coordinate[]) {
 }
 
 function formatRouteLineSignatureCoordinate(value: number) {
-  return value.toFixed(7)
+  return value.toFixed(ROUTE_LINE_SIGNATURE_COORDINATE_PRECISION)
 }
 
 function getRouteAlignedTrafficSegments(
@@ -1328,6 +1384,74 @@ function getRouteAlignedTrafficSegments(
   }
 
   return routeLineSegments
+}
+
+function getRemainingRouteLineSegments(
+  routeLineSegments: RouteTrafficSegment[],
+  progressPosition: Coordinate,
+): RouteTrafficSegment[] {
+  const activeSegmentIndex = getNearestRouteLineSegmentIndex(routeLineSegments, progressPosition)
+
+  if (activeSegmentIndex === undefined) {
+    return routeLineSegments
+  }
+
+  return routeLineSegments.flatMap((segment, index) => {
+    if (index < activeSegmentIndex) {
+      return []
+    }
+
+    if (index > activeSegmentIndex) {
+      return [segment]
+    }
+
+    const projection = projectCoordinateToRouteSegment(segment.coordinates, progressPosition)
+    const remainingCoordinates = compactRouteCoordinates([
+      projection.coordinate,
+      ...segment.coordinates.slice(projection.segmentIndex + 1),
+    ])
+
+    if (remainingCoordinates.length < 2) {
+      return []
+    }
+
+    return [{
+      ...segment,
+      coordinates: remainingCoordinates,
+    }]
+  })
+}
+
+function getNearestRouteLineSegmentIndex(
+  routeLineSegments: RouteTrafficSegment[],
+  coordinate: Coordinate,
+) {
+  const nearest = routeLineSegments.reduce<{
+    index: number
+    distance: number
+  } | undefined>((closest, segment, index) => {
+    if (segment.coordinates.length < 2) {
+      return closest
+    }
+
+    const projected = projectCoordinateToRouteSegment(segment.coordinates, coordinate)
+    const distance = getSquaredCoordinateDistance(projected.coordinate, coordinate)
+
+    if (!closest || distance < closest.distance) {
+      return {
+        index,
+        distance,
+      }
+    }
+
+    return closest
+  }, undefined)
+
+  if (!nearest || nearest.distance > MAX_TRAFFIC_SEGMENT_MATCH_DISTANCE_SQUARED) {
+    return undefined
+  }
+
+  return nearest.index
 }
 
 function getNearestTrafficCongestion(

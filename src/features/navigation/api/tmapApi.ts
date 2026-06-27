@@ -201,7 +201,7 @@ function normalizeRoute(data: TmapRouteResponse): NavigationRoute {
   const features = data.features ?? []
   const coordinates = features.flatMap((feature) => extractLineCoordinates(feature.geometry))
   const firstProperties = features[0]?.properties
-  const trafficSegments = normalizeTrafficSegments(features)
+  const trafficSegments = mergeTrafficSegments(normalizeTrafficSegments(features))
 
   return {
     coordinates,
@@ -316,6 +316,31 @@ function getGeometryTrafficSegments(
       congestion,
     }]
   })
+}
+
+function mergeTrafficSegments(segments: RouteTrafficSegment[]): RouteTrafficSegment[] {
+  return segments.reduce<RouteTrafficSegment[]>((mergedSegments, segment) => {
+    const previous = mergedSegments[mergedSegments.length - 1]
+
+    if (
+      previous &&
+      previous.congestion === segment.congestion &&
+      areSameCoordinate(previous.coordinates[previous.coordinates.length - 1], segment.coordinates[0])
+    ) {
+      previous.coordinates = [
+        ...previous.coordinates,
+        ...segment.coordinates.slice(1),
+      ]
+      return mergedSegments
+    }
+
+    mergedSegments.push(segment)
+    return mergedSegments
+  }, [])
+}
+
+function areSameCoordinate(left: Coordinate | undefined, right: Coordinate | undefined) {
+  return Boolean(left && right && left.lat === right.lat && left.lng === right.lng)
 }
 
 function isTrafficCongestion(value: number): value is TrafficCongestion {

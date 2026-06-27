@@ -304,6 +304,49 @@ describe('getRoute', () => {
       },
     ])
   })
+
+  it('merges adjacent traffic tuple ranges with the same congestion', async () => {
+    const post = vi.fn().mockResolvedValue({
+      data: {
+        features: [
+          {
+            geometry: {
+              type: 'LineString',
+              coordinates: [
+                [126.978, 37.5665],
+                [126.99, 37.56],
+                [127, 37.55],
+                [127.01, 37.54],
+              ],
+              traffic: [
+                [0, 1, 4, 8],
+                [1, 3, 4, 7],
+              ],
+            },
+            properties: { totalDistance: '1000', totalTime: '120' },
+          },
+        ],
+      },
+    })
+
+    const route = await getRoute(
+      { lat: 37.5665, lng: 126.978 },
+      { lat: 37.54, lng: 127.01 },
+      { post },
+    )
+
+    expect(route.trafficSegments).toEqual([
+      {
+        coordinates: [
+          { lat: 37.5665, lng: 126.978 },
+          { lat: 37.56, lng: 126.99 },
+          { lat: 37.55, lng: 127 },
+          { lat: 37.54, lng: 127.01 },
+        ],
+        congestion: 4,
+      },
+    ])
+  })
 })
 
 describe('getRoadMatch', () => {

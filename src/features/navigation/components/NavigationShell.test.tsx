@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { useEffect } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { NavigationShell } from './NavigationShell'
@@ -17,19 +18,34 @@ vi.mock('./TmapPanel', () => ({
     currentPosition,
     route,
     simulationPosition,
+    onSimulationFrameRendererReady,
   }: {
     currentPosition?: { lat: number; lng: number }
     route?: { coordinates: { lat: number; lng: number }[] }
     simulationPosition?: { lat: number; lng: number }
-  }) => (
-    <div data-route-points={route?.coordinates.length ?? 0} data-testid="tmap-panel">
-      {simulationPosition
-        ? `sim:${simulationPosition.lat.toFixed(4)},${simulationPosition.lng.toFixed(4)}`
-        : currentPosition
-          ? `current:${currentPosition.lat.toFixed(4)},${currentPosition.lng.toFixed(4)}`
-          : 'idle'}
-    </div>
-  ),
+    onSimulationFrameRendererReady?: (renderFrame: ((position: { lat: number; lng: number }) => void) | undefined) => void
+  }) => {
+    useEffect(() => {
+      onSimulationFrameRendererReady?.((position) => {
+        window.__lastRenderedSimulationFrame = position
+      })
+      return () => onSimulationFrameRendererReady?.(undefined)
+    }, [onSimulationFrameRendererReady])
+
+    return (
+      <div
+        data-route-points={route?.coordinates.length ?? 0}
+        data-simulation-lat={simulationPosition?.lat}
+        data-testid="tmap-panel"
+      >
+        {simulationPosition
+          ? `sim:${simulationPosition.lat.toFixed(4)},${simulationPosition.lng.toFixed(4)}`
+          : currentPosition
+            ? `current:${currentPosition.lat.toFixed(4)},${currentPosition.lng.toFixed(4)}`
+            : 'idle'}
+      </div>
+    )
+  },
 }))
 
 const mockedSearchPlaces = vi.mocked(searchPlaces)
@@ -351,9 +367,11 @@ describe('NavigationShell', () => {
     expect(primaryManeuverCard).toHaveClass('w-fit')
     expect(primaryManeuverCard).toHaveClass('max-w-[min(22rem,calc(100%-7rem))]')
     expect(primaryManeuverCard).toContainElement(screen.getByText('좌회전'))
+    expect(primaryManeuverCard.querySelector('img[src*="left"]')).toBeInTheDocument()
     expect(nextManeuverCard).toHaveClass('w-fit')
     expect(nextManeuverCard).not.toHaveClass('w-[min(16rem,calc(100%-10rem))]')
     expect(nextManeuverCard).toContainElement(screen.getByText('900m'))
+    expect(nextManeuverCard.querySelector('img[src*="right"]')).toBeInTheDocument()
     expect(primaryManeuverCard).not.toContainElement(nextManeuverCard)
   })
 
@@ -749,6 +767,13 @@ describe('NavigationShell', () => {
     await act(async () => {
       rafCallbacks.shift()?.(0)
     })
+    const simulationLatAfterFirstFrame = screen.getByTestId('tmap-panel').dataset.simulationLat
+    await act(async () => {
+      rafCallbacks.shift()?.(16)
+    })
+    expect(screen.getByTestId('tmap-panel').dataset.simulationLat).toBe(simulationLatAfterFirstFrame)
+    expect(window.__lastRenderedSimulationFrame?.lat).not.toBe(Number(simulationLatAfterFirstFrame))
+
     await act(async () => {
       rafCallbacks.shift()?.(240)
     })

@@ -38,4 +38,8 @@ interface Window {
     Polyline: new (options: Record<string, unknown>) => NonNullable<Window['Tmapv3Polyline']>
   }
   __naviTmapMap?: Window['Tmapv3Map']
+  __lastRenderedSimulationFrame?: {
+    lat: number
+    lng: number
+  }
 }

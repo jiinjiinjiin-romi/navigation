@@ -1,6 +1,5 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import {
-  ArrowBendUpLeft,
   ArrowBendUpRight,
   ArrowUp,
   Buildings,
@@ -30,7 +29,9 @@ import boxTunnelSignSrc from '../assets/road-signs/130.png'
 import cautionSignSrc from '../assets/road-signs/140.png'
 import curveSignSrc from '../assets/road-signs/113.png'
 import fallingRockSignSrc from '../assets/road-signs/130.png'
+import leftManeuverSrc from '../assets/maneuvers/left.png'
 import overpassSignSrc from '../assets/road-signs/120.png'
+import rightManeuverSrc from '../assets/maneuvers/right.png'
 import schoolZoneSignSrc from '../assets/road-signs/133.png'
 import sideOverpassSignSrc from '../assets/road-signs/124.png'
 import sideUnderpassSignSrc from '../assets/road-signs/123.png'
@@ -206,6 +207,7 @@ export function NavigationShell() {
   const animationFrameRef = useRef<number | undefined>(undefined)
   const simulationStartedAtRef = useRef<number | undefined>(undefined)
   const simulationLastUiUpdateAtRef = useRef<number | undefined>(undefined)
+  const simulationFrameRendererRef = useRef<((position: Coordinate) => void) | undefined>(undefined)
   const guidanceDistanceDisplayRef = useRef<GuidanceDistanceDisplayStore>(new Map())
   const debouncedOriginKeyword = useDebouncedValue(originKeyword.trim(), SEARCH_DEBOUNCE_MS)
   const debouncedDestinationKeyword = useDebouncedValue(destinationKeyword.trim(), SEARCH_DEBOUNCE_MS)
@@ -526,15 +528,15 @@ export function NavigationShell() {
 
       const elapsed = timestamp - simulationStartedAtRef.current
       const progress = getSimulatedRoutePosition(simulationPlan, elapsed / simulationDurationMs)
+      simulationFrameRendererRef.current?.(progress.coordinate)
       const shouldUpdateUiState = (
         progress.completed ||
         simulationLastUiUpdateAtRef.current === undefined ||
         timestamp - simulationLastUiUpdateAtRef.current >= SIMULATION_UI_UPDATE_INTERVAL_MS
       )
 
-      setSimulationPosition(progress.coordinate)
-
       if (shouldUpdateUiState) {
+        setSimulationPosition(progress.coordinate)
         setSimulationRemainingDistance(progress.remainingDistanceMeters)
         setSimulationRemainingDuration(progress.remainingDurationSeconds)
         simulationLastUiUpdateAtRef.current = timestamp
@@ -574,6 +576,9 @@ export function NavigationShell() {
           origin={origin}
           destination={destination}
           simulationPosition={simulationPosition}
+          onSimulationFrameRendererReady={(renderFrame) => {
+            simulationFrameRendererRef.current = renderFrame
+          }}
           onRequestLocation={requestCurrentLocation}
         />
 
@@ -1436,8 +1441,8 @@ function ManeuverIcon({
   className: string
   type: RouteManeuver['type']
 }) {
-  if (type === 'left') return <ArrowBendUpLeft className={className} weight="bold" />
-  if (type === 'right') return <ArrowBendUpRight className={className} weight="bold" />
+  if (type === 'left') return <img alt="" className={`${className} object-contain`} src={leftManeuverSrc} />
+  if (type === 'right') return <img alt="" className={`${className} object-contain`} src={rightManeuverSrc} />
   if (type === 'highway-exit' || type === 'urban-express-exit') return <ArrowBendUpRight className={className} weight="bold" />
   if (type === 'clock-direction') return <ArrowBendUpRight className={className} weight="bold" />
   if (type === 'arrive' || type === 'caution') return <Warning className={className} weight="bold" />
