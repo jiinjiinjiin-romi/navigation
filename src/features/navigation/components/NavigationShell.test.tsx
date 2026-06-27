@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { useEffect } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -169,6 +169,7 @@ describe('NavigationShell', () => {
     expect(screen.queryByText('API 키는 백엔드 env에서만 사용됩니다.')).not.toBeInTheDocument()
     expect(screen.queryByPlaceholderText('출발지를 입력하세요')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: /어디로 갈까요/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '설정' })).toBeInTheDocument()
     await waitFor(() => {
       expect(screen.getByTestId('bottom-status-bar')).toHaveClass('grid-cols-3')
     })
@@ -348,7 +349,7 @@ describe('NavigationShell', () => {
     const bottomStatusBar = screen.getByTestId('bottom-status-bar')
     expect(bottomStatusBar).toHaveClass('grid-cols-5')
     expect(screen.getByText('도착')).toBeInTheDocument()
-    expect(screen.getByText('거리')).toBeInTheDocument()
+    expect(screen.getByText('남은거리')).toBeInTheDocument()
     expect(bottomStatusBar).toContainElement(screen.getByText('남은 시간'))
     expect(bottomStatusBar).toContainElement(screen.getByText('목적지'))
     expect(bottomStatusBar).toContainElement(screen.getByText('서울 강남구'))
@@ -648,6 +649,102 @@ describe('NavigationShell', () => {
     expect(screen.getByRole('button', { name: '시뮬레이션 시작' })).toBeInTheDocument()
   })
 
+  it('ends active route guidance and returns to the current-location status view', async () => {
+    mockedSearchPlaces.mockResolvedValue([
+      {
+        id: 'destination',
+        name: '강남역',
+        address: '서울 강남구',
+        coordinate: { lat: 37.4979, lng: 127.0276 },
+      },
+    ])
+    mockedGetRoute.mockResolvedValue({
+      coordinates: [
+        { lat: 37.5665, lng: 126.978 },
+        { lat: 37.4979, lng: 127.0276 },
+      ],
+      summary: {
+        distanceMeters: 12340,
+        durationSeconds: 1320,
+      },
+    })
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell />
+      </QueryClientProvider>,
+    )
+
+    const destinationInput = await openDestinationEditor()
+    fireEvent.change(destinationInput, {
+      target: { value: '강남역' },
+    })
+    fireEvent.click(await screen.findByRole('option', { name: /강남역/ }))
+    await screen.findByText('22분')
+
+    fireEvent.click(screen.getByRole('button', { name: '길안내 종료' }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('bottom-status-bar')).toHaveClass('grid-cols-3')
+    })
+    expect(screen.queryByRole('button', { name: '시뮬레이션 시작' })).not.toBeInTheDocument()
+    expect(screen.getByTestId('tmap-panel').dataset.routePoints).toBe('0')
+  })
+
+  it('uses a map pin icon for arrival maneuver guidance', async () => {
+    mockedSearchPlaces.mockResolvedValue([
+      {
+        id: 'destination',
+        name: '강남역',
+        address: '서울 강남구',
+        coordinate: { lat: 37.4979, lng: 127.0276 },
+      },
+    ])
+    mockedGetRoute.mockResolvedValue({
+      coordinates: [
+        { lat: 37.5665, lng: 126.978 },
+        { lat: 37.4979, lng: 127.0276 },
+      ],
+      summary: {
+        distanceMeters: 12340,
+        durationSeconds: 1320,
+      },
+      maneuvers: [
+        {
+          id: 'arrive-12340',
+          type: 'arrive',
+          label: '도착',
+          description: '목적지 도착',
+          coordinate: { lat: 37.4979, lng: 127.0276 },
+          distanceFromStartMeters: 12340,
+        },
+      ],
+    })
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell />
+      </QueryClientProvider>,
+    )
+
+    const destinationInput = await openDestinationEditor()
+    fireEvent.change(destinationInput, {
+      target: { value: '강남역' },
+    })
+    fireEvent.click(await screen.findByRole('option', { name: /강남역/ }))
+
+    const primaryManeuverCard = await screen.findByTestId('primary-maneuver-card')
+
+    expect(within(primaryManeuverCard).getByText('도착')).toBeInTheDocument()
+    expect(primaryManeuverCard).toContainElement(screen.getByTestId('arrive-maneuver-map-pin-icon'))
+  })
+
   it('keeps route guidance visible during simulation when TMAP returns no maneuver points', async () => {
     mockedSearchPlaces.mockResolvedValue([
       {
@@ -692,7 +789,7 @@ describe('NavigationShell', () => {
     expect(screen.queryByText('경로 안내')).not.toBeInTheDocument()
   })
 
-  it('updates sub-kilometer maneuver distance in randomized 3 to 10 meter steps', async () => {
+  it('updates sub-kilometer maneuver distance every 500ms during simulation', async () => {
     const rafCallbacks: FrameRequestCallback[] = []
     const requestAnimationFrameSpy = vi
       .spyOn(window, 'requestAnimationFrame')
@@ -703,7 +800,6 @@ describe('NavigationShell', () => {
     const cancelAnimationFrameSpy = vi
       .spyOn(window, 'cancelAnimationFrame')
       .mockImplementation(() => undefined)
-    const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0)
 
     mockedSearchPlaces.mockResolvedValue([
       {
@@ -777,17 +873,20 @@ describe('NavigationShell', () => {
     await act(async () => {
       rafCallbacks.shift()?.(240)
     })
+    expect(screen.getByText('500')).toBeInTheDocument()
+    expect(screen.getByText('900m')).toBeInTheDocument()
+
+    await act(async () => {
+      rafCallbacks.shift()?.(500)
+    })
 
     await waitFor(() => {
-      expect(screen.getByText('497')).toBeInTheDocument()
-      expect(screen.getByText('897m')).toBeInTheDocument()
+      expect(screen.getByText('494')).toBeInTheDocument()
+      expect(screen.getByText('894m')).toBeInTheDocument()
     })
-    expect(screen.queryByText('496')).not.toBeInTheDocument()
-    expect(screen.queryByText('896m')).not.toBeInTheDocument()
 
     requestAnimationFrameSpy.mockRestore()
     cancelAnimationFrameSpy.mockRestore()
-    randomSpy.mockRestore()
   })
 
   it('keeps a school-zone alert visible as active after the simulation passes the alert point', async () => {

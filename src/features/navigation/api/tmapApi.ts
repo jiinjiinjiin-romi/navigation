@@ -496,10 +496,6 @@ function getManeuverType(turnType: number): RouteManeuver['type'] | undefined {
     return 'arrive'
   }
 
-  if ([150, 151, 184, 185, 186, 187, 188, 189, 191, 192, 193, 194].includes(turnType)) {
-    return 'caution'
-  }
-
   return undefined
 }
 
@@ -574,6 +570,7 @@ function getSafetyAlertType(turnType: number): SafetyAlert['type'] | undefined {
   if (turnType === 192) return 'accident'
   if (turnType === 193) return 'curve'
   if (turnType === 194) return 'falling-rock'
+  if ([150, 151, 184, 185, 186, 187, 188, 189].includes(turnType)) return 'caution'
   return undefined
 }
 

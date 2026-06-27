@@ -6,6 +6,7 @@ import {
   CaretLeft,
   CloudSun,
   Clock,
+  GearSix,
   HouseLine,
   MagnifyingGlass,
   MapPin,
@@ -52,12 +53,10 @@ const WEATHER_STALE_TIME_MS = 10 * 60 * 1000
 const SEARCH_DEBOUNCE_MS = 250
 const ADDRESS_COORDINATE_PRECISION = 5
 const WEATHER_COORDINATE_PRECISION = 3
-const GUIDANCE_DISTANCE_STEP_MIN_METERS = 3
-const GUIDANCE_DISTANCE_STEP_MAX_METERS = 10
-const GUIDANCE_DISTANCE_SHARED_STEP_KEY = '__guidance-distance-shared-step__'
 const ROUTE_SEARCH_SUMMARY_FIELDS_HEIGHT = 140
 const ROUTE_SEARCH_EDITOR_FIELDS_HEIGHT = 380
 const SIMULATION_UI_UPDATE_INTERVAL_MS = 200
+const GUIDANCE_DISTANCE_UPDATE_INTERVAL_MS = 500
 const DRIVING_ASSIST_DEBUG_QUERY_PARAM = 'debugSigns'
 const DRIVING_ASSIST_DEBUG_SEQUENCE_INTERVAL_MS = 1400
 const SAVED_PLACES: Place[] = [
@@ -204,6 +203,7 @@ export function NavigationShell() {
   const [simulationPosition, setSimulationPosition] = useState<Coordinate>()
   const [simulationRemainingDistance, setSimulationRemainingDistance] = useState(0)
   const [simulationRemainingDuration, setSimulationRemainingDuration] = useState(0)
+  const [guidanceDistanceUpdateKey, setGuidanceDistanceUpdateKey] = useState(0)
   const animationFrameRef = useRef<number | undefined>(undefined)
   const simulationStartedAtRef = useRef<number | undefined>(undefined)
   const simulationLastUiUpdateAtRef = useRef<number | undefined>(undefined)
@@ -342,6 +342,7 @@ export function NavigationShell() {
       activeRoute,
       travelledDistanceMeters,
       guidanceDistanceDisplayRef.current,
+      simulationRunning ? guidanceDistanceUpdateKey : undefined,
     )
     : undefined
   const activePlaces = activeField === 'origin'
@@ -491,6 +492,7 @@ export function NavigationShell() {
     setSimulationPosition(firstCoordinate)
     setSimulationRemainingDistance(route.summary.distanceMeters)
     setSimulationRemainingDuration(route.summary.durationSeconds)
+    setGuidanceDistanceUpdateKey(0)
     guidanceDistanceDisplayRef.current.clear()
     simulationStartedAtRef.current = undefined
     simulationLastUiUpdateAtRef.current = undefined
@@ -507,6 +509,20 @@ export function NavigationShell() {
     simulationLastUiUpdateAtRef.current = undefined
     setSimulationRunning(false)
   }, [])
+
+  const endGuidance = useCallback(() => {
+    stopSimulation()
+    setSimulationPosition(undefined)
+    setSimulationRemainingDistance(0)
+    setSimulationRemainingDuration(0)
+    setGuidanceDistanceUpdateKey(0)
+    guidanceDistanceDisplayRef.current.clear()
+    setDestination(undefined)
+    setDestinationKeyword('')
+    setActiveField(null)
+    setHighlightedIndex(0)
+    setRouteSearchOpen(false)
+  }, [stopSimulation])
 
   useEffect(() => {
     const route = activeRoute
@@ -539,6 +555,7 @@ export function NavigationShell() {
         setSimulationPosition(progress.coordinate)
         setSimulationRemainingDistance(progress.remainingDistanceMeters)
         setSimulationRemainingDuration(progress.remainingDurationSeconds)
+        setGuidanceDistanceUpdateKey(Math.floor(elapsed / GUIDANCE_DISTANCE_UPDATE_INTERVAL_MS))
         simulationLastUiUpdateAtRef.current = timestamp
       }
 
@@ -581,6 +598,7 @@ export function NavigationShell() {
           }}
           onRequestLocation={requestCurrentLocation}
         />
+        <AppIconDock motionTiming={motionTiming} />
 
         {!activeRoute ? (
           <>
@@ -649,6 +667,7 @@ export function NavigationShell() {
             motionTiming={motionTiming}
             simulationRunning={simulationRunning}
             onToggleSimulation={simulationRunning ? stopSimulation : startSimulation}
+            onEndGuidance={endGuidance}
           />
         )}
 
@@ -665,6 +684,30 @@ export function NavigationShell() {
         />
       </section>
     </main>
+  )
+}
+
+function AppIconDock({
+  motionTiming,
+}: {
+  motionTiming: MotionTiming
+}) {
+  return (
+    <motion.div
+      aria-label="앱 바로가기"
+      className="pointer-events-auto absolute right-5 top-5 z-30 flex items-center gap-2 rounded-full bg-white/95 p-1.5 shadow-[var(--nav-shadow-control)] backdrop-blur max-sm:right-3 max-sm:top-3"
+      initial={{ opacity: 0, y: -8, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={motionTiming}
+    >
+      <button
+        aria-label="설정"
+        className="grid size-10 place-items-center rounded-full text-[var(--nav-ink)] transition hover:bg-[var(--nav-panel)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)] active:bg-[var(--nav-selection)]"
+        type="button"
+      >
+        <GearSix className="size-5" weight="bold" />
+      </button>
+    </motion.div>
   )
 }
 
@@ -1051,12 +1094,14 @@ function DrivingHud({
   assist,
   guidance,
   motionTiming,
+  onEndGuidance,
   simulationRunning,
   onToggleSimulation,
 }: {
   assist?: DrivingAssistInfo
   guidance?: ManeuverGuidance
   motionTiming: MotionTiming
+  onEndGuidance: () => void
   simulationRunning: boolean
   onToggleSimulation: () => void
 }) {
@@ -1122,6 +1167,15 @@ function DrivingHud({
           )}
           <span>{simulationRunning ? '시뮬레이션 중지' : '시뮬레이션 시작'}</span>
         </motion.button>
+        <motion.button
+          className="pointer-events-auto inline-flex h-11 items-center gap-2 rounded-full bg-white/95 px-4 text-sm font-semibold text-[var(--nav-ink)] shadow-[0_4px_10px_rgba(15,23,42,0.14)] transition hover:bg-white max-sm:px-3"
+          onClick={onEndGuidance}
+          type="button"
+          whileTap={motionTiming.duration === 0 ? undefined : { scale: 0.97 }}
+        >
+          <X className="h-4 w-4" weight="bold" />
+          <span>길안내 종료</span>
+        </motion.button>
       </motion.div>
 
     </motion.div>
@@ -1172,7 +1226,7 @@ function BottomStatusBar({
   const items = hasRoute
     ? [
         { label: '도착', value: `${arrivalLabel} 예정`, icon: <Clock className="h-4 w-4" weight="bold" /> },
-        { label: '거리', value: distanceLabel, icon: <RoadHorizon className="h-4 w-4" weight="bold" /> },
+        { label: '남은거리', value: distanceLabel, icon: <RoadHorizon className="h-4 w-4" weight="bold" /> },
         { label: '남은 시간', value: durationLabel, icon: <Timer className="h-4 w-4" weight="bold" /> },
         { label: '목적지', value: destinationLabel, icon: <MapPin className="h-4 w-4" weight="bold" /> },
         { label: '날씨', value: weatherLabel, icon: <CloudSun className="h-4 w-4" weight="bold" /> },
@@ -1242,7 +1296,7 @@ interface ManeuverGuidance {
 
 interface GuidanceDistanceDisplayState {
   displayMeters: number
-  nextStepMeters?: number
+  updateKey?: number
 }
 
 type GuidanceDistanceDisplayStore = Map<string, GuidanceDistanceDisplayState>
@@ -1251,6 +1305,7 @@ function getManeuverGuidance(
   route: NavigationRoute,
   travelledDistanceMeters: number,
   distanceDisplayStore: GuidanceDistanceDisplayStore,
+  distanceUpdateKey?: number,
 ): ManeuverGuidance | undefined {
   const maneuvers = (route.maneuvers ?? []).filter(isActionManeuver)
 
@@ -1268,21 +1323,19 @@ function getManeuverGuidance(
     return createFallbackManeuverGuidance(route, travelledDistanceMeters)
   }
 
-  const sharedStepMeters = getSharedGuidanceDistanceStep(distanceDisplayStore, travelledDistanceMeters)
-
   return {
     current: createManeuverGuidanceItem(
       currentManeuver,
       currentManeuver.distanceFromStartMeters - travelledDistanceMeters,
       distanceDisplayStore,
-      sharedStepMeters,
+      distanceUpdateKey,
     ),
     next: nextManeuver
       ? createManeuverGuidanceItem(
         nextManeuver,
         nextManeuver.distanceFromStartMeters - travelledDistanceMeters,
         distanceDisplayStore,
-        sharedStepMeters,
+        distanceUpdateKey,
       )
       : undefined,
   }
@@ -1327,13 +1380,13 @@ function createManeuverGuidanceItem(
   maneuver: RouteManeuver,
   distanceMeters: number,
   distanceDisplayStore: GuidanceDistanceDisplayStore,
-  stepMeters: number,
+  updateKey?: number,
 ): ManeuverGuidanceItem {
-  const displayDistanceMeters = getSteppedGuidanceDistance(
+  const displayDistanceMeters = getTimedGuidanceDistance(
     distanceDisplayStore,
     maneuver.id,
     distanceMeters,
-    stepMeters,
+    updateKey,
   )
   const distance = formatGuidanceDistance(displayDistanceMeters)
 
@@ -1346,76 +1399,36 @@ function createManeuverGuidanceItem(
   }
 }
 
-function getSteppedGuidanceDistance(
+function getTimedGuidanceDistance(
   store: GuidanceDistanceDisplayStore,
   key: string,
   distanceMeters: number,
-  stepMeters: number,
+  updateKey?: number,
 ) {
   const actualMeters = Math.max(0, Math.round(distanceMeters))
 
-  if (actualMeters >= 1000) {
+  if (actualMeters >= 1000 || updateKey === undefined) {
     store.delete(key)
     return actualMeters
   }
 
   const existing = store.get(key)
 
-  if (!existing || actualMeters > existing.displayMeters || actualMeters === 0) {
+  if (
+    !existing ||
+    existing.updateKey !== updateKey ||
+    actualMeters > existing.displayMeters ||
+    actualMeters === 0
+  ) {
     const nextState = {
       displayMeters: actualMeters,
+      updateKey,
     }
     store.set(key, nextState)
     return nextState.displayMeters
   }
 
-  while (
-    existing.displayMeters > 0 &&
-    actualMeters <= existing.displayMeters - stepMeters
-  ) {
-    existing.displayMeters = Math.max(0, existing.displayMeters - stepMeters)
-  }
-
   return existing.displayMeters
-}
-
-function getSharedGuidanceDistanceStep(
-  store: GuidanceDistanceDisplayStore,
-  travelledDistanceMeters: number,
-) {
-  const travelledMeters = Math.max(0, Math.round(travelledDistanceMeters))
-  const existing = store.get(GUIDANCE_DISTANCE_SHARED_STEP_KEY)
-
-  if (!existing || existing.nextStepMeters === undefined || travelledMeters < existing.displayMeters) {
-    const nextState = {
-      displayMeters: travelledMeters,
-      nextStepMeters: getRandomGuidanceDistanceStep(),
-    }
-    store.set(GUIDANCE_DISTANCE_SHARED_STEP_KEY, nextState)
-    return nextState.nextStepMeters
-  }
-
-  let activeStepMeters = existing.nextStepMeters
-
-  while (travelledMeters >= existing.displayMeters + existing.nextStepMeters) {
-    activeStepMeters = existing.nextStepMeters
-    existing.displayMeters += existing.nextStepMeters
-    existing.nextStepMeters = getRandomGuidanceDistanceStep()
-  }
-
-  return activeStepMeters
-}
-
-function getRandomGuidanceDistanceStep() {
-  return (
-    Math.floor(
-      Math.random() * (
-        GUIDANCE_DISTANCE_STEP_MAX_METERS -
-        GUIDANCE_DISTANCE_STEP_MIN_METERS +
-        1
-      ),
-    ) + GUIDANCE_DISTANCE_STEP_MIN_METERS
-  )
 }
 
 function formatGuidanceDistance(distanceMeters: number) {
@@ -1445,7 +1458,8 @@ function ManeuverIcon({
   if (type === 'right') return <img alt="" className={`${className} object-contain`} src={rightManeuverSrc} />
   if (type === 'highway-exit' || type === 'urban-express-exit') return <ArrowBendUpRight className={className} weight="bold" />
   if (type === 'clock-direction') return <ArrowBendUpRight className={className} weight="bold" />
-  if (type === 'arrive' || type === 'caution') return <Warning className={className} weight="bold" />
+  if (type === 'arrive') return <MapPin className={className} data-testid="arrive-maneuver-map-pin-icon" weight="bold" />
+  if (type === 'caution') return <Warning className={className} weight="bold" />
   return <ArrowUp className={className} weight="bold" />
 }
 
