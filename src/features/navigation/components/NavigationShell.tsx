@@ -695,14 +695,18 @@ function AppIconDock({
   return (
     <motion.div
       aria-label="앱 바로가기"
-      className="pointer-events-auto absolute right-5 top-5 z-30 flex items-center gap-2 rounded-full bg-white/95 p-1.5 shadow-[var(--nav-shadow-control)] backdrop-blur max-sm:right-3 max-sm:top-3"
+      className="pointer-events-none absolute inset-y-0 right-0 z-30 flex w-11 flex-col items-center pt-5 max-sm:pt-3"
       initial={{ opacity: 0, y: -8, scale: 0.98 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={motionTiming}
     >
+      <span
+        aria-hidden="true"
+        className="absolute inset-y-0 right-0 w-11 bg-white/92 shadow-[-4px_0_12px_rgb(15_23_42/0.1)]"
+      />
       <button
         aria-label="설정"
-        className="grid size-10 place-items-center rounded-full text-[var(--nav-ink)] transition hover:bg-[var(--nav-panel)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)] active:bg-[var(--nav-selection)]"
+        className="pointer-events-auto relative grid size-8 place-items-center rounded-full text-[var(--nav-ink)] transition hover:bg-[var(--nav-panel)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)] active:bg-[var(--nav-selection)]"
         type="button"
       >
         <GearSix className="size-5" weight="bold" />
