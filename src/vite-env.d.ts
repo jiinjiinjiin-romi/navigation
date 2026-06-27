@@ -4,6 +4,7 @@ interface Window {
   Tmapv3Map?: {
     getZoom?: () => number
     getBearing?: () => number
+    getPitch?: () => number
     setCenter?: (latLng: unknown) => void
     setZoom?: (zoom: number) => void
     setBearing?: (bearing: number) => void

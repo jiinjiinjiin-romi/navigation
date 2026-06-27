@@ -15,6 +15,7 @@ describe('TmapPanel', () => {
   const setZoom = vi.fn()
   const getZoom = vi.fn()
   const getBearing = vi.fn()
+  const getPitch = vi.fn()
   const zoomIn = vi.fn()
   const zoomOut = vi.fn()
   const setBearing = vi.fn()
@@ -34,6 +35,8 @@ describe('TmapPanel', () => {
     getZoom.mockReturnValue(19)
     getBearing.mockReset()
     getBearing.mockReturnValue(0)
+    getPitch.mockReset()
+    getPitch.mockReturnValue(0)
     zoomIn.mockReset()
     zoomOut.mockReset()
     setBearing.mockReset()
@@ -48,6 +51,7 @@ describe('TmapPanel', () => {
       Map: vi.fn(function () {
         return {
           getBearing,
+          getPitch,
           getZoom,
           setCenter,
           setZoom,
@@ -97,7 +101,7 @@ describe('TmapPanel', () => {
       expect.objectContaining({
         pitch: 0,
         rotateEnabled: true,
-        zoom: 18,
+        zoom: 18.3,
       }),
     )
   })
@@ -108,7 +112,7 @@ describe('TmapPanel', () => {
     await waitFor(() => {
       expect(setCenter).toHaveBeenCalledWith({ lat: 37.5665, lng: 126.978 })
     })
-    expect(setZoom).toHaveBeenCalledWith(18)
+    expect(setZoom).toHaveBeenCalledWith(18.3)
     expect(window.Tmapv3!.Marker).toHaveBeenCalledWith(
       expect.objectContaining({
         anchor: 'center',
@@ -121,6 +125,30 @@ describe('TmapPanel', () => {
         label: '현재 위치',
       }),
     )
+  })
+
+  it('tilts the current marker with the map pitch after a manual map gesture', async () => {
+    render(<TmapPanel currentPosition={{ lat: 37.5665, lng: 126.978 }} />)
+
+    await waitFor(() => {
+      expect(window.Tmapv3!.Marker).toHaveBeenCalledWith(
+        expect.objectContaining({
+          iconHTML: expect.stringContaining('--vehicle-marker-pitch:0deg'),
+        }),
+      )
+    })
+
+    markerSetOptions.mockClear()
+    getPitch.mockReturnValue(48)
+    fireEvent.pointerMove(screen.getByTestId('tmap-canvas'))
+
+    await waitFor(() => {
+      expect(markerSetOptions).toHaveBeenCalledWith(
+        expect.objectContaining({
+          iconHTML: expect.stringContaining('--vehicle-marker-pitch:48deg'),
+        }),
+      )
+    })
   })
 
   it('does not duplicate the current location with a standard origin marker', async () => {
@@ -158,7 +186,7 @@ describe('TmapPanel', () => {
     await waitFor(() => {
       expect(setCenter).toHaveBeenCalledWith({ lat: 37.55, lng: 127.01 })
     })
-    expect(setZoom).toHaveBeenCalledWith(18)
+    expect(setZoom).toHaveBeenCalledWith(18.3)
   })
 
   it('rotates the map camera to the active route bearing', async () => {
@@ -220,7 +248,7 @@ describe('TmapPanel', () => {
         expect.objectContaining({
           center: [126, 37],
           bearing: expect.closeTo(89.8, 0),
-          zoom: 18,
+          zoom: 18.3,
           pitch: 0,
         }),
         { animate: false },
@@ -231,19 +259,19 @@ describe('TmapPanel', () => {
     expect(setCenter).not.toHaveBeenCalled()
   })
 
-  it('shows the compass only while route guidance is active', async () => {
+  it('shows the compass in regular map mode', async () => {
     render(<TmapPanel />)
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: '현재 위치' })).toBeInTheDocument()
     })
 
-    expect(screen.queryByRole('button', { name: '나침반 원위치' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '나침반 원위치' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '지도 확대' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '지도 축소' })).toBeInTheDocument()
   })
 
-  it('resets the map to north-up when the compass is pressed', async () => {
+  it('resets the map to north-up top-down when the compass is pressed', async () => {
     const matchMedia = vi.fn().mockReturnValue({ matches: true })
     vi.stubGlobal('matchMedia', matchMedia)
 
@@ -269,7 +297,52 @@ describe('TmapPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: '나침반 원위치' }))
 
     expect(setBearing).toHaveBeenLastCalledWith(0)
+    expect(setPitch).toHaveBeenLastCalledWith(0)
     vi.unstubAllGlobals()
+  })
+
+  it('keeps zoom while centering on current location in regular map mode', async () => {
+    const onRequestLocation = vi.fn()
+
+    render(
+      <TmapPanel
+        currentPosition={{ lat: 37.5665, lng: 126.978 }}
+        onRequestLocation={onRequestLocation}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '현재 위치' })).toBeInTheDocument()
+    })
+    setCenter.mockClear()
+    setZoom.mockClear()
+
+    fireEvent.click(screen.getByRole('button', { name: '현재 위치' }))
+
+    expect(onRequestLocation).toHaveBeenCalled()
+    expect(setCenter).toHaveBeenCalledWith({ lat: 37.5665, lng: 126.978 })
+    expect(setZoom).not.toHaveBeenCalled()
+  })
+
+  it('resets zoom on the second current-location press in regular map mode', async () => {
+    const nowSpy = vi.spyOn(performance, 'now')
+    nowSpy.mockReturnValueOnce(1000).mockReturnValueOnce(1600)
+
+    render(<TmapPanel currentPosition={{ lat: 37.5665, lng: 126.978 }} />)
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '현재 위치' })).toBeInTheDocument()
+    })
+    setCenter.mockClear()
+    setZoom.mockClear()
+
+    const currentLocationButton = screen.getByRole('button', { name: '현재 위치' })
+    fireEvent.click(currentLocationButton)
+    fireEvent.click(currentLocationButton)
+
+    expect(setCenter).toHaveBeenLastCalledWith({ lat: 37.5665, lng: 126.978 })
+    expect(setZoom).toHaveBeenLastCalledWith(18.3)
+    nowSpy.mockRestore()
   })
 
   it('does not draw a north tick behind the compass N mark', async () => {
@@ -426,7 +499,7 @@ describe('TmapPanel', () => {
     vi.unstubAllGlobals()
   })
 
-  it('toggles the compass back to heading-up mode on the second press', async () => {
+  it('keeps north-up top-down when the compass is pressed repeatedly', async () => {
     const matchMedia = vi.fn().mockReturnValue({ matches: true })
     vi.stubGlobal('matchMedia', matchMedia)
 
@@ -458,15 +531,17 @@ describe('TmapPanel', () => {
     await waitFor(() => {
       expect(setBearing).toHaveBeenLastCalledWith(0)
     })
+    expect(setPitch).toHaveBeenLastCalledWith(0)
 
     fireEvent.click(compassButton)
 
     await waitFor(() => {
-      expect(setBearing).toHaveBeenLastCalledWith(expect.closeTo(89.8, 0))
+      expect(setBearing).toHaveBeenLastCalledWith(0)
     })
+    expect(setPitch).toHaveBeenLastCalledWith(0)
     expect(markerSetOptions).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        iconHTML: expect.stringContaining('--vehicle-marker-bearing:0deg'),
+        iconHTML: expect.stringContaining('--vehicle-marker-bearing:90deg'),
       }),
     )
     vi.unstubAllGlobals()
