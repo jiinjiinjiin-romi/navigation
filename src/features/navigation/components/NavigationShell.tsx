@@ -75,6 +75,12 @@ const SIMULATION_UI_UPDATE_INTERVAL_MS = 200
 const GUIDANCE_DISTANCE_UPDATE_INTERVAL_MS = 500
 const DRIVING_ASSIST_DEBUG_QUERY_PARAM = 'debugSigns'
 const DRIVING_ASSIST_DEBUG_SEQUENCE_INTERVAL_MS = 1400
+const DEFAULT_CURRENT_LOCATION_PLACE: Place = {
+  id: CURRENT_LOCATION_PLACE_ID,
+  name: '세종대학교',
+  address: '서울 광진구 능동로 209',
+  coordinate: { lat: 37.5502, lng: 127.073 },
+}
 const SAVED_PLACES: Place[] = [
   {
     id: 'saved-home',
@@ -206,11 +212,11 @@ const DEBUG_DRIVING_ASSIST_SEQUENCE = ([
 export function NavigationShell() {
   const shouldReduceMotion = useReducedMotion()
   const [now, setNow] = useState(() => new Date())
-  const [originKeyword, setOriginKeyword] = useState('')
+  const [originKeyword, setOriginKeyword] = useState(DEFAULT_CURRENT_LOCATION_PLACE.name)
   const [destinationKeyword, setDestinationKeyword] = useState('')
-  const [origin, setOrigin] = useState<Place>()
+  const [origin, setOrigin] = useState<Place | undefined>(DEFAULT_CURRENT_LOCATION_PLACE)
   const [destination, setDestination] = useState<Place>()
-  const [currentPosition, setCurrentPosition] = useState<Coordinate>()
+  const [currentPosition, setCurrentPosition] = useState<Coordinate>(DEFAULT_CURRENT_LOCATION_PLACE.coordinate)
   const [locationStatus, setLocationStatus] = useState<LocationStatus>('checking')
   const [activeField, setActiveField] = useState<SearchFieldId | null>(null)
   const [highlightedIndex, setHighlightedIndex] = useState(0)
@@ -238,6 +244,7 @@ export function NavigationShell() {
   const simulationFrameRendererRef = useRef<((position: Coordinate) => void) | undefined>(undefined)
   const guidanceDistanceDisplayRef = useRef<GuidanceDistanceDisplayStore>(new Map())
   const routeSelectionCameraSettingsRef = useRef<MapCameraSettings | undefined>(undefined)
+  const routeSearchEditorTimerRef = useRef<number | undefined>(undefined)
   const debouncedOriginKeyword = useDebouncedValue(originKeyword.trim(), SEARCH_DEBOUNCE_MS)
   const debouncedDestinationKeyword = useDebouncedValue(destinationKeyword.trim(), SEARCH_DEBOUNCE_MS)
   const addressQueryCoordinate = useMemo(
@@ -278,7 +285,7 @@ export function NavigationShell() {
       destination?.coordinate.lng,
     ],
     queryFn: ({ signal }) => getRouteOptions(origin!.coordinate, destination!.coordinate, undefined, signal),
-    enabled: locationStatus === 'granted' && Boolean(origin && destination) && !selectedRouteOptionId,
+    enabled: Boolean(origin && destination) && !selectedRouteOptionId,
   })
 
   const weatherQuery = useQuery({
@@ -331,7 +338,7 @@ export function NavigationShell() {
       currentRoadMatchCoordinates?.[0].lng,
     ],
     queryFn: ({ signal }) => getRoadMatch(currentRoadMatchCoordinates!, undefined, signal),
-    enabled: locationStatus === 'granted' && Boolean(currentRoadMatchCoordinates) && !activeRoute,
+    enabled: Boolean(currentRoadMatchCoordinates) && !activeRoute,
     staleTime: 60 * 1000,
     retry: false,
   })
@@ -352,8 +359,10 @@ export function NavigationShell() {
     : ''
   const currentTimeLabel = formatClockTime(now)
   const currentLocationLabel = currentAddressQuery.data
-    ?? (currentPosition ? 'GPS 위치' : '위치 확인 중')
-  const currentOriginLabel = currentPosition ? currentLocationLabel : 'GPS 위치'
+    ?? (locationStatus === 'granted' ? 'GPS 위치' : DEFAULT_CURRENT_LOCATION_PLACE.name)
+  const currentOriginLabel = locationStatus === 'granted'
+    ? currentLocationLabel
+    : DEFAULT_CURRENT_LOCATION_PLACE.name
   const destinationStatusLabel = destination?.address || destination?.name || '목적지'
   const weatherLabel = weatherQuery.data ?? (weatherQuery.isError ? '날씨 정보 없음' : '날씨 확인 중')
   const travelledDistanceMeters = activeRoute
@@ -412,12 +421,26 @@ export function NavigationShell() {
         }
 
         setCurrentPosition(coordinate)
-        setOrigin((selectedOrigin) => selectedOrigin ?? currentPlace)
-        setOriginKeyword((keyword) => keyword || currentPlace.name)
+        setOrigin((selectedOrigin) => (
+          !selectedOrigin || selectedOrigin.id === CURRENT_LOCATION_PLACE_ID
+            ? currentPlace
+            : selectedOrigin
+        ))
+        setOriginKeyword((keyword) => (
+          !keyword || keyword === DEFAULT_CURRENT_LOCATION_PLACE.name
+            ? currentPlace.name
+            : keyword
+        ))
         setLocationStatus('granted')
       },
       () => {
-        setCurrentPosition(undefined)
+        setCurrentPosition(DEFAULT_CURRENT_LOCATION_PLACE.coordinate)
+        setOrigin((selectedOrigin) => (
+          !selectedOrigin || selectedOrigin.id === CURRENT_LOCATION_PLACE_ID
+            ? DEFAULT_CURRENT_LOCATION_PLACE
+            : selectedOrigin
+        ))
+        setOriginKeyword((keyword) => keyword || DEFAULT_CURRENT_LOCATION_PLACE.name)
         setLocationStatus('denied')
       },
       {
@@ -428,12 +451,34 @@ export function NavigationShell() {
     )
   }, [])
 
+  const clearPendingRouteSearchEditor = useCallback(() => {
+    if (routeSearchEditorTimerRef.current !== undefined) {
+      window.clearTimeout(routeSearchEditorTimerRef.current)
+      routeSearchEditorTimerRef.current = undefined
+    }
+  }, [])
+
+  const openRouteSearchEditor = useCallback((field: SearchFieldId) => {
+    clearPendingRouteSearchEditor()
+    setRouteSearchOpen(true)
+    setActiveField(null)
+    setHighlightedIndex(0)
+    routeSearchEditorTimerRef.current = window.setTimeout(() => {
+      routeSearchEditorTimerRef.current = undefined
+      setActiveField(field)
+    }, 40)
+  }, [clearPendingRouteSearchEditor])
+
+  useEffect(() => () => {
+    clearPendingRouteSearchEditor()
+  }, [clearPendingRouteSearchEditor])
+
   useEffect(() => {
     requestCurrentLocation()
   }, [requestCurrentLocation])
 
   useEffect(() => {
-    if (origin?.id !== CURRENT_LOCATION_PLACE_ID || !currentPosition) {
+    if (locationStatus !== 'granted' || origin?.id !== CURRENT_LOCATION_PLACE_ID || !currentPosition) {
       return
     }
 
@@ -454,7 +499,7 @@ export function NavigationShell() {
         ? nextLabel
         : keyword
     ))
-  }, [currentOriginLabel, currentPosition, origin])
+  }, [currentOriginLabel, currentPosition, locationStatus, origin])
 
   const fillOriginWithCurrentLocation = useCallback(() => {
     if (!currentPosition) {
@@ -483,12 +528,6 @@ export function NavigationShell() {
 
     return () => window.clearInterval(timer)
   }, [])
-
-  useEffect(() => {
-    if (locationStatus !== 'granted') {
-      setRouteSearchOpen(false)
-    }
-  }, [locationStatus])
 
   const restoreRouteSelectionCameraSettings = useCallback(() => {
     const previousSettings = routeSelectionCameraSettingsRef.current
@@ -736,11 +775,7 @@ export function NavigationShell() {
                 locationStatus={locationStatus}
                 motionTiming={motionTiming}
                 searchOpen={routeSearchOpen}
-                onOpenSearch={() => {
-                  setRouteSearchOpen(true)
-                  setActiveField('destination')
-                  setHighlightedIndex(0)
-                }}
+                onOpenSearch={() => openRouteSearchEditor('destination')}
                 onRequestLocation={requestCurrentLocation}
               />
             ) : (
@@ -752,9 +787,7 @@ export function NavigationShell() {
                 optionCount={routeOptions?.length ?? 0}
                 originLabel={originKeyword || origin?.name || currentOriginLabel}
                 onEditRoute={() => {
-                  setRouteSearchOpen(true)
-                  setActiveField('destination')
-                  setHighlightedIndex(0)
+                  openRouteSearchEditor('destination')
                 }}
               />
             )}
@@ -783,15 +816,23 @@ export function NavigationShell() {
                     setHighlightedIndex(0)
                   }}
                 onClose={() => {
+                  clearPendingRouteSearchEditor()
                   setRouteSearchOpen(false)
                   setActiveField(null)
                 }}
                 onBackToSummary={() => {
+                  clearPendingRouteSearchEditor()
                   setActiveField(null)
                   setHighlightedIndex(0)
                 }}
-                onFocusOrigin={() => setActiveField('origin')}
-                onFocusDestination={() => setActiveField('destination')}
+                onFocusOrigin={() => {
+                  clearPendingRouteSearchEditor()
+                  setActiveField('origin')
+                }}
+                onFocusDestination={() => {
+                  clearPendingRouteSearchEditor()
+                  setActiveField('destination')
+                }}
                 onKeyDown={(field, event) => handleSearchKeyDown(field, event)}
                 onSelectPlace={(place) => selectPlace(activeField ?? 'destination', place)}
                 onSelectSavedPlace={selectSavedPlace}
@@ -1456,12 +1497,13 @@ function IdleMapControls({
   onOpenSearch: () => void
   onRequestLocation: () => void
 }) {
-  const navigationBlocked = locationStatus !== 'granted'
+  const navigationBlocked = false
   const locationMessage = locationStatus === 'checking'
-    ? '현재 위치를 확인하는 중입니다'
+    ? '세종대학교 기준으로 시작합니다'
     : locationStatus === 'unsupported'
-      ? '이 브라우저에서는 위치를 사용할 수 없습니다'
-      : '위치 권한을 허용해야 길안내를 사용할 수 있습니다'
+      ? '세종대학교를 현재 위치로 사용 중입니다'
+      : '세종대학교를 현재 위치로 사용 중입니다'
+  const showLocationFallbackMessage = locationStatus !== 'granted'
 
   return (
     <div className="pointer-events-none absolute inset-0 text-[var(--nav-ink)]">
@@ -1475,7 +1517,7 @@ function IdleMapControls({
             transition={motionTiming}
           >
             <AnimatePresence initial={false}>
-              {navigationBlocked ? (
+              {showLocationFallbackMessage ? (
                 <motion.div
                   className="pointer-events-auto mb-2 flex min-h-11 items-center justify-between gap-3 rounded-full bg-white/95 px-4 py-2 text-sm font-medium text-[var(--nav-muted)] shadow-[var(--nav-shadow-control)] backdrop-blur max-sm:rounded-2xl max-sm:text-xs"
                   initial={{ opacity: 0, y: 8 }}
@@ -1484,7 +1526,7 @@ function IdleMapControls({
                   transition={motionTiming}
                 >
                   <span className="min-w-0 truncate">{locationMessage}</span>
-                  {locationStatus === 'denied' ? (
+                  {locationStatus === 'denied' || locationStatus === 'unsupported' ? (
                     <motion.button
                       className="shrink-0 rounded-full bg-[var(--nav-primary)] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[var(--nav-primary-hover)]"
                       onClick={onRequestLocation}

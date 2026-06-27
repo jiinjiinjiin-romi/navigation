@@ -154,9 +154,15 @@ describe('NavigationShell', () => {
   })
 
   const openRouteSearchSummary = async () => {
-    const existingDestinationField = screen.queryByRole('combobox', { name: '목적지' })
+    const existingDestinationField = screen.queryByPlaceholderText('목적지 검색')
     if (existingDestinationField) {
       return existingDestinationField
+    }
+
+    const summaryDestinationField = screen.queryByRole('combobox', { name: '목적지' })
+    if (summaryDestinationField) {
+      fireEvent.focus(summaryDestinationField)
+      return screen.findByPlaceholderText('목적지 검색')
     }
 
     const searchButton = await screen.findByRole('button', { name: /어디로 갈까요/ })
@@ -165,7 +171,7 @@ describe('NavigationShell', () => {
     })
     fireEvent.click(searchButton)
 
-    return screen.findByRole('combobox', { name: '목적지' })
+    return screen.findByPlaceholderText('목적지 검색')
   }
 
   const openOriginEditor = async () => {
@@ -284,7 +290,7 @@ describe('NavigationShell', () => {
     expect(screen.getByRole('button', { name: /어디로 갈까요/ })).not.toBeDisabled()
   })
 
-  it('blocks navigation search when location permission is denied', async () => {
+  it('uses Sejong University as the current location when location permission is denied', async () => {
     mockGeolocationError()
     const queryClient = new QueryClient()
 
@@ -294,13 +300,15 @@ describe('NavigationShell', () => {
       </QueryClientProvider>,
     )
 
-    expect(await screen.findByText('위치 권한을 허용해야 길안내를 사용할 수 있습니다')).toBeInTheDocument()
+    expect(await screen.findByText('세종대학교를 현재 위치로 사용 중입니다')).toBeInTheDocument()
+    expect(screen.getByTestId('tmap-panel')).toHaveTextContent('current:37.5502,127.0730')
     const searchButton = screen.getByRole('button', { name: /어디로 갈까요/ })
-    expect(searchButton).toBeDisabled()
+    expect(searchButton).not.toBeDisabled()
 
     fireEvent.click(searchButton)
 
-    expect(screen.queryByPlaceholderText('목적지 검색')).not.toBeInTheDocument()
+    expect(screen.getByDisplayValue('세종대학교')).toBeInTheDocument()
+    expect(await screen.findByPlaceholderText('목적지 검색')).toHaveFocus()
   })
 
   it('opens destination search as a navigation bottom sheet from the current location', async () => {
@@ -312,11 +320,17 @@ describe('NavigationShell', () => {
       </QueryClientProvider>,
     )
 
-    await openRouteSearchSummary()
+    const searchButton = await screen.findByRole('button', { name: /어디로 갈까요/ })
+    await waitFor(() => {
+      expect(searchButton).not.toBeDisabled()
+    })
+    fireEvent.click(searchButton)
 
     expect(screen.queryByText('현재 위치에서')).not.toBeInTheDocument()
     expect(screen.queryByText('출발지는 변경할 수 있습니다')).not.toBeInTheDocument()
     expect(screen.queryByText('선택됨')).not.toBeInTheDocument()
+    expect(screen.getByDisplayValue('서울특별시 중구 세종대로 110')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('목적지')).toBeInTheDocument()
     expect(await screen.findByPlaceholderText('목적지 검색')).toHaveFocus()
     expect(screen.queryByDisplayValue('서울특별시 중구 세종대로 110')).not.toBeInTheDocument()
     expect(screen.queryByPlaceholderText('목적지')).not.toBeInTheDocument()
