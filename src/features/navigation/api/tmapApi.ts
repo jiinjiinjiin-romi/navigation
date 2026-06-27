@@ -98,6 +98,7 @@ interface TmapRoadMatchResponse {
 export async function searchPlaces(
   keyword: string,
   client: Pick<HttpClient, 'get'> = axios,
+  signal?: AbortSignal,
 ): Promise<Place[]> {
   const trimmed = keyword.trim()
 
@@ -107,6 +108,7 @@ export async function searchPlaces(
 
   const { data } = await client.get<TmapPoiSearchResponse>('/api/tmap/pois', {
     params: { keyword: trimmed },
+    ...withSignal(signal),
   })
 
   return normalizePlaces(data)
@@ -116,11 +118,15 @@ export async function getRoute(
   origin: Coordinate,
   destination: Coordinate,
   client: Pick<HttpClient, 'post'> = axios,
+  signal?: AbortSignal,
 ): Promise<NavigationRoute> {
-  const { data } = await client.post<TmapRouteResponse>('/api/tmap/routes', {
+  const payload = {
     origin,
     destination,
-  })
+  }
+  const { data } = signal
+    ? await client.post<TmapRouteResponse>('/api/tmap/routes', payload, { signal })
+    : await client.post<TmapRouteResponse>('/api/tmap/routes', payload)
 
   return normalizeRoute(data)
 }
@@ -128,9 +134,11 @@ export async function getRoute(
 export async function getCurrentAddress(
   coordinate: Coordinate,
   client: Pick<HttpClient, 'get'> = axios,
+  signal?: AbortSignal,
 ): Promise<string> {
   const { data } = await client.get<TmapReverseGeocodeResponse>('/api/tmap/reverse-geocode', {
     params: coordinate,
+    ...withSignal(signal),
   })
 
   return normalizeCurrentAddress(data)
@@ -139,16 +147,24 @@ export async function getCurrentAddress(
 export async function getRoadMatch(
   coordinates: Coordinate[],
   client: Pick<HttpClient, 'post'> = axios,
+  signal?: AbortSignal,
 ): Promise<RoadMatchPoint[]> {
   if (coordinates.length < 2) {
     return []
   }
 
-  const { data } = await client.post<TmapRoadMatchResponse>('/api/tmap/road-match', {
+  const payload = {
     coordinates: sampleRoadMatchCoordinates(coordinates),
-  })
+  }
+  const { data } = signal
+    ? await client.post<TmapRoadMatchResponse>('/api/tmap/road-match', payload, { signal })
+    : await client.post<TmapRoadMatchResponse>('/api/tmap/road-match', payload)
 
   return normalizeRoadMatch(data)
+}
+
+function withSignal(signal?: AbortSignal) {
+  return signal ? { signal } : {}
 }
 
 function normalizePlaces(data: TmapPoiSearchResponse): Place[] {

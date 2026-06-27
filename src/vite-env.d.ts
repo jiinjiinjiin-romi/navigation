@@ -8,6 +8,15 @@ interface Window {
     setZoom?: (zoom: number) => void
     setBearing?: (bearing: number) => void
     setPitch?: (pitch: number) => void
+    vsmMap?: () => {
+      getCamera?: () => {
+        jumpTo?: (
+          options: Record<string, unknown>,
+          animationOptions?: Record<string, unknown>,
+          eventOptions?: Record<string, unknown>,
+        ) => void
+      }
+    }
     zoomIn?: () => void
     zoomOut?: () => void
   }
@@ -18,11 +27,13 @@ interface Window {
   }
   Tmapv3Polyline?: {
     setMap: (map: unknown | null) => void
+    setPath?: (path: unknown[]) => void
   }
   Tmapv3?: {
     Map: new (element: HTMLElement | string, options: Record<string, unknown>) => NonNullable<Window['Tmapv3Map']>
     LatLng: new (lat: number, lng: number) => unknown
     Point: new (x: number, y: number) => unknown
+    Size: new (width: number, height: number) => unknown
     Marker: new (options: Record<string, unknown>) => NonNullable<Window['Tmapv3Marker']>
     Polyline: new (options: Record<string, unknown>) => NonNullable<Window['Tmapv3Polyline']>
   }

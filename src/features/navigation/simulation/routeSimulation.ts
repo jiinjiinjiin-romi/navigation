@@ -7,8 +7,32 @@ export interface SimulatedRoutePosition {
   completed: boolean
 }
 
+export interface RouteSimulationPlan {
+  coordinates: Coordinate[]
+  cumulativeDistanceMeters: number[]
+  pathDistanceMeters: number
+  summary: NavigationRoute['summary']
+}
+
+export function createRouteSimulationPlan(route: NavigationRoute): RouteSimulationPlan {
+  const cumulativeDistanceMeters = [0]
+  let pathDistanceMeters = 0
+
+  for (let index = 0; index < route.coordinates.length - 1; index += 1) {
+    pathDistanceMeters += getDistanceMeters(route.coordinates[index], route.coordinates[index + 1])
+    cumulativeDistanceMeters.push(pathDistanceMeters)
+  }
+
+  return {
+    coordinates: route.coordinates,
+    cumulativeDistanceMeters,
+    pathDistanceMeters,
+    summary: route.summary,
+  }
+}
+
 export function getSimulatedRoutePosition(
-  route: NavigationRoute,
+  route: NavigationRoute | RouteSimulationPlan,
   progressRatio: number,
 ): SimulatedRoutePosition {
   const coordinates = route.coordinates
@@ -33,10 +57,10 @@ export function getSimulatedRoutePosition(
     }
   }
 
-  const pathDistanceMeters = getPathDistanceMeters(coordinates)
-  const targetDistanceMeters = pathDistanceMeters * clampedRatio
+  const plan = isRouteSimulationPlan(route) ? route : createRouteSimulationPlan(route)
+  const targetDistanceMeters = plan.pathDistanceMeters * clampedRatio
   const { startIndex, endIndex, segmentRatio } = getSegmentProgress(
-    coordinates,
+    plan,
     targetDistanceMeters,
   )
   const start = coordinates[startIndex]
@@ -57,42 +81,55 @@ function interpolate(start: number, end: number, ratio: number) {
   return start + (end - start) * ratio
 }
 
-function getSegmentProgress(coordinates: Coordinate[], targetDistanceMeters: number) {
-  let travelledDistanceMeters = 0
+function getSegmentProgress(plan: RouteSimulationPlan, targetDistanceMeters: number) {
+  const coordinates = plan.coordinates
+  const segmentIndex = findSegmentIndex(plan.cumulativeDistanceMeters, targetDistanceMeters)
+  const travelledDistanceMeters = plan.cumulativeDistanceMeters[segmentIndex] ?? 0
+  const nextTravelledDistanceMeters = plan.cumulativeDistanceMeters[segmentIndex + 1] ?? travelledDistanceMeters
+  const segmentDistanceMeters = nextTravelledDistanceMeters - travelledDistanceMeters
 
-  for (let index = 0; index < coordinates.length - 1; index += 1) {
-    const start = coordinates[index]
-    const end = coordinates[index + 1]
-    const segmentDistanceMeters = getDistanceMeters(start, end)
-    const nextTravelledDistanceMeters = travelledDistanceMeters + segmentDistanceMeters
+  if (segmentIndex < coordinates.length - 1) {
+    const segmentRatio = segmentDistanceMeters > 0
+      ? (targetDistanceMeters - travelledDistanceMeters) / segmentDistanceMeters
+      : 0
 
-    if (targetDistanceMeters <= nextTravelledDistanceMeters || index === coordinates.length - 2) {
-      const segmentRatio = segmentDistanceMeters > 0
-        ? (targetDistanceMeters - travelledDistanceMeters) / segmentDistanceMeters
-        : 0
-
-      return {
-        startIndex: index,
-        endIndex: index + 1,
-        segmentRatio: Math.min(Math.max(segmentRatio, 0), 1),
-      }
+    return {
+      startIndex: segmentIndex,
+      endIndex: segmentIndex + 1,
+      segmentRatio: Math.min(Math.max(segmentRatio, 0), 1),
     }
-
-    travelledDistanceMeters = nextTravelledDistanceMeters
   }
 
   return {
-    startIndex: 0,
-    endIndex: Math.min(1, coordinates.length - 1),
-    segmentRatio: 0,
+    startIndex: Math.max(0, coordinates.length - 2),
+    endIndex: coordinates.length - 1,
+    segmentRatio: 1,
   }
 }
 
-function getPathDistanceMeters(coordinates: Coordinate[]) {
-  return coordinates.reduce((distanceMeters, coordinate, index) => {
-    const next = coordinates[index + 1]
-    return next ? distanceMeters + getDistanceMeters(coordinate, next) : distanceMeters
-  }, 0)
+function findSegmentIndex(cumulativeDistanceMeters: number[], targetDistanceMeters: number) {
+  let low = 0
+  let high = cumulativeDistanceMeters.length - 2
+
+  while (low <= high) {
+    const middle = Math.floor((low + high) / 2)
+    const startDistance = cumulativeDistanceMeters[middle]
+    const endDistance = cumulativeDistanceMeters[middle + 1]
+
+    if (targetDistanceMeters < startDistance) {
+      high = middle - 1
+    } else if (targetDistanceMeters > endDistance) {
+      low = middle + 1
+    } else {
+      return middle
+    }
+  }
+
+  return Math.min(Math.max(low, 0), Math.max(0, cumulativeDistanceMeters.length - 2))
+}
+
+function isRouteSimulationPlan(route: NavigationRoute | RouteSimulationPlan): route is RouteSimulationPlan {
+  return 'cumulativeDistanceMeters' in route
 }
 
 function getDistanceMeters(from: Coordinate, to: Coordinate) {

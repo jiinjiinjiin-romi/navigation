@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   calculateBearing,
+  getLocalRouteBearingNearCoordinate,
   getRouteBearingNearCoordinate,
   interpolateBearing,
   interpolateBearingContinuously,
@@ -30,6 +31,21 @@ describe('navigationCamera', () => {
     ]
 
     expect(getRouteBearingNearCoordinate(route, { lat: 37.1, lng: 127 })).toBeCloseTo(0)
+  })
+
+  it('uses a short local route tangent near corners instead of snapping to one segment', () => {
+    const route = [
+      { lat: 37, lng: 126 },
+      { lat: 37, lng: 126.001 },
+      { lat: 37.001, lng: 126.001 },
+    ]
+
+    const cornerBearing = getLocalRouteBearingNearCoordinate(route, { lat: 37, lng: 126.001 }, 14)
+    const straightBearing = getLocalRouteBearingNearCoordinate(route, { lat: 37, lng: 126.0002 }, 8)
+
+    expect(cornerBearing).toBeGreaterThan(0)
+    expect(cornerBearing).toBeLessThan(90)
+    expect(straightBearing).toBeCloseTo(89.7, 0)
   })
 
   it('projects an off-road position onto the nearest route segment', () => {

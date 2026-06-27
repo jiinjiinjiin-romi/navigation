@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import {
   ArrowBendUpLeft,
   ArrowBendUpRight,
@@ -18,7 +18,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getCurrentAddress, getRoadMatch, getRoute, searchPlaces } from '../api/tmapApi'
 import { createRoundedRoutePath } from '../map/routeGeometry'
-import { getSimulatedRoutePosition } from '../simulation/routeSimulation'
+import { createRouteSimulationPlan, getSimulatedRoutePosition } from '../simulation/routeSimulation'
 import { getSimulationDurationMs } from '../simulation/simulationTiming'
 import type { Coordinate, NavigationRoute, Place, RoadMatchPoint, RouteManeuver } from '../types'
 import { TmapPanel } from './TmapPanel'
@@ -33,8 +33,12 @@ type MotionTiming = {
 const CURRENT_LOCATION_PLACE_ID = 'current-location'
 const PRODUCT_EASE: [number, number, number, number] = [0.22, 1, 0.36, 1]
 const WEATHER_STALE_TIME_MS = 10 * 60 * 1000
+const SEARCH_DEBOUNCE_MS = 250
+const ADDRESS_COORDINATE_PRECISION = 5
+const WEATHER_COORDINATE_PRECISION = 3
 const GUIDANCE_DISTANCE_STEP_MIN_METERS = 3
 const GUIDANCE_DISTANCE_STEP_MAX_METERS = 10
+const SIMULATION_UI_UPDATE_INTERVAL_MS = 200
 
 export function NavigationShell() {
   const shouldReduceMotion = useReducedMotion()
@@ -54,44 +58,57 @@ export function NavigationShell() {
   const [simulationRemainingDuration, setSimulationRemainingDuration] = useState(0)
   const animationFrameRef = useRef<number | undefined>(undefined)
   const simulationStartedAtRef = useRef<number | undefined>(undefined)
+  const simulationLastUiUpdateAtRef = useRef<number | undefined>(undefined)
   const guidanceDistanceDisplayRef = useRef<GuidanceDistanceDisplayStore>(new Map())
+  const debouncedOriginKeyword = useDebouncedValue(originKeyword.trim(), SEARCH_DEBOUNCE_MS)
+  const debouncedDestinationKeyword = useDebouncedValue(destinationKeyword.trim(), SEARCH_DEBOUNCE_MS)
+  const addressQueryCoordinate = useMemo(
+    () => currentPosition ? roundCoordinate(currentPosition, ADDRESS_COORDINATE_PRECISION) : undefined,
+    [currentPosition],
+  )
+  const weatherQueryCoordinate = useMemo(
+    () => currentPosition ? roundCoordinate(currentPosition, WEATHER_COORDINATE_PRECISION) : undefined,
+    [currentPosition],
+  )
 
   const originSearch = useQuery({
-    queryKey: ['places', originKeyword],
-    queryFn: () => searchPlaces(originKeyword),
-    enabled: activeField === 'origin' && originKeyword.trim().length >= 2,
+    queryKey: ['places', debouncedOriginKeyword],
+    queryFn: ({ signal }) => searchPlaces(debouncedOriginKeyword, undefined, signal),
+    enabled: activeField === 'origin' && debouncedOriginKeyword.length >= 2,
+    placeholderData: keepPreviousData,
   })
 
   const destinationSearch = useQuery({
-    queryKey: ['places', destinationKeyword],
-    queryFn: () => searchPlaces(destinationKeyword),
-    enabled: activeField === 'destination' && destinationKeyword.trim().length >= 2,
+    queryKey: ['places', debouncedDestinationKeyword],
+    queryFn: ({ signal }) => searchPlaces(debouncedDestinationKeyword, undefined, signal),
+    enabled: activeField === 'destination' && debouncedDestinationKeyword.length >= 2,
+    placeholderData: keepPreviousData,
   })
 
   const routeQuery = useQuery({
     queryKey: ['route', origin?.id, destination?.id],
-    queryFn: () => getRoute(origin!.coordinate, destination!.coordinate),
+    queryFn: ({ signal }) => getRoute(origin!.coordinate, destination!.coordinate, undefined, signal),
     enabled: locationStatus === 'granted' && Boolean(origin && destination),
   })
   const roadMatchQuery = useQuery({
     queryKey: ['road-match', origin?.id, destination?.id],
-    queryFn: () => getRoadMatch(routeQuery.data!.coordinates),
+    queryFn: ({ signal }) => getRoadMatch(routeQuery.data!.coordinates, undefined, signal),
     enabled: Boolean(routeQuery.data?.coordinates.length),
     staleTime: 5 * 60 * 1000,
     retry: false,
   })
 
   const weatherQuery = useQuery({
-    queryKey: ['weather', currentPosition?.lat, currentPosition?.lng],
-    queryFn: () => getCurrentWeatherLabel(currentPosition!),
-    enabled: Boolean(currentPosition),
+    queryKey: ['weather', weatherQueryCoordinate?.lat, weatherQueryCoordinate?.lng],
+    queryFn: () => getCurrentWeatherLabel(weatherQueryCoordinate!),
+    enabled: Boolean(weatherQueryCoordinate),
     staleTime: WEATHER_STALE_TIME_MS,
     retry: false,
   })
   const currentAddressQuery = useQuery({
-    queryKey: ['current-address', currentPosition?.lat, currentPosition?.lng],
-    queryFn: () => getCurrentAddress(currentPosition!),
-    enabled: Boolean(currentPosition),
+    queryKey: ['current-address', addressQueryCoordinate?.lat, addressQueryCoordinate?.lng],
+    queryFn: ({ signal }) => getCurrentAddress(addressQueryCoordinate!, undefined, signal),
+    enabled: Boolean(addressQueryCoordinate),
     staleTime: WEATHER_STALE_TIME_MS,
     retry: false,
   })
@@ -108,6 +125,10 @@ export function NavigationShell() {
       coordinates: createRoundedRoutePath(route.coordinates),
     }
   }, [routeQuery.data])
+  const activeRouteSimulationPlan = useMemo(
+    () => activeRoute ? createRouteSimulationPlan(activeRoute) : undefined,
+    [activeRoute],
+  )
 
   useEffect(() => {
     guidanceDistanceDisplayRef.current.clear()
@@ -289,13 +310,15 @@ export function NavigationShell() {
     setSimulationRemainingDuration(route.summary.durationSeconds)
     guidanceDistanceDisplayRef.current.clear()
     simulationStartedAtRef.current = undefined
+    simulationLastUiUpdateAtRef.current = undefined
     setSimulationRunning(true)
   }
 
   useEffect(() => {
     const route = activeRoute
+    const simulationPlan = activeRouteSimulationPlan
 
-    if (!simulationRunning || !route) {
+    if (!simulationRunning || !route || !simulationPlan) {
       return
     }
 
@@ -310,15 +333,25 @@ export function NavigationShell() {
       }
 
       const elapsed = timestamp - simulationStartedAtRef.current
-      const progress = getSimulatedRoutePosition(route, elapsed / simulationDurationMs)
+      const progress = getSimulatedRoutePosition(simulationPlan, elapsed / simulationDurationMs)
+      const shouldUpdateUiState = (
+        progress.completed ||
+        simulationLastUiUpdateAtRef.current === undefined ||
+        timestamp - simulationLastUiUpdateAtRef.current >= SIMULATION_UI_UPDATE_INTERVAL_MS
+      )
 
       setSimulationPosition(progress.coordinate)
-      setSimulationRemainingDistance(progress.remainingDistanceMeters)
-      setSimulationRemainingDuration(progress.remainingDurationSeconds)
+
+      if (shouldUpdateUiState) {
+        setSimulationRemainingDistance(progress.remainingDistanceMeters)
+        setSimulationRemainingDuration(progress.remainingDurationSeconds)
+        simulationLastUiUpdateAtRef.current = timestamp
+      }
 
       if (progress.completed) {
         setSimulationRunning(false)
         animationFrameRef.current = undefined
+        simulationLastUiUpdateAtRef.current = undefined
         return
       }
 
@@ -332,7 +365,7 @@ export function NavigationShell() {
         window.cancelAnimationFrame(animationFrameRef.current)
       }
     }
-  }, [activeRoute, simulationRunning])
+  }, [activeRoute, activeRouteSimulationPlan, simulationRunning])
 
   return (
     <main
@@ -1070,6 +1103,33 @@ function formatClockTime(date: Date) {
   const minutes = date.getMinutes().toString().padStart(2, '0')
 
   return `${period} ${hour12.toString().padStart(2, '0')}:${minutes}`
+}
+
+function useDebouncedValue<T>(value: T, delayMs: number) {
+  const [debouncedValue, setDebouncedValue] = useState(value)
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedValue(value)
+    }, delayMs)
+
+    return () => window.clearTimeout(timer)
+  }, [delayMs, value])
+
+  return debouncedValue
+}
+
+function roundCoordinate(coordinate: Coordinate, precision: number): Coordinate {
+  return {
+    lat: roundNumber(coordinate.lat, precision),
+    lng: roundNumber(coordinate.lng, precision),
+  }
+}
+
+function roundNumber(value: number, precision: number) {
+  const factor = 10 ** precision
+
+  return Math.round(value * factor) / factor
 }
 
 async function getCurrentWeatherLabel(position: Coordinate) {

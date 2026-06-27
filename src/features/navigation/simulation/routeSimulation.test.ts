@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { getSimulatedRoutePosition } from './routeSimulation'
+import { createRouteSimulationPlan, getSimulatedRoutePosition } from './routeSimulation'
 import type { NavigationRoute } from '../types'
 
 const route: NavigationRoute = {
@@ -54,6 +54,19 @@ describe('getSimulatedRoutePosition', () => {
       remainingDistanceMeters: 0,
       remainingDurationSeconds: 0,
       completed: true,
+    })
+  })
+
+  it('reuses a precomputed route plan for simulation ticks', () => {
+    const plan = createRouteSimulationPlan(route)
+
+    expect(getSimulatedRoutePosition(plan, 0.25).coordinate).toEqual({
+      lat: 37,
+      lng: 127.5,
+    })
+    expect(getSimulatedRoutePosition(plan, 0.75).coordinate).toEqual({
+      lat: 37,
+      lng: 128.5,
     })
   })
 })

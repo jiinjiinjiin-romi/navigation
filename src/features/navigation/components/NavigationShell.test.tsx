@@ -267,6 +267,8 @@ describe('NavigationShell', () => {
       expect(mockedGetRoute).toHaveBeenCalledWith(
         { lat: 37.5547, lng: 126.9706 },
         { lat: 37.4979, lng: 127.0276 },
+        undefined,
+        expect.objectContaining({ aborted: false }),
       )
     })
     expect(await screen.findByText('22분')).toBeInTheDocument()
@@ -320,6 +322,44 @@ describe('NavigationShell', () => {
     await waitFor(() => {
       expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
     })
+  })
+
+  it('debounces autocomplete API calls while keeping the input responsive', async () => {
+    mockedSearchPlaces.mockResolvedValue([
+      {
+        id: 'destination',
+        name: '강남역',
+        address: '서울 강남구',
+        coordinate: { lat: 37.4979, lng: 127.0276 },
+      },
+    ])
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /어디로 갈까요/ }))
+    const destinationInput = screen.getByPlaceholderText('목적지 검색')
+
+    fireEvent.change(destinationInput, { target: { value: '강' } })
+    fireEvent.change(destinationInput, { target: { value: '강남' } })
+    fireEvent.change(destinationInput, { target: { value: '강남역' } })
+
+    expect(destinationInput).toHaveValue('강남역')
+    expect(mockedSearchPlaces).not.toHaveBeenCalled()
+
+    expect(await screen.findByRole('option', { name: /강남역/ })).toBeInTheDocument()
+    expect(mockedSearchPlaces).toHaveBeenCalledTimes(1)
+    expect(mockedSearchPlaces).toHaveBeenCalledWith(
+      '강남역',
+      undefined,
+      expect.objectContaining({ aborted: false }),
+    )
   })
 
   it('renders all autocomplete results and scrolls the active option into view during keyboard navigation', async () => {
