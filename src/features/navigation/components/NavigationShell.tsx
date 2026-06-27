@@ -228,6 +228,7 @@ export function NavigationShell() {
   const currentTimeLabel = formatClockTime(now)
   const currentLocationLabel = currentAddressQuery.data
     ?? (currentPosition ? 'GPS 위치' : '위치 확인 중')
+  const destinationStatusLabel = destination?.address || destination?.name || '목적지'
   const weatherLabel = weatherQuery.data ?? (weatherQuery.isError ? '날씨 정보 없음' : '날씨 확인 중')
   const travelledDistanceMeters = activeRoute
     ? Math.max(0, activeRoute.summary.distanceMeters - remainingDistanceMeters)
@@ -551,6 +552,7 @@ export function NavigationShell() {
           arrivalLabel={arrivalLabel}
           currentLocationLabel={currentLocationLabel}
           currentTimeLabel={currentTimeLabel}
+          destinationLabel={destinationStatusLabel}
           distanceLabel={drivingDistance}
           durationLabel={`${routeMinutes}분`}
           hasRoute={Boolean(activeRoute)}
@@ -1034,6 +1036,7 @@ function BottomStatusBar({
   arrivalLabel,
   currentLocationLabel,
   currentTimeLabel,
+  destinationLabel,
   distanceLabel,
   durationLabel,
   hasRoute,
@@ -1043,6 +1046,7 @@ function BottomStatusBar({
   arrivalLabel: string
   currentLocationLabel: string
   currentTimeLabel: string
+  destinationLabel: string
   distanceLabel: string
   durationLabel: string
   hasRoute: boolean
@@ -1053,8 +1057,8 @@ function BottomStatusBar({
     ? [
         { label: '도착', value: `${arrivalLabel} 예정`, icon: <Clock className="h-4 w-4" weight="bold" /> },
         { label: '거리', value: distanceLabel, icon: <RoadHorizon className="h-4 w-4" weight="bold" /> },
-        { label: '소요시간', value: durationLabel, icon: <Timer className="h-4 w-4" weight="bold" /> },
-        { label: '현재 위치', value: currentLocationLabel, icon: <MapPin className="h-4 w-4" weight="bold" /> },
+        { label: '남은 시간', value: durationLabel, icon: <Timer className="h-4 w-4" weight="bold" /> },
+        { label: '목적지', value: destinationLabel, icon: <MapPin className="h-4 w-4" weight="bold" /> },
         { label: '날씨', value: weatherLabel, icon: <CloudSun className="h-4 w-4" weight="bold" /> },
       ]
     : [
