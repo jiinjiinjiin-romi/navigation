@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Crosshair } from '@phosphor-icons/react'
-import type { Coordinate, NavigationRoute, Place, RouteTrafficSegment, TrafficCongestion } from '../types'
+import type { Coordinate, NavigationRoute, NavigationRouteOption, Place, RouteTrafficSegment, TrafficCongestion } from '../types'
 import { loadTmapSdk } from '../tmap/loadTmapSdk'
 import {
   getRouteBearing,
@@ -14,10 +14,12 @@ interface TmapPanelProps {
   cameraSettings?: MapCameraSettings
   currentPosition?: Coordinate
   route?: NavigationRoute
+  routeOptions?: NavigationRouteOption[]
   origin?: Place
   destination?: Place
   simulationPosition?: Coordinate
   onCameraSettingsChange?: (settings: Partial<MapCameraSettings>) => void
+  onSelectRouteOption?: (id: string) => void
   onSimulationFrameRendererReady?: (renderFrame: ((position: Coordinate) => void) | undefined) => void
   onRequestLocation?: () => void
 }
@@ -109,6 +111,14 @@ interface RouteDirectionMarker {
   bearing: number
 }
 
+interface RouteOptionOverlay {
+  id: string
+  index: number
+  lines: NonNullable<Window['Tmapv3Polyline']>[]
+  marker: NonNullable<Window['Tmapv3Marker']>
+  option: NavigationRouteOption
+}
+
 interface RouteDirectionArrowDensity {
   spacingMeters: number
   startOffsetMeters: number
@@ -119,16 +129,20 @@ export function TmapPanel({
   cameraSettings,
   currentPosition,
   route,
+  routeOptions,
   origin,
   destination,
   simulationPosition,
   onCameraSettingsChange,
+  onSelectRouteOption,
   onSimulationFrameRendererReady,
   onRequestLocation,
 }: TmapPanelProps) {
   const mapElementRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<Window['Tmapv3Map']>(undefined)
   const routeLineRefs = useRef<Window['Tmapv3Polyline'][]>([])
+  const routeOptionOverlayRefs = useRef<RouteOptionOverlay[]>([])
+  const routeOptionOverlaySignatureRef = useRef<string | undefined>(undefined)
   const routeDirectionMarkerRefs = useRef<RouteDirectionMarker[]>([])
   const routeLineSignatureRef = useRef<string | undefined>(undefined)
   const routeLineStructureSignatureRef = useRef<string | undefined>(undefined)
@@ -338,6 +352,37 @@ export function TmapPanel({
       if (markerElement) {
         markerElement.style.setProperty('--route-arrow-bearing', `${formatCssBearing(markerBearing)}deg`)
       }
+    })
+  }, [])
+
+  const clearRouteOptionOverlays = useCallback(() => {
+    routeOptionOverlayRefs.current.forEach((overlay) => {
+      overlay.lines.forEach((line) => line.setMap(null))
+      overlay.marker.setMap(null)
+    })
+    routeOptionOverlayRefs.current = []
+    routeOptionOverlaySignatureRef.current = undefined
+  }, [])
+
+  const updateRouteOptionOverlayPreview = useCallback((previewOptionId?: string) => {
+    const overlays = routeOptionOverlayRefs.current
+    const activeOptionId = previewOptionId ?? overlays[0]?.id
+
+    overlays.forEach((overlay) => {
+      const isActive = overlay.id === activeOptionId
+      const lineStyle = getRouteOptionOverlayLineStyle(isActive)
+
+      overlay.lines[0]?.setOptions?.({
+        strokeOpacity: lineStyle.borderOpacity,
+        strokeWeight: lineStyle.borderWeight,
+      })
+      overlay.lines[1]?.setOptions?.({
+        strokeOpacity: lineStyle.strokeOpacity,
+        strokeWeight: lineStyle.strokeWeight,
+      })
+      overlay.marker.setOptions?.({
+        iconHTML: createRouteOptionBubbleHtml(overlay.option, overlay.index, isActive),
+      })
     })
   }, [])
 
@@ -583,11 +628,12 @@ export function TmapPanel({
         cancelled = true
         stopCameraAnimation()
         stopMapModePitchAnimation()
+        clearRouteOptionOverlays()
         if (import.meta.env.DEV && window.__naviTmapMap === mapRef.current) {
           delete window.__naviTmapMap
         }
       }
-  }, [stopCameraAnimation, stopMapModePitchAnimation])
+  }, [clearRouteOptionOverlays, stopCameraAnimation, stopMapModePitchAnimation])
 
   useEffect(() => {
     if (!mapRef.current || status !== 'ready') {
@@ -802,6 +848,118 @@ export function TmapPanel({
       },
     )
   }, [applyNavigationCamera, currentPosition, getCurrentMapBearing, getDisplayMapPitch, getSettingsMapPitch, northUpLocked, route?.coordinates, status])
+
+  useEffect(() => {
+    const mapElement = mapElementRef.current
+    if (!mapElement) {
+      return
+    }
+
+    const getRouteOptionId = (target: EventTarget | null) => (
+      target instanceof HTMLElement
+        ? target.closest<HTMLElement>('[data-route-option-id]')?.dataset.routeOptionId
+        : undefined
+    )
+    const handlePointerOver = (event: PointerEvent) => {
+      const optionId = getRouteOptionId(event.target)
+      if (optionId) {
+        updateRouteOptionOverlayPreview(optionId)
+      }
+    }
+    const handlePointerOut = (event: PointerEvent) => {
+      const fromOption = getRouteOptionId(event.target)
+      const toOption = getRouteOptionId(event.relatedTarget)
+      if (fromOption && fromOption !== toOption) {
+        updateRouteOptionOverlayPreview()
+      }
+    }
+    const handleFocusIn = (event: FocusEvent) => {
+      const optionId = getRouteOptionId(event.target)
+      if (optionId) {
+        updateRouteOptionOverlayPreview(optionId)
+      }
+    }
+    const handleFocusOut = (event: FocusEvent) => {
+      const fromOption = getRouteOptionId(event.target)
+      const toOption = getRouteOptionId(event.relatedTarget)
+      if (fromOption && fromOption !== toOption) {
+        updateRouteOptionOverlayPreview()
+      }
+    }
+    const handleClick = (event: MouseEvent) => {
+      const target = event.target
+      if (!(target instanceof HTMLElement)) {
+        return
+      }
+
+      const selectButton = target.closest<HTMLElement>('[data-route-option-select]')
+      const optionId = selectButton?.closest<HTMLElement>('[data-route-option-id]')?.dataset.routeOptionId
+      if (optionId) {
+        event.preventDefault()
+        onSelectRouteOption?.(optionId)
+      }
+    }
+
+    mapElement.addEventListener('pointerover', handlePointerOver)
+    mapElement.addEventListener('pointerout', handlePointerOut)
+    mapElement.addEventListener('focusin', handleFocusIn)
+    mapElement.addEventListener('focusout', handleFocusOut)
+    mapElement.addEventListener('click', handleClick)
+
+    return () => {
+      mapElement.removeEventListener('pointerover', handlePointerOver)
+      mapElement.removeEventListener('pointerout', handlePointerOut)
+      mapElement.removeEventListener('focusin', handleFocusIn)
+      mapElement.removeEventListener('focusout', handleFocusOut)
+      mapElement.removeEventListener('click', handleClick)
+    }
+  }, [onSelectRouteOption, updateRouteOptionOverlayPreview])
+
+  useEffect(() => {
+    if (!window.Tmapv3 || !mapRef.current || status !== 'ready') {
+      return
+    }
+
+    if (route?.coordinates.length || !routeOptions?.length) {
+      clearRouteOptionOverlays()
+      return
+    }
+
+    const overlaySignature = getRouteOptionOverlaySignature(routeOptions)
+    if (routeOptionOverlaySignatureRef.current === overlaySignature) {
+      return
+    }
+
+    clearRouteOptionOverlays()
+    const activeOptionId = routeOptions[0]?.id
+    routeOptionOverlayRefs.current = routeOptions.map((option, index) => (
+      createRouteOptionOverlay(option, index, activeOptionId, mapRef.current)
+    ))
+    routeOptionOverlaySignatureRef.current = overlaySignature
+
+    const overviewCenter = getRouteOptionsCenter(routeOptions)
+    if (overviewCenter) {
+      const centerLatLng = new window.Tmapv3.LatLng(overviewCenter.lat, overviewCenter.lng)
+      const overviewCamera = {
+        position: overviewCenter,
+        bearing: 0,
+        markerBearing: 0,
+        pitch: MAP_TOP_DOWN_PITCH,
+      }
+
+      applyMapCamera(mapRef.current, overviewCamera, centerLatLng, getRouteOptionsOverviewZoom(routeOptions))
+      renderedBearingRef.current = 0
+      renderedPitchRef.current = MAP_TOP_DOWN_PITCH
+      renderedCameraRef.current = overviewCamera
+      syncCompassBearing(0)
+    }
+  }, [
+    clearRouteOptionOverlays,
+    route?.coordinates.length,
+    routeOptions,
+    status,
+    syncCompassBearing,
+  ])
 
   useEffect(() => {
     if (!window.Tmapv3 || !mapRef.current || status !== 'ready') {
@@ -1471,6 +1629,113 @@ function createRouteLinePolylines(
   ]
 }
 
+function createRouteOptionOverlay(
+  option: NavigationRouteOption,
+  index: number,
+  activeOptionId: string | undefined,
+  map: Window['Tmapv3Map'],
+): RouteOptionOverlay {
+  const isActive = option.id === activeOptionId
+  const path = toTmapPath(option.route.coordinates)
+  const lineStyle = getRouteOptionOverlayLineStyle(isActive)
+  const labelCoordinate = getRouteCoordinateAtRatio(option.route.coordinates, getRouteOptionLabelRatio(index))
+    ?? option.route.coordinates[Math.floor(option.route.coordinates.length / 2)]
+    ?? option.route.coordinates[0]
+  const marker = new window.Tmapv3!.Marker({
+    position: new window.Tmapv3!.LatLng(labelCoordinate.lat, labelCoordinate.lng),
+    anchor: 'center',
+    iconHTML: createRouteOptionBubbleHtml(option, index, isActive),
+    map,
+    zIndex: isActive ? 240 : 220,
+  })
+  const lines = [
+    new window.Tmapv3!.Polyline({
+      path,
+      strokeColor: '#ffffff',
+      strokeOpacity: lineStyle.borderOpacity,
+      strokeWeight: lineStyle.borderWeight,
+      map,
+    }),
+    new window.Tmapv3!.Polyline({
+      path,
+      strokeColor: option.color,
+      strokeOpacity: lineStyle.strokeOpacity,
+      strokeWeight: lineStyle.strokeWeight,
+      map,
+    }),
+  ]
+
+  return {
+    id: option.id,
+    index,
+    lines,
+    marker,
+    option,
+  }
+}
+
+function getRouteOptionOverlayLineStyle(active: boolean) {
+  return {
+    borderOpacity: active ? 0.88 : 0.16,
+    borderWeight: active ? 13 : 9,
+    strokeOpacity: active ? 0.95 : 0.28,
+    strokeWeight: active ? 8 : 5,
+  }
+}
+
+function createRouteOptionBubbleHtml(option: NavigationRouteOption, index: number, active: boolean) {
+  const laneOffset = [-28, 24, -72, 68][index % 4]
+  const durationLabel = formatRouteDuration(option.route.summary.durationSeconds)
+  const distanceLabel = formatRouteDistance(option.route.summary.distanceMeters)
+  const arrivalLabel = formatRouteOptionArrival(option.route.summary.durationSeconds)
+  const opacity = active ? '1' : '0.78'
+  const scale = active ? '1' : '0.96'
+
+  return `
+    <div
+      class="nav-route-option-bubble"
+      data-route-option-id="${escapeHtml(option.id)}"
+      style="
+        transform: translate(-50%, calc(-100% + ${laneOffset}px)) scale(${scale});
+        transform-origin: 50% 100%;
+        opacity: ${opacity};
+        min-width: 168px;
+        max-width: 204px;
+        border-radius: 14px;
+        background: rgba(255,255,255,0.97);
+        color: #172033;
+        box-shadow: 0 8px 20px rgba(15,23,42,0.16);
+        border: 1px solid rgba(148,163,184,0.28);
+        padding: 10px;
+        pointer-events: auto;
+        font-family: Pretendard, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      "
+    >
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;">
+        <span style="width:9px;height:9px;border-radius:999px;background:${escapeHtml(option.color)};box-shadow:0 0 0 3px rgba(14,165,233,0.12);"></span>
+        <span style="font-size:13px;font-weight:800;line-height:1.1;">${escapeHtml(option.label)}</span>
+        <span style="margin-left:auto;font-size:11px;font-weight:700;color:#667085;">${escapeHtml(arrivalLabel)} 도착</span>
+      </div>
+      <div style="font-size:12px;font-weight:700;color:#475467;margin-bottom:9px;">${escapeHtml(durationLabel)} · ${escapeHtml(distanceLabel)}</div>
+      <button
+        type="button"
+        data-route-option-select
+        style="
+          width:100%;
+          height:30px;
+          border:0;
+          border-radius:999px;
+          background:${active ? escapeHtml(option.color) : '#eef4fb'};
+          color:${active ? '#ffffff' : '#172033'};
+          font-size:12px;
+          font-weight:800;
+          cursor:pointer;
+        "
+      >여기서 경로 선택</button>
+    </div>
+  `
+}
+
 function createRouteDirectionMarkers(
   coordinates: Coordinate[],
   map: Window['Tmapv3Map'],
@@ -1622,6 +1887,77 @@ function getRouteDirectionMarkerSignature(coordinates: Coordinate[], zoom: numbe
   return `${density.spacingMeters}:${density.maxArrows}:` + coordinates.map((coordinate) => (
     `${coordinate.lat.toFixed(4)},${coordinate.lng.toFixed(4)}`
   )).join('|')
+}
+
+function getRouteOptionOverlaySignature(options: NavigationRouteOption[]) {
+  return options.map((option) => (
+    `${option.id}:${option.color}:${option.route.summary.durationSeconds}:${option.route.summary.distanceMeters}:` +
+    option.route.coordinates.map((coordinate) => `${coordinate.lat.toFixed(5)},${coordinate.lng.toFixed(5)}`).join('|')
+  )).join(';')
+}
+
+function getRouteOptionLabelRatio(index: number) {
+  return [0.42, 0.56, 0.35, 0.66][index % 4]
+}
+
+function getRouteCoordinateAtRatio(coordinates: Coordinate[], ratio: number) {
+  if (!coordinates.length) {
+    return undefined
+  }
+
+  const routeDistance = getRouteDistanceMeters(coordinates)
+  if (routeDistance <= 0) {
+    return coordinates[Math.floor(coordinates.length * ratio)]
+  }
+
+  return getRouteAnchorAtDistance(coordinates, routeDistance * ratio)?.coordinate
+}
+
+function getRouteOptionsCenter(options: NavigationRouteOption[]) {
+  const coordinates = options.flatMap((option) => option.route.coordinates)
+  if (!coordinates.length) {
+    return undefined
+  }
+
+  const bounds = getCoordinateBounds(coordinates)
+  return {
+    lat: (bounds.minLat + bounds.maxLat) / 2,
+    lng: (bounds.minLng + bounds.maxLng) / 2,
+  }
+}
+
+function getRouteOptionsOverviewZoom(options: NavigationRouteOption[]) {
+  const coordinates = options.flatMap((option) => option.route.coordinates)
+  if (coordinates.length < 2) {
+    return MAP_OVERVIEW_ZOOM
+  }
+
+  const bounds = getCoordinateBounds(coordinates)
+  const diagonalMeters = getApproximateDistanceMeters(
+    { lat: bounds.minLat, lng: bounds.minLng },
+    { lat: bounds.maxLat, lng: bounds.maxLng },
+  )
+
+  if (diagonalMeters > 30_000) return 11.8
+  if (diagonalMeters > 18_000) return 12.8
+  if (diagonalMeters > 10_000) return 13.8
+  if (diagonalMeters > 5_000) return 14.8
+  if (diagonalMeters > 2_000) return 15.8
+  return 16.8
+}
+
+function getCoordinateBounds(coordinates: Coordinate[]) {
+  return coordinates.reduce((bounds, coordinate) => ({
+    minLat: Math.min(bounds.minLat, coordinate.lat),
+    maxLat: Math.max(bounds.maxLat, coordinate.lat),
+    minLng: Math.min(bounds.minLng, coordinate.lng),
+    maxLng: Math.max(bounds.maxLng, coordinate.lng),
+  }), {
+    minLat: Number.POSITIVE_INFINITY,
+    maxLat: Number.NEGATIVE_INFINITY,
+    minLng: Number.POSITIVE_INFINITY,
+    maxLng: Number.NEGATIVE_INFINITY,
+  })
 }
 
 function toTmapPath(coordinates: Coordinate[]) {
@@ -1817,6 +2153,42 @@ function getApproximateDistanceMeters(from: Coordinate, to: Coordinate) {
   const lngDeltaMeters = (to.lng - from.lng) * earthMetersPerDegree * latitudeScale
 
   return Math.hypot(latDeltaMeters, lngDeltaMeters)
+}
+
+function formatRouteDuration(durationSeconds: number) {
+  const minutes = Math.max(1, Math.round(durationSeconds / 60))
+  if (minutes < 60) {
+    return `${minutes}분`
+  }
+
+  const hours = Math.floor(minutes / 60)
+  const remainingMinutes = minutes % 60
+  return remainingMinutes > 0 ? `${hours}시간 ${remainingMinutes}분` : `${hours}시간`
+}
+
+function formatRouteDistance(distanceMeters: number) {
+  if (distanceMeters < 1000) {
+    return `${Math.max(1, Math.round(distanceMeters))}m`
+  }
+
+  return `${(distanceMeters / 1000).toFixed(1)}km`
+}
+
+function formatRouteOptionArrival(durationSeconds: number) {
+  const arrival = new Date(Date.now() + durationSeconds * 1000)
+  return arrival.toLocaleTimeString('ko-KR', {
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
 }
 
 function isSameCamera(from: RenderedCamera, to: RenderedCamera) {

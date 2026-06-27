@@ -35,6 +35,7 @@ interface Window {
   Tmapv3Polyline?: {
     setMap: (map: unknown | null) => void
     setPath?: (path: unknown[]) => void
+    setOptions?: (options: Record<string, unknown>) => void
   }
   Tmapv3?: {
     Map: new (element: HTMLElement | string, options: Record<string, unknown>) => NonNullable<Window['Tmapv3Map']>

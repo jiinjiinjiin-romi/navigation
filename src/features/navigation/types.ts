@@ -79,3 +79,12 @@ export interface NavigationRoute {
   safetyAlerts?: SafetyAlert[]
   trafficSegments?: RouteTrafficSegment[]
 }
+
+export interface NavigationRouteOption {
+  id: string
+  label: string
+  searchOption: string
+  route: NavigationRoute
+  color: string
+  isRecommended: boolean
+}

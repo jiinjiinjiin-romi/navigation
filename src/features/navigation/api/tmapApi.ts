@@ -2,6 +2,7 @@ import axios from 'axios'
 import type {
   Coordinate,
   NavigationRoute,
+  NavigationRouteOption,
   Place,
   RoadMatchPoint,
   RouteManeuver,
@@ -98,6 +99,13 @@ interface TmapRoadMatchResponse {
   }
 }
 
+const ROUTE_OPTION_PRESETS = [
+  { searchOption: '0', label: '추천', color: '#0EA5E9', isRecommended: true },
+  { searchOption: '2', label: '최소시간', color: '#22C55E', isRecommended: false },
+  { searchOption: '10', label: '최단거리', color: '#F97316', isRecommended: false },
+  { searchOption: '4', label: '고속도로', color: '#8B5CF6', isRecommended: false },
+] as const
+
 export async function searchPlaces(
   keyword: string,
   client: Pick<HttpClient, 'get'> = axios,
@@ -122,16 +130,43 @@ export async function getRoute(
   destination: Coordinate,
   client: Pick<HttpClient, 'post'> = axios,
   signal?: AbortSignal,
+  searchOption = '0',
 ): Promise<NavigationRoute> {
   const payload = {
     origin,
     destination,
+    searchOption,
   }
   const { data } = signal
     ? await client.post<TmapRouteResponse>('/api/tmap/routes', payload, { signal })
     : await client.post<TmapRouteResponse>('/api/tmap/routes', payload)
 
   return normalizeRoute(data)
+}
+
+export async function getRouteOptions(
+  origin: Coordinate,
+  destination: Coordinate,
+  client: Pick<HttpClient, 'post'> = axios,
+  signal?: AbortSignal,
+): Promise<NavigationRouteOption[]> {
+  const results = await Promise.allSettled(
+    ROUTE_OPTION_PRESETS.map(async (preset) => ({
+      id: `route-option-${preset.searchOption}`,
+      ...preset,
+      route: await getRoute(origin, destination, client, signal, preset.searchOption),
+    })),
+  )
+  const fulfilledOptions = results.flatMap((result) => (
+    result.status === 'fulfilled' ? [result.value] : []
+  ))
+  const uniqueOptions = dedupeRouteOptions(fulfilledOptions)
+
+  if (!uniqueOptions.length) {
+    throw new Error('Failed to load route options')
+  }
+
+  return sortRouteOptions(uniqueOptions)
 }
 
 export async function getCurrentAddress(
@@ -168,6 +203,45 @@ export async function getRoadMatch(
 
 function withSignal(signal?: AbortSignal) {
   return signal ? { signal } : {}
+}
+
+function dedupeRouteOptions(options: NavigationRouteOption[]) {
+  const signatures = new Set<string>()
+
+  return options.filter((option) => {
+    const signature = getRouteOptionSignature(option.route)
+
+    if (signatures.has(signature)) {
+      return false
+    }
+
+    signatures.add(signature)
+    return true
+  })
+}
+
+function sortRouteOptions(options: NavigationRouteOption[]) {
+  return [...options].sort((left, right) => {
+    if (left.isRecommended !== right.isRecommended) {
+      return left.isRecommended ? -1 : 1
+    }
+
+    return left.route.summary.durationSeconds - right.route.summary.durationSeconds
+  })
+}
+
+function getRouteOptionSignature(route: NavigationRoute) {
+  return [
+    route.coordinates.map((coordinate) => (
+      `${roundCoordinate(coordinate.lat)},${roundCoordinate(coordinate.lng)}`
+    )).join('|'),
+    Math.round(route.summary.distanceMeters / 25),
+    Math.round(route.summary.durationSeconds / 5),
+  ].join(':')
+}
+
+function roundCoordinate(value: number) {
+  return Math.round(value * 10_000) / 10_000
 }
 
 function normalizePlaces(data: TmapPoiSearchResponse): Place[] {

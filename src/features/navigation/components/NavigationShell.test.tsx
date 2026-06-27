@@ -4,11 +4,11 @@ import { useEffect } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { NavigationShell } from './NavigationShell'
-import { getCurrentAddress, getRoadMatch, getRoute, searchPlaces } from '../api/tmapApi'
+import { getCurrentAddress, getRoadMatch, getRouteOptions, searchPlaces } from '../api/tmapApi'
 
 vi.mock('../api/tmapApi', () => ({
   searchPlaces: vi.fn(),
-  getRoute: vi.fn(),
+  getRouteOptions: vi.fn(),
   getRoadMatch: vi.fn(),
   getCurrentAddress: vi.fn(),
 }))
@@ -17,41 +17,60 @@ vi.mock('./TmapPanel', () => ({
   TmapPanel: ({
     currentPosition,
     cameraSettings,
-    route,
-    simulationPosition,
-    onCameraSettingsChange,
-    onSimulationFrameRendererReady,
-  }: {
-    cameraSettings?: { mode: '2d' | '3d'; zoom: number; pitch: number }
-    currentPosition?: { lat: number; lng: number }
-    route?: { coordinates: { lat: number; lng: number }[] }
-    simulationPosition?: { lat: number; lng: number }
-    onCameraSettingsChange?: (settings: Partial<{ mode: '2d' | '3d'; zoom: number; pitch: number }>) => void
-    onSimulationFrameRendererReady?: (renderFrame: ((position: { lat: number; lng: number }) => void) | undefined) => void
-  }) => {
-    useEffect(() => {
-      onSimulationFrameRendererReady?.((position) => {
-        window.__lastRenderedSimulationFrame = position
-      })
-      return () => onSimulationFrameRendererReady?.(undefined)
-    }, [onSimulationFrameRendererReady])
+	    route,
+	    routeOptions,
+	    simulationPosition,
+	    onCameraSettingsChange,
+	    onSelectRouteOption,
+	    onSimulationFrameRendererReady,
+	  }: {
+	    cameraSettings?: { mode: '2d' | '3d'; zoom: number; pitch: number }
+	    currentPosition?: { lat: number; lng: number }
+	    route?: { coordinates: { lat: number; lng: number }[] }
+	    routeOptions?: Array<{ id: string; label: string; route: { coordinates: { lat: number; lng: number }[] } }>
+	    simulationPosition?: { lat: number; lng: number }
+	    onCameraSettingsChange?: (settings: Partial<{ mode: '2d' | '3d'; zoom: number; pitch: number }>) => void
+	    onSelectRouteOption?: (id: string) => void
+	    onSimulationFrameRendererReady?: (renderFrame: ((position: { lat: number; lng: number }) => void) | undefined) => void
+	  }) => {
+	    useEffect(() => {
+	      onSimulationFrameRendererReady?.((position) => {
+	        window.__lastRenderedSimulationFrame = position
+	      })
+	      return () => onSimulationFrameRendererReady?.(undefined)
+	    }, [onSimulationFrameRendererReady])
+	    useEffect(() => {
+	      if (routeOptions?.length === 1) {
+	        onSelectRouteOption?.(routeOptions[0].id)
+	      }
+	    }, [onSelectRouteOption, routeOptions])
 
     return (
       <div
         data-camera-pitch={cameraSettings?.pitch}
         data-camera-mode={cameraSettings?.mode}
-        data-camera-zoom={cameraSettings?.zoom}
-        data-route-points={route?.coordinates.length ?? 0}
-        data-simulation-lat={simulationPosition?.lat}
-        data-testid="tmap-panel"
-      >
+	        data-camera-zoom={cameraSettings?.zoom}
+	        data-route-points={route?.coordinates.length ?? 0}
+	        data-route-options={routeOptions?.length ?? 0}
+	        data-simulation-lat={simulationPosition?.lat}
+	        data-testid="tmap-panel"
+	      >
         <button
           aria-label="테스트 지도 피치 변경"
           onClick={() => onCameraSettingsChange?.({ pitch: 24 })}
           type="button"
-        />
-        {simulationPosition
-          ? `sim:${simulationPosition.lat.toFixed(4)},${simulationPosition.lng.toFixed(4)}`
+	        />
+	        {routeOptions?.map((option) => (
+	          <button
+	            key={option.id}
+	            type="button"
+	            onClick={() => onSelectRouteOption?.(option.id)}
+	          >
+	            {`${option.label} 여기서 경로 선택`}
+	          </button>
+	        ))}
+	        {simulationPosition
+	          ? `sim:${simulationPosition.lat.toFixed(4)},${simulationPosition.lng.toFixed(4)}`
           : currentPosition
             ? `current:${currentPosition.lat.toFixed(4)},${currentPosition.lng.toFixed(4)}`
             : 'idle'}
@@ -61,9 +80,21 @@ vi.mock('./TmapPanel', () => ({
 }))
 
 const mockedSearchPlaces = vi.mocked(searchPlaces)
-const mockedGetRoute = vi.mocked(getRoute)
+const mockedGetRouteOptions = vi.mocked(getRouteOptions)
+const mockedGetRoute = vi.fn()
 const mockedGetRoadMatch = vi.mocked(getRoadMatch)
 const mockedGetCurrentAddress = vi.mocked(getCurrentAddress)
+
+function createMockRouteOption(route: Awaited<ReturnType<typeof mockedGetRoute>>) {
+  return {
+    id: 'route-option-0',
+    label: '추천',
+    searchOption: '0',
+    color: '#0EA5E9',
+    isRecommended: true,
+    route,
+  }
+}
 
 describe('NavigationShell', () => {
   const mockGeolocationSuccess = (latitude = 37.5665, longitude = 126.978) => {
@@ -95,6 +126,10 @@ describe('NavigationShell', () => {
     window.history.replaceState(null, '', '/')
     mockedSearchPlaces.mockReset()
     mockedGetRoute.mockReset()
+    mockedGetRouteOptions.mockReset()
+    mockedGetRouteOptions.mockImplementation(async (...args) => [
+      createMockRouteOption(await mockedGetRoute(...args)),
+    ])
     mockedGetRoadMatch.mockReset()
     mockedGetCurrentAddress.mockReset()
     mockedGetRoadMatch.mockResolvedValue([
@@ -135,6 +170,8 @@ describe('NavigationShell', () => {
 
   const openOriginEditor = async () => {
     await openRouteSearchSummary()
+    fireEvent.click(screen.getByRole('button', { name: '경로 입력으로 돌아가기' }))
+    await screen.findByRole('combobox', { name: '출발 위치' })
     fireEvent.focus(screen.getByRole('combobox', { name: '출발 위치' }))
 
     return screen.findByPlaceholderText('출발지 검색')
@@ -280,11 +317,12 @@ describe('NavigationShell', () => {
     expect(screen.queryByText('현재 위치에서')).not.toBeInTheDocument()
     expect(screen.queryByText('출발지는 변경할 수 있습니다')).not.toBeInTheDocument()
     expect(screen.queryByText('선택됨')).not.toBeInTheDocument()
+    expect(await screen.findByPlaceholderText('목적지 검색')).toHaveFocus()
+    expect(screen.queryByDisplayValue('서울특별시 중구 세종대로 110')).not.toBeInTheDocument()
+    expect(screen.queryByPlaceholderText('목적지')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '경로 입력으로 돌아가기' }))
     expect(await screen.findByDisplayValue('서울특별시 중구 세종대로 110')).toBeInTheDocument()
     expect(screen.getByPlaceholderText('목적지')).toBeInTheDocument()
-    expect(screen.queryByPlaceholderText('목적지 검색')).not.toBeInTheDocument()
-    fireEvent.focus(screen.getByRole('combobox', { name: '목적지' }))
-    expect(await screen.findByPlaceholderText('목적지 검색')).toHaveFocus()
     await waitFor(() => {
       expect(screen.queryByRole('button', { name: /어디로 갈까요/ })).not.toBeInTheDocument()
     })
@@ -429,6 +467,79 @@ describe('NavigationShell', () => {
     expect(primaryManeuverCard).not.toContainElement(nextManeuverCard)
   })
 
+  it('shows route candidates before starting guidance and starts with the selected option', async () => {
+    mockedGetRouteOptions.mockResolvedValue([
+      {
+        id: 'route-recommended',
+        label: '추천',
+        searchOption: '0',
+        color: '#0EA5E9',
+        isRecommended: true,
+        route: {
+          coordinates: [
+            { lat: 37.5665, lng: 126.978 },
+            { lat: 37.4979, lng: 127.0276 },
+          ],
+          summary: {
+            distanceMeters: 12340,
+            durationSeconds: 1320,
+          },
+        },
+      },
+      {
+        id: 'route-fastest',
+        label: '최소시간',
+        searchOption: '2',
+        color: '#F97316',
+        isRecommended: false,
+        route: {
+          coordinates: [
+            { lat: 37.5665, lng: 126.978 },
+            { lat: 37.51, lng: 127.01 },
+            { lat: 37.4979, lng: 127.0276 },
+          ],
+          summary: {
+            distanceMeters: 12800,
+            durationSeconds: 1260,
+          },
+        },
+      },
+    ])
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell />
+      </QueryClientProvider>,
+    )
+
+    await openDestinationEditor()
+    fireEvent.click(await screen.findByRole('button', { name: '도착지를 회사로 설정' }))
+
+    await waitFor(() => {
+      expect(mockedGetRouteOptions).toHaveBeenCalledWith(
+        { lat: 37.5665, lng: 126.978 },
+        { lat: 37.4979, lng: 127.0276 },
+        undefined,
+        expect.objectContaining({ aborted: false }),
+      )
+    })
+    expect(await screen.findByText('2개 경로')).toBeInTheDocument()
+    expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-route-options', '2')
+    expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-route-points', '0')
+
+    fireEvent.click(screen.getByRole('button', { name: '최소시간 여기서 경로 선택' }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-route-options', '0')
+    })
+    expect(Number(screen.getByTestId('tmap-panel').getAttribute('data-route-points'))).toBeGreaterThan(0)
+    expect(screen.getByText('21분')).toBeInTheDocument()
+    expect(screen.getByText('12.8 km')).toBeInTheDocument()
+  })
+
   it('cycles every driving assist sign in debug mode', async () => {
     const debugSequenceWaitMs = 1450
     window.history.replaceState(null, '', '/?debugSigns=1')
@@ -525,6 +636,16 @@ describe('NavigationShell', () => {
         coordinate: { lat: 37.5502, lng: 127.073 },
       },
     ])
+    mockedGetRoute.mockResolvedValue({
+      coordinates: [
+        { lat: 37.5665, lng: 126.978 },
+        { lat: 37.5502, lng: 127.073 },
+      ],
+      summary: {
+        distanceMeters: 9100,
+        durationSeconds: 1180,
+      },
+    })
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     })
@@ -548,7 +669,17 @@ describe('NavigationShell', () => {
     await waitFor(() => {
       expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
     })
-    expect(screen.getByRole('combobox', { name: '목적지' })).toHaveValue('세종대학교')
+    await waitFor(() => {
+      expect(mockedGetRoute).toHaveBeenCalledWith(
+        { lat: 37.5665, lng: 126.978 },
+        { lat: 37.5502, lng: 127.073 },
+        undefined,
+        expect.objectContaining({ aborted: false }),
+      )
+    })
+    await waitFor(() => {
+      expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-route-points', '2')
+    })
   })
 
   it('debounces autocomplete API calls while keeping the input responsive', async () => {

@@ -23,7 +23,7 @@ import {
 } from '@phosphor-icons/react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { getCurrentAddress, getRoadMatch, getRoute, searchPlaces } from '../api/tmapApi'
+import { getCurrentAddress, getRoadMatch, getRouteOptions, searchPlaces } from '../api/tmapApi'
 import { createRoundedRoutePath } from '../map/routeGeometry'
 import { createRouteSimulationPlan, getSimulatedRoutePosition } from '../simulation/routeSimulation'
 import { getSimulationDurationMs } from '../simulation/simulationTiming'
@@ -215,6 +215,7 @@ export function NavigationShell() {
   const [activeField, setActiveField] = useState<SearchFieldId | null>(null)
   const [highlightedIndex, setHighlightedIndex] = useState(0)
   const [routeSearchOpen, setRouteSearchOpen] = useState(false)
+  const [selectedRouteOptionId, setSelectedRouteOptionId] = useState<string>()
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [mapCameraSettings, setMapCameraSettings] = useState<MapCameraSettings>(DEFAULT_MAP_CAMERA_SETTINGS)
   const updateMapCameraSettings = useCallback((settings: Partial<MapCameraSettings>) => {
@@ -236,6 +237,7 @@ export function NavigationShell() {
   const simulationLastUiUpdateAtRef = useRef<number | undefined>(undefined)
   const simulationFrameRendererRef = useRef<((position: Coordinate) => void) | undefined>(undefined)
   const guidanceDistanceDisplayRef = useRef<GuidanceDistanceDisplayStore>(new Map())
+  const routeSelectionCameraSettingsRef = useRef<MapCameraSettings | undefined>(undefined)
   const debouncedOriginKeyword = useDebouncedValue(originKeyword.trim(), SEARCH_DEBOUNCE_MS)
   const debouncedDestinationKeyword = useDebouncedValue(destinationKeyword.trim(), SEARCH_DEBOUNCE_MS)
   const addressQueryCoordinate = useMemo(
@@ -265,9 +267,9 @@ export function NavigationShell() {
     placeholderData: keepPreviousData,
   })
 
-  const routeQuery = useQuery({
+  const routeOptionsQuery = useQuery({
     queryKey: [
-      'route',
+      'route-options',
       origin?.id,
       origin?.coordinate.lat,
       origin?.coordinate.lng,
@@ -275,26 +277,8 @@ export function NavigationShell() {
       destination?.coordinate.lat,
       destination?.coordinate.lng,
     ],
-    queryFn: ({ signal }) => getRoute(origin!.coordinate, destination!.coordinate, undefined, signal),
-    enabled: locationStatus === 'granted' && Boolean(origin && destination),
-  })
-  const roadMatchQuery = useQuery({
-    queryKey: ['road-match', origin?.id, destination?.id],
-    queryFn: ({ signal }) => getRoadMatch(routeQuery.data!.coordinates, undefined, signal),
-    enabled: Boolean(routeQuery.data?.coordinates.length),
-    staleTime: 5 * 60 * 1000,
-    retry: false,
-  })
-  const currentRoadMatchQuery = useQuery({
-    queryKey: [
-      'current-road-match',
-      currentRoadMatchCoordinates?.[0].lat,
-      currentRoadMatchCoordinates?.[0].lng,
-    ],
-    queryFn: ({ signal }) => getRoadMatch(currentRoadMatchCoordinates!, undefined, signal),
-    enabled: locationStatus === 'granted' && Boolean(currentRoadMatchCoordinates) && !routeQuery.data,
-    staleTime: 60 * 1000,
-    retry: false,
+    queryFn: ({ signal }) => getRouteOptions(origin!.coordinate, destination!.coordinate, undefined, signal),
+    enabled: locationStatus === 'granted' && Boolean(origin && destination) && !selectedRouteOptionId,
   })
 
   const weatherQuery = useQuery({
@@ -312,8 +296,11 @@ export function NavigationShell() {
     retry: false,
   })
 
+  const selectedRouteOption = useMemo(() => (
+    routeOptionsQuery.data?.find((option) => option.id === selectedRouteOptionId)
+  ), [routeOptionsQuery.data, selectedRouteOptionId])
   const activeRoute = useMemo(() => {
-    const route = routeQuery.data
+    const route = selectedRouteOption?.route
 
     if (!route) {
       return undefined
@@ -323,11 +310,31 @@ export function NavigationShell() {
       ...route,
       coordinates: createRoundedRoutePath(route.coordinates),
     }
-  }, [routeQuery.data])
+  }, [selectedRouteOption?.route])
   const activeRouteSimulationPlan = useMemo(
     () => activeRoute ? createRouteSimulationPlan(activeRoute) : undefined,
     [activeRoute],
   )
+  const routeSelectionMode = Boolean(origin && destination && !selectedRouteOptionId)
+  const routeOptions = routeSelectionMode ? routeOptionsQuery.data ?? [] : undefined
+  const roadMatchQuery = useQuery({
+    queryKey: ['road-match', selectedRouteOptionId, activeRoute?.coordinates.length],
+    queryFn: ({ signal }) => getRoadMatch(activeRoute!.coordinates, undefined, signal),
+    enabled: Boolean(activeRoute?.coordinates.length),
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  })
+  const currentRoadMatchQuery = useQuery({
+    queryKey: [
+      'current-road-match',
+      currentRoadMatchCoordinates?.[0].lat,
+      currentRoadMatchCoordinates?.[0].lng,
+    ],
+    queryFn: ({ signal }) => getRoadMatch(currentRoadMatchCoordinates!, undefined, signal),
+    enabled: locationStatus === 'granted' && Boolean(currentRoadMatchCoordinates) && !activeRoute,
+    staleTime: 60 * 1000,
+    retry: false,
+  })
 
   useEffect(() => {
     guidanceDistanceDisplayRef.current.clear()
@@ -483,13 +490,64 @@ export function NavigationShell() {
     }
   }, [locationStatus])
 
+  const restoreRouteSelectionCameraSettings = useCallback(() => {
+    const previousSettings = routeSelectionCameraSettingsRef.current
+    if (!previousSettings) {
+      return
+    }
+
+    routeSelectionCameraSettingsRef.current = undefined
+    setMapCameraSettings(previousSettings)
+  }, [])
+
+  useEffect(() => {
+    if (!routeSelectionMode) {
+      restoreRouteSelectionCameraSettings()
+      return
+    }
+
+    setRouteSearchOpen(false)
+    setActiveField(null)
+    setHighlightedIndex(0)
+    setMapCameraSettings((currentSettings) => {
+      if (!routeSelectionCameraSettingsRef.current) {
+        routeSelectionCameraSettingsRef.current = currentSettings
+      }
+
+      const nextSettings = {
+        ...currentSettings,
+        mode: '2d' as const,
+        pitch: 0,
+      }
+
+      return isSameMapCameraSettings(currentSettings, nextSettings)
+        ? currentSettings
+        : nextSettings
+    })
+  }, [restoreRouteSelectionCameraSettings, routeSelectionMode])
+
+  const selectRouteOption = useCallback((optionId: string) => {
+    setSelectedRouteOptionId(optionId)
+    guidanceDistanceDisplayRef.current.clear()
+    restoreRouteSelectionCameraSettings()
+  }, [restoreRouteSelectionCameraSettings])
+
   const selectPlace = (field: SearchFieldId, place: Place) => {
+    stopSimulation()
+    setSelectedRouteOptionId(undefined)
+    setSimulationPosition(undefined)
+    setSimulationRemainingDistance(0)
+    setSimulationRemainingDuration(0)
+    setGuidanceDistanceUpdateKey(0)
+    guidanceDistanceDisplayRef.current.clear()
+
     if (field === 'origin') {
       setOrigin(place)
       setOriginKeyword(place.name)
     } else {
       setDestination(place)
       setDestinationKeyword(place.name)
+      setRouteSearchOpen(false)
     }
 
     setActiveField(null)
@@ -569,6 +627,7 @@ export function NavigationShell() {
     setSimulationRemainingDuration(0)
     setGuidanceDistanceUpdateKey(0)
     guidanceDistanceDisplayRef.current.clear()
+    setSelectedRouteOptionId(undefined)
     setDestination(undefined)
     setDestinationKeyword('')
     setActiveField(null)
@@ -643,10 +702,12 @@ export function NavigationShell() {
           cameraSettings={mapCameraSettings}
           currentPosition={currentPosition}
           route={activeRoute}
+          routeOptions={routeOptions}
           origin={origin}
           destination={destination}
           simulationPosition={simulationPosition}
           onCameraSettingsChange={updateMapCameraSettings}
+          onSelectRouteOption={selectRouteOption}
           onSimulationFrameRendererReady={(renderFrame) => {
             simulationFrameRendererRef.current = renderFrame
           }}
@@ -670,16 +731,33 @@ export function NavigationShell() {
 
         {!activeRoute ? (
           <>
-            <IdleMapControls
-              locationStatus={locationStatus}
-              motionTiming={motionTiming}
-              searchOpen={routeSearchOpen}
-              onOpenSearch={() => {
-                setRouteSearchOpen(true)
-                setActiveField(null)
-              }}
-              onRequestLocation={requestCurrentLocation}
-            />
+            {!routeSelectionMode ? (
+              <IdleMapControls
+                locationStatus={locationStatus}
+                motionTiming={motionTiming}
+                searchOpen={routeSearchOpen}
+                onOpenSearch={() => {
+                  setRouteSearchOpen(true)
+                  setActiveField('destination')
+                  setHighlightedIndex(0)
+                }}
+                onRequestLocation={requestCurrentLocation}
+              />
+            ) : (
+              <RouteSelectionSummary
+                destinationLabel={destinationKeyword || destination?.name || '목적지'}
+                error={routeOptionsQuery.isError}
+                loading={routeOptionsQuery.isFetching && !routeOptions?.length}
+                motionTiming={motionTiming}
+                optionCount={routeOptions?.length ?? 0}
+                originLabel={originKeyword || origin?.name || currentOriginLabel}
+                onEditRoute={() => {
+                  setRouteSearchOpen(true)
+                  setActiveField('destination')
+                  setHighlightedIndex(0)
+                }}
+              />
+            )}
             <AnimatePresence initial={false}>
               {routeSearchOpen ? (
         <RouteSearchSheet
@@ -1434,6 +1512,68 @@ function IdleMapControls({
         ) : null}
       </AnimatePresence>
     </div>
+  )
+}
+
+function RouteSelectionSummary({
+  destinationLabel,
+  error,
+  loading,
+  motionTiming,
+  optionCount,
+  originLabel,
+  onEditRoute,
+}: {
+  destinationLabel: string
+  error: boolean
+  loading: boolean
+  motionTiming: MotionTiming
+  optionCount: number
+  originLabel: string
+  onEditRoute: () => void
+}) {
+  const statusLabel = error
+    ? '경로를 찾지 못했습니다'
+    : loading
+      ? '경로 찾는 중'
+      : `${optionCount}개 경로`
+
+  return (
+    <motion.div
+      className="pointer-events-none absolute left-5 top-5 z-20 w-[min(30rem,calc(100%-6rem))] text-[var(--nav-ink)] max-sm:left-3 max-sm:top-3 max-sm:w-[calc(100%-4.5rem)]"
+      initial={{ opacity: 0, y: -14, scale: 0.985 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: -10, scale: 0.985 }}
+      transition={motionTiming}
+    >
+      <div className="pointer-events-auto flex items-center gap-3 rounded-2xl bg-white/96 px-4 py-3 shadow-[0_8px_22px_rgba(15,23,42,0.14)] backdrop-blur">
+        <div className="grid shrink-0 content-center justify-center">
+          <span className="size-2 rounded-full bg-[var(--nav-primary)]" />
+          <span className="mx-auto h-6 w-px bg-[var(--nav-border)]" />
+          <span className="size-2 rounded-full bg-[var(--nav-guidance)]" />
+        </div>
+        <div className="grid min-w-0 flex-1 gap-1">
+          <div className="flex min-w-0 items-center gap-2 text-sm">
+            <span className="shrink-0 text-[11px] font-semibold text-[var(--nav-muted)]">출발</span>
+            <span className="min-w-0 truncate font-semibold">{originLabel}</span>
+          </div>
+          <div className="flex min-w-0 items-center gap-2 text-sm">
+            <span className="shrink-0 text-[11px] font-semibold text-[var(--nav-muted)]">도착</span>
+            <span className="min-w-0 truncate font-semibold">{destinationLabel}</span>
+          </div>
+        </div>
+        <span className="shrink-0 rounded-full bg-[var(--nav-panel)] px-2.5 py-1 text-xs font-bold text-[var(--nav-muted)]">
+          {statusLabel}
+        </span>
+        <button
+          className="shrink-0 rounded-full bg-white px-3 py-1.5 text-xs font-bold text-[var(--nav-primary)] shadow-[0_3px_8px_rgba(15,23,42,0.1)] transition hover:bg-[var(--nav-selection)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
+          onClick={onEditRoute}
+          type="button"
+        >
+          변경
+        </button>
+      </div>
+    </motion.div>
   )
 }
 

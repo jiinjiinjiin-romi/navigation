@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { getCurrentAddress, getRoadMatch, getRoute, searchPlaces } from './tmapApi'
+import { getCurrentAddress, getRoadMatch, getRoute, getRouteOptions, searchPlaces } from './tmapApi'
 
 describe('searchPlaces', () => {
   it('calls the backend TMAP POI proxy without exposing an app key', async () => {
@@ -119,6 +119,7 @@ describe('getRoute', () => {
     expect(post).toHaveBeenCalledWith('/api/tmap/routes', {
       origin: { lat: 37.5665, lng: 126.978 },
       destination: { lat: 37.4979, lng: 127.0276 },
+      searchOption: '0',
     })
     expect(JSON.stringify(post.mock.calls)).not.toContain('appKey')
     expect(route).toEqual({
@@ -351,7 +352,101 @@ describe('getRoute', () => {
       },
     ])
   })
+
+  it('posts a custom route search option to the backend proxy', async () => {
+    const post = vi.fn().mockResolvedValue({
+      data: routeResponse([
+        [126.978, 37.5665],
+        [127.0276, 37.4979],
+      ], 12340, 1320),
+    })
+
+    await getRoute(
+      { lat: 37.5665, lng: 126.978 },
+      { lat: 37.4979, lng: 127.0276 },
+      { post },
+      undefined,
+      '10',
+    )
+
+    expect(post).toHaveBeenCalledWith('/api/tmap/routes', {
+      origin: { lat: 37.5665, lng: 126.978 },
+      destination: { lat: 37.4979, lng: 127.0276 },
+      searchOption: '10',
+    })
+  })
 })
+
+describe('getRouteOptions', () => {
+  it('requests all route option presets and returns successful unique options', async () => {
+    const post = vi.fn()
+      .mockResolvedValueOnce({ data: routeResponse([[126.978, 37.5665], [127, 37.55]], 1000, 100) })
+      .mockResolvedValueOnce({ data: routeResponse([[126.978, 37.5665], [127.01, 37.54]], 900, 90) })
+      .mockResolvedValueOnce({ data: routeResponse([[126.978, 37.5665], [127.02, 37.53]], 800, 120) })
+      .mockResolvedValueOnce({ data: routeResponse([[126.978, 37.5665], [127.03, 37.52]], 1200, 110) })
+
+    const options = await getRouteOptions(
+      { lat: 37.5665, lng: 126.978 },
+      { lat: 37.4979, lng: 127.0276 },
+      { post },
+    )
+
+    expect(post).toHaveBeenCalledTimes(4)
+    expect(post.mock.calls.map((call) => call[1].searchOption)).toEqual(['0', '2', '10', '4'])
+    expect(options.map((option) => option.searchOption)).toEqual(['0', '2', '4', '10'])
+    expect(options[0]).toMatchObject({
+      id: 'route-option-0',
+      label: '추천',
+      color: '#0EA5E9',
+      isRecommended: true,
+    })
+  })
+
+  it('drops failed individual route options and duplicate route summaries', async () => {
+    const post = vi.fn()
+      .mockResolvedValueOnce({ data: routeResponse([[126.978, 37.5665], [127, 37.55]], 1000, 100) })
+      .mockRejectedValueOnce(new Error('route option unavailable'))
+      .mockResolvedValueOnce({ data: routeResponse([[126.9780001, 37.5665001], [127.0000001, 37.5500001]], 1004, 102) })
+      .mockResolvedValueOnce({ data: routeResponse([[126.978, 37.5665], [127.03, 37.52]], 1200, 110) })
+
+    const options = await getRouteOptions(
+      { lat: 37.5665, lng: 126.978 },
+      { lat: 37.4979, lng: 127.0276 },
+      { post },
+    )
+
+    expect(options.map((option) => option.searchOption)).toEqual(['0', '4'])
+  })
+
+  it('throws when every route option request fails', async () => {
+    const post = vi.fn().mockRejectedValue(new Error('network down'))
+
+    await expect(getRouteOptions(
+      { lat: 37.5665, lng: 126.978 },
+      { lat: 37.4979, lng: 127.0276 },
+      { post },
+    )).rejects.toThrow('Failed to load route options')
+  })
+})
+
+function routeResponse(
+  coordinates: [number, number][],
+  totalDistance: number,
+  totalTime: number,
+) {
+  return {
+    features: [
+      {
+        geometry: { type: 'Point', coordinates: coordinates[0] },
+        properties: { totalDistance: String(totalDistance), totalTime: String(totalTime) },
+      },
+      {
+        geometry: { type: 'LineString', coordinates },
+        properties: {},
+      },
+    ],
+  }
+}
 
 describe('getRoadMatch', () => {
   it('calls the backend road match proxy and normalizes speed limit data', async () => {
