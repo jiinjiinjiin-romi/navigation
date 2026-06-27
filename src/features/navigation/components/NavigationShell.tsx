@@ -10,10 +10,14 @@ import {
   HouseLine,
   MagnifyingGlass,
   MapPin,
+  Minus,
   Play,
+  Plus,
   RoadHorizon,
+  SlidersHorizontal,
   Stop,
   Timer,
+  UserCircle,
   Warning,
   X,
 } from '@phosphor-icons/react'
@@ -38,7 +42,7 @@ import sideOverpassSignSrc from '../assets/road-signs/124.png'
 import sideUnderpassSignSrc from '../assets/road-signs/123.png'
 import tunnelSignSrc from '../assets/road-signs/121.png'
 import underpassSignSrc from '../assets/road-signs/119.png'
-import { TmapPanel } from './TmapPanel'
+import { TmapPanel, type MapCameraSettings } from './TmapPanel'
 
 type SearchFieldId = 'origin' | 'destination'
 type LocationStatus = 'checking' | 'granted' | 'denied' | 'unsupported'
@@ -55,6 +59,18 @@ const ADDRESS_COORDINATE_PRECISION = 5
 const WEATHER_COORDINATE_PRECISION = 3
 const ROUTE_SEARCH_SUMMARY_FIELDS_HEIGHT = 140
 const ROUTE_SEARCH_EDITOR_FIELDS_HEIGHT = 380
+const DEFAULT_MAP_CAMERA_SETTINGS: MapCameraSettings = {
+  mode: '2d',
+  zoom: 18.3,
+  pitch: 0,
+}
+const MAP_SETTINGS_ZOOM_MIN = 16
+const MAP_SETTINGS_ZOOM_MAX = 19
+const MAP_SETTINGS_ZOOM_STEP = 0.1
+const MAP_SETTINGS_3D_DEFAULT_PITCH = 45
+const MAP_SETTINGS_PITCH_MIN = 0
+const MAP_SETTINGS_PITCH_MAX = 60
+const MAP_SETTINGS_PITCH_STEP = 1
 const SIMULATION_UI_UPDATE_INTERVAL_MS = 200
 const GUIDANCE_DISTANCE_UPDATE_INTERVAL_MS = 500
 const DRIVING_ASSIST_DEBUG_QUERY_PARAM = 'debugSigns'
@@ -199,6 +215,17 @@ export function NavigationShell() {
   const [activeField, setActiveField] = useState<SearchFieldId | null>(null)
   const [highlightedIndex, setHighlightedIndex] = useState(0)
   const [routeSearchOpen, setRouteSearchOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [mapCameraSettings, setMapCameraSettings] = useState<MapCameraSettings>(DEFAULT_MAP_CAMERA_SETTINGS)
+  const updateMapCameraSettings = useCallback((settings: Partial<MapCameraSettings>) => {
+    setMapCameraSettings((currentSettings) => {
+      const nextSettings = getNextMapCameraSettings(currentSettings, settings)
+
+      return isSameMapCameraSettings(currentSettings, nextSettings)
+        ? currentSettings
+        : nextSettings
+    })
+  }, [])
   const [simulationRunning, setSimulationRunning] = useState(false)
   const [simulationPosition, setSimulationPosition] = useState<Coordinate>()
   const [simulationRemainingDistance, setSimulationRemainingDistance] = useState(0)
@@ -319,6 +346,7 @@ export function NavigationShell() {
   const currentTimeLabel = formatClockTime(now)
   const currentLocationLabel = currentAddressQuery.data
     ?? (currentPosition ? 'GPS 위치' : '위치 확인 중')
+  const currentOriginLabel = currentPosition ? currentLocationLabel : 'GPS 위치'
   const destinationStatusLabel = destination?.address || destination?.name || '목적지'
   const weatherLabel = weatherQuery.data ?? (weatherQuery.isError ? '날씨 정보 없음' : '날씨 확인 중')
   const travelledDistanceMeters = activeRoute
@@ -371,7 +399,7 @@ export function NavigationShell() {
         }
         const currentPlace: Place = {
           id: CURRENT_LOCATION_PLACE_ID,
-          name: '현재 위치',
+          name: 'GPS 위치',
           address: 'GPS 위치',
           coordinate,
         }
@@ -397,6 +425,30 @@ export function NavigationShell() {
     requestCurrentLocation()
   }, [requestCurrentLocation])
 
+  useEffect(() => {
+    if (origin?.id !== CURRENT_LOCATION_PLACE_ID || !currentPosition) {
+      return
+    }
+
+    const nextLabel = currentOriginLabel
+
+    if (origin.name === nextLabel && origin.address === nextLabel) {
+      return
+    }
+
+    setOrigin({
+      ...origin,
+      name: nextLabel,
+      address: nextLabel,
+      coordinate: currentPosition,
+    })
+    setOriginKeyword((keyword) => (
+      keyword === origin.name || keyword === '현재 위치' || keyword === 'GPS 위치'
+        ? nextLabel
+        : keyword
+    ))
+  }, [currentOriginLabel, currentPosition, origin])
+
   const fillOriginWithCurrentLocation = useCallback(() => {
     if (!currentPosition) {
       requestCurrentLocation()
@@ -405,8 +457,8 @@ export function NavigationShell() {
 
     const currentPlace: Place = {
       id: CURRENT_LOCATION_PLACE_ID,
-      name: '현재 위치',
-      address: 'GPS 위치',
+      name: currentOriginLabel,
+      address: currentLocationLabel,
       coordinate: currentPosition,
     }
 
@@ -415,7 +467,7 @@ export function NavigationShell() {
     setActiveField(null)
     setHighlightedIndex(0)
     setRouteSearchOpen(true)
-  }, [currentPosition, requestCurrentLocation])
+  }, [currentLocationLabel, currentOriginLabel, currentPosition, requestCurrentLocation])
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -588,17 +640,33 @@ export function NavigationShell() {
         className="relative aspect-[16/10] w-[min(100vw,calc(100vh*1.6))] max-w-[1440px] overflow-hidden rounded-2xl border border-[var(--nav-border)] bg-[var(--nav-frame)] shadow-[0_8px_24px_rgba(15,23,42,0.22)] max-sm:h-[calc(100vh-2rem)] max-sm:w-[calc(100vw-2rem)] max-sm:aspect-auto"
       >
         <TmapPanel
+          cameraSettings={mapCameraSettings}
           currentPosition={currentPosition}
           route={activeRoute}
           origin={origin}
           destination={destination}
           simulationPosition={simulationPosition}
+          onCameraSettingsChange={updateMapCameraSettings}
           onSimulationFrameRendererReady={(renderFrame) => {
             simulationFrameRendererRef.current = renderFrame
           }}
           onRequestLocation={requestCurrentLocation}
         />
-        <AppIconDock motionTiming={motionTiming} />
+        <AppIconDock
+          motionTiming={motionTiming}
+          settingsOpen={settingsOpen}
+          onToggleSettings={() => setSettingsOpen((open) => !open)}
+        />
+        <AnimatePresence initial={false}>
+          {settingsOpen ? (
+            <SettingsPanel
+              cameraSettings={mapCameraSettings}
+              motionTiming={motionTiming}
+              onChangeCameraSettings={updateMapCameraSettings}
+              onClose={() => setSettingsOpen(false)}
+            />
+          ) : null}
+        </AnimatePresence>
 
         {!activeRoute ? (
           <>
@@ -689,8 +757,12 @@ export function NavigationShell() {
 
 function AppIconDock({
   motionTiming,
+  settingsOpen,
+  onToggleSettings,
 }: {
   motionTiming: MotionTiming
+  settingsOpen: boolean
+  onToggleSettings: () => void
 }) {
   return (
     <motion.div
@@ -706,12 +778,283 @@ function AppIconDock({
       />
       <button
         aria-label="설정"
+        aria-pressed={settingsOpen}
         className="pointer-events-auto relative grid size-8 place-items-center rounded-full text-[var(--nav-ink)] transition hover:bg-[var(--nav-panel)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)] active:bg-[var(--nav-selection)]"
+        onClick={onToggleSettings}
         type="button"
       >
         <GearSix className="size-5" weight="bold" />
       </button>
     </motion.div>
+  )
+}
+
+function SettingsPanel({
+  cameraSettings,
+  motionTiming,
+  onChangeCameraSettings,
+  onClose,
+}: {
+  cameraSettings: MapCameraSettings
+  motionTiming: MotionTiming
+  onChangeCameraSettings: (settings: Partial<MapCameraSettings>) => void
+  onClose: () => void
+}) {
+  const itemTransition = {
+    ...motionTiming,
+    duration: motionTiming.duration === 0 ? 0 : 0.18,
+  }
+  const itemVariants = {
+    hidden: {
+      opacity: 0,
+      y: motionTiming.duration === 0 ? 0 : 8,
+      scale: motionTiming.duration === 0 ? 1 : 0.985,
+      transition: itemTransition,
+    },
+    visible: {
+      opacity: 1,
+      y: 0,
+      scale: 1,
+      transition: itemTransition,
+    },
+  }
+  const updateZoom = (zoom: number) => {
+    onChangeCameraSettings({
+      zoom: clamp(zoom, MAP_SETTINGS_ZOOM_MIN, MAP_SETTINGS_ZOOM_MAX),
+    })
+  }
+  const updatePitch = (pitch: number) => {
+    onChangeCameraSettings({
+      pitch: clamp(pitch, MAP_SETTINGS_PITCH_MIN, MAP_SETTINGS_PITCH_MAX),
+    })
+  }
+  const updateMode = (mode: MapCameraSettings['mode']) => {
+    onChangeCameraSettings({ mode })
+  }
+
+  return (
+    <motion.section
+      aria-label="설정"
+      className="pointer-events-auto absolute right-15 top-5 z-40 w-[min(20rem,calc(100%-5.5rem))] rounded-xl bg-white/96 p-4 text-[var(--nav-ink)] shadow-[0_12px_30px_rgb(15_23_42/0.2)] backdrop-blur max-sm:right-13 max-sm:top-3 max-sm:w-[min(18rem,calc(100%-4.5rem))]"
+      exit={{ opacity: 0, x: 12, scale: motionTiming.duration === 0 ? 1 : 0.985 }}
+      initial={{ opacity: 0, x: 12, scale: motionTiming.duration === 0 ? 1 : 0.985 }}
+      animate={{ opacity: 1, x: 0, scale: 1 }}
+      role="dialog"
+      transition={motionTiming}
+    >
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--nav-panel)] text-[var(--nav-primary)]">
+            <SlidersHorizontal className="size-4.5" weight="bold" />
+          </span>
+          <h2 className="text-[15px] font-bold">설정</h2>
+        </div>
+        <button
+          aria-label="설정 닫기"
+          className="grid size-8 place-items-center rounded-full text-[var(--nav-muted)] transition hover:bg-[var(--nav-panel)] hover:text-[var(--nav-ink)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
+          onClick={onClose}
+          type="button"
+        >
+          <X className="size-4.5" weight="bold" />
+        </button>
+      </div>
+
+      <motion.div
+        animate="visible"
+        className="grid gap-4"
+        initial="hidden"
+        variants={{
+          hidden: {
+            transition: {
+              staggerChildren: motionTiming.duration === 0 ? 0 : 0.035,
+              staggerDirection: -1,
+            },
+          },
+          visible: {
+            transition: {
+              delayChildren: motionTiming.duration === 0 ? 0 : 0.04,
+              staggerChildren: motionTiming.duration === 0 ? 0 : 0.045,
+            },
+          },
+        }}
+      >
+        <motion.div className="rounded-lg bg-[var(--nav-panel)] p-1" variants={itemVariants}>
+          <div className="grid grid-cols-2 gap-1" role="group" aria-label="지도 모드">
+            {(['2d', '3d'] as const).map((mode) => {
+              const selected = cameraSettings.mode === mode
+              const label = mode === '2d' ? '2D 지도' : '3D 지도'
+
+              return (
+                <button
+                  aria-pressed={selected}
+                  className={[
+                    'h-9 rounded-md text-sm font-bold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]',
+                    selected
+                      ? 'bg-white text-[var(--nav-ink)] shadow-[0_2px_8px_rgb(15_23_42/0.08)]'
+                      : 'text-[var(--nav-muted)] hover:bg-white/65 hover:text-[var(--nav-ink)]',
+                  ].join(' ')}
+                  key={mode}
+                  onClick={() => updateMode(mode)}
+                  type="button"
+                >
+                  {label}
+                </button>
+              )
+            })}
+          </div>
+        </motion.div>
+        <motion.div variants={itemVariants}>
+          <SettingSlider
+            label="지도 줌"
+            max={MAP_SETTINGS_ZOOM_MAX}
+            min={MAP_SETTINGS_ZOOM_MIN}
+            step={MAP_SETTINGS_ZOOM_STEP}
+            value={cameraSettings.zoom}
+            valueLabel={cameraSettings.zoom.toFixed(1)}
+            onDecrease={() => updateZoom(cameraSettings.zoom - MAP_SETTINGS_ZOOM_STEP)}
+            onIncrease={() => updateZoom(cameraSettings.zoom + MAP_SETTINGS_ZOOM_STEP)}
+            onChange={updateZoom}
+          />
+        </motion.div>
+        {cameraSettings.mode === '3d' ? (
+          <motion.div variants={itemVariants}>
+            <SettingSlider
+              label="지도 피치"
+              max={MAP_SETTINGS_PITCH_MAX}
+              min={MAP_SETTINGS_PITCH_MIN}
+              resetLabel="0°"
+              step={MAP_SETTINGS_PITCH_STEP}
+              value={cameraSettings.pitch}
+              valueLabel={`${Math.round(cameraSettings.pitch)}°`}
+              onDecrease={() => updatePitch(cameraSettings.pitch - MAP_SETTINGS_PITCH_STEP)}
+              onIncrease={() => updatePitch(cameraSettings.pitch + MAP_SETTINGS_PITCH_STEP)}
+              onReset={() => updatePitch(0)}
+              onChange={updatePitch}
+            />
+          </motion.div>
+        ) : null}
+        <motion.div
+          className="flex items-center gap-3 rounded-lg bg-[var(--nav-panel)] px-3 py-3"
+          variants={itemVariants}
+        >
+          <UserCircle className="size-8 shrink-0 text-[var(--nav-primary)]" weight="fill" />
+          <div className="min-w-0">
+            <div className="text-sm font-bold text-[var(--nav-ink)]">안정현</div>
+            <div className="mt-0.5 truncate text-xs font-medium text-[var(--nav-muted)]">로그인됨</div>
+          </div>
+        </motion.div>
+      </motion.div>
+    </motion.section>
+  )
+}
+
+function SettingSlider({
+  label,
+  max,
+  min,
+  resetLabel,
+  step,
+  value,
+  valueLabel,
+  onChange,
+  onDecrease,
+  onIncrease,
+  onReset,
+}: {
+  label: string
+  max: number
+  min: number
+  resetLabel?: string
+  step: number
+  value: number
+  valueLabel: string
+  onChange: (value: number) => void
+  onDecrease: () => void
+  onIncrease: () => void
+  onReset?: () => void
+}) {
+  return (
+    <div className="rounded-lg border border-[var(--nav-border)] bg-white px-3 py-3">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <span className="text-sm font-bold">{label}</span>
+        <span className="rounded-full bg-[var(--nav-panel)] px-2 py-1 text-xs font-bold text-[var(--nav-muted)]">{valueLabel}</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <button
+          aria-label={`${label} 줄이기`}
+          className="grid size-8 shrink-0 place-items-center rounded-full text-[var(--nav-muted)] transition hover:bg-[var(--nav-panel)] hover:text-[var(--nav-ink)]"
+          onClick={onDecrease}
+          type="button"
+        >
+          <Minus className="size-4" weight="bold" />
+        </button>
+        <input
+          aria-label={label}
+          className="h-2 min-w-0 flex-1 accent-[var(--nav-primary)]"
+          max={max}
+          min={min}
+          onChange={(event) => onChange(Number(event.target.value))}
+          step={step}
+          type="range"
+          value={value}
+        />
+        <button
+          aria-label={`${label} 키우기`}
+          className="grid size-8 shrink-0 place-items-center rounded-full text-[var(--nav-muted)] transition hover:bg-[var(--nav-panel)] hover:text-[var(--nav-ink)]"
+          onClick={onIncrease}
+          type="button"
+        >
+          <Plus className="size-4" weight="bold" />
+        </button>
+        {onReset ? (
+          <button
+            className="h-8 shrink-0 rounded-full bg-[var(--nav-panel)] px-2 text-xs font-bold text-[var(--nav-muted)] transition hover:text-[var(--nav-ink)]"
+            onClick={onReset}
+            type="button"
+          >
+            {resetLabel}
+          </button>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value))
+}
+
+function getNextMapCameraSettings(
+  currentSettings: MapCameraSettings,
+  settings: Partial<MapCameraSettings>,
+): MapCameraSettings {
+  const mode = settings.mode ?? currentSettings.mode
+  const zoom = clamp(settings.zoom ?? currentSettings.zoom, MAP_SETTINGS_ZOOM_MIN, MAP_SETTINGS_ZOOM_MAX)
+
+  if (mode === '2d') {
+    return {
+      mode,
+      zoom,
+      pitch: 0,
+    }
+  }
+
+  return {
+    mode,
+    zoom,
+    pitch: clamp(
+      settings.pitch ?? (currentSettings.mode === '3d' ? currentSettings.pitch : MAP_SETTINGS_3D_DEFAULT_PITCH),
+      MAP_SETTINGS_PITCH_MIN,
+      MAP_SETTINGS_PITCH_MAX,
+    ),
+  }
+}
+
+function isSameMapCameraSettings(currentSettings: MapCameraSettings, nextSettings: MapCameraSettings) {
+  return (
+    currentSettings.mode === nextSettings.mode &&
+    currentSettings.zoom === nextSettings.zoom &&
+    currentSettings.pitch === nextSettings.pitch
   )
 }
 

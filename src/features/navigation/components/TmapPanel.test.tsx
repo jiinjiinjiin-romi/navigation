@@ -151,6 +151,105 @@ describe('TmapPanel', () => {
     })
   })
 
+  it('applies external camera settings to zoom and pitch', async () => {
+    render(
+      <TmapPanel
+        cameraSettings={{ mode: '3d', zoom: 17.6, pitch: 35 }}
+        currentPosition={{ lat: 37.5665, lng: 126.978 }}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(setZoom).toHaveBeenCalledWith(17.6)
+    })
+    expect(setPitch).toHaveBeenCalledWith(35)
+    expect(window.Tmapv3!.Marker).toHaveBeenCalledWith(
+      expect.objectContaining({
+        iconHTML: expect.stringContaining('--vehicle-marker-pitch:35deg'),
+      }),
+    )
+  })
+
+  it('animates pitch when switching between 2d and 3d map modes', async () => {
+    const animationFrames: FrameRequestCallback[] = []
+    vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({ matches: false }))
+    vi.stubGlobal('requestAnimationFrame', vi.fn((callback: FrameRequestCallback) => {
+      animationFrames.push(callback)
+      return animationFrames.length
+    }))
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+
+    const { rerender } = render(
+      <TmapPanel
+        cameraSettings={{ mode: '2d', zoom: 18.3, pitch: 0 }}
+        currentPosition={{ lat: 37.5665, lng: 126.978 }}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(setPitch).toHaveBeenCalledWith(0)
+    })
+    setPitch.mockClear()
+    markerSetOptions.mockClear()
+    getPitch.mockReturnValue(0)
+
+    rerender(
+      <TmapPanel
+        cameraSettings={{ mode: '3d', zoom: 18.3, pitch: 45 }}
+        currentPosition={{ lat: 37.5665, lng: 126.978 }}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(animationFrames.length).toBeGreaterThan(0)
+    })
+
+    act(() => {
+      animationFrames.shift()?.(0)
+    })
+    expect(setPitch).toHaveBeenLastCalledWith(0)
+
+    act(() => {
+      animationFrames.shift()?.(120)
+    })
+    const midPitch = setPitch.mock.calls[setPitch.mock.calls.length - 1]?.[0]
+    expect(midPitch).toBeGreaterThan(0)
+    expect(midPitch).toBeLessThan(45)
+
+    act(() => {
+      animationFrames.shift()?.(240)
+    })
+    expect(setPitch).toHaveBeenLastCalledWith(45)
+    expect(markerSetOptions).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        iconHTML: expect.stringContaining('--vehicle-marker-pitch:45deg'),
+      }),
+    )
+  })
+
+  it('keeps the 3d map pitch when compass resets orientation', async () => {
+    const matchMedia = vi.fn().mockReturnValue({ matches: true })
+    vi.stubGlobal('matchMedia', matchMedia)
+
+    render(
+      <TmapPanel
+        cameraSettings={{ mode: '3d', zoom: 18.3, pitch: 45 }}
+        currentPosition={{ lat: 37.5665, lng: 126.978 }}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '나침반 원위치' })).toBeInTheDocument()
+    })
+    setPitch.mockClear()
+
+    fireEvent.click(screen.getByRole('button', { name: '나침반 원위치' }))
+
+    expect(setBearing).toHaveBeenLastCalledWith(0)
+    expect(setPitch).toHaveBeenLastCalledWith(45)
+    vi.unstubAllGlobals()
+  })
+
   it('does not duplicate the current location with a standard origin marker', async () => {
     render(
       <TmapPanel
@@ -259,7 +358,7 @@ describe('TmapPanel', () => {
     expect(setCenter).not.toHaveBeenCalled()
   })
 
-  it('shows the compass in regular map mode', async () => {
+  it('shows the compass and current location controls in regular map mode', async () => {
     render(<TmapPanel />)
 
     await waitFor(() => {
@@ -267,8 +366,8 @@ describe('TmapPanel', () => {
     })
 
     expect(screen.getByRole('button', { name: '나침반 원위치' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '지도 확대' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '지도 축소' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '지도 확대' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '지도 축소' })).not.toBeInTheDocument()
   })
 
   it('resets the map to north-up top-down when the compass is pressed', async () => {
@@ -844,39 +943,6 @@ describe('TmapPanel', () => {
     )
   })
 
-  it('reduces route direction marker density after zooming out', async () => {
-    render(
-      <TmapPanel
-        route={{
-          coordinates: [
-            { lat: 37, lng: 126 },
-            { lat: 37, lng: 127 },
-          ],
-          summary: {
-            distanceMeters: 88000,
-            durationSeconds: 1200,
-          },
-        }}
-      />,
-    )
-
-    await waitFor(() => {
-      expect(getRouteDirectionMarkerCalls().length).toBeGreaterThan(0)
-    })
-    const zoomedInMarkerCount = getRouteDirectionMarkerCalls().length
-    expect(zoomedInMarkerCount).toBeLessThanOrEqual(10)
-
-    vi.mocked(window.Tmapv3!.Marker).mockClear()
-    getZoom.mockReturnValue(13)
-    fireEvent.click(screen.getByRole('button', { name: '지도 축소' }))
-
-    await waitFor(() => {
-      expect(getRouteDirectionMarkerCalls().length).toBeGreaterThan(0)
-    })
-    expect(getRouteDirectionMarkerCalls().length).toBeLessThan(zoomedInMarkerCount)
-    expect(getRouteDirectionMarkerCalls().length).toBeLessThanOrEqual(2)
-  })
-
   it('distributes route direction markers across the full remaining route', async () => {
     render(
       <TmapPanel
@@ -1216,76 +1282,6 @@ describe('TmapPanel', () => {
     expect(window.Tmapv3!.Polyline).toHaveBeenCalledTimes(4)
     expect(polylineSetPath).not.toHaveBeenCalled()
     expect(polylineSetMap).not.toHaveBeenCalledWith(null)
-  })
-
-  it('keeps user zoom changes while simulation continues', async () => {
-    getZoom.mockReturnValue(17)
-    const route = {
-      coordinates: [
-        { lat: 37, lng: 126 },
-        { lat: 37, lng: 127 },
-      ],
-      summary: {
-        distanceMeters: 1000,
-        durationSeconds: 120,
-      },
-    }
-    const { rerender } = render(
-      <TmapPanel
-        route={route}
-        simulationPosition={{ lat: 37, lng: 126 }}
-      />,
-    )
-
-    await waitFor(() => {
-      expect(setCenter).toHaveBeenCalledWith({ lat: 37, lng: 126 })
-    })
-
-    setZoom.mockClear()
-    fireEvent.click(screen.getByRole('button', { name: '지도 확대' }))
-
-    expect(setZoom).toHaveBeenCalledWith(18)
-
-    rerender(
-      <TmapPanel
-        route={route}
-        simulationPosition={{ lat: 37, lng: 126.2 }}
-      />,
-    )
-
-    await waitFor(() => {
-      expect(setZoom).toHaveBeenCalledWith(18)
-    })
-  })
-
-  it('applies zoom controls immediately while following simulation camera', async () => {
-    getZoom.mockReturnValue(17)
-    const route = {
-      coordinates: [
-        { lat: 37, lng: 126 },
-        { lat: 37, lng: 127 },
-      ],
-      summary: {
-        distanceMeters: 1000,
-        durationSeconds: 120,
-      },
-    }
-
-    render(
-      <TmapPanel
-        route={route}
-        simulationPosition={{ lat: 37, lng: 126 }}
-      />,
-    )
-
-    await waitFor(() => {
-      expect(setCenter).toHaveBeenCalledWith({ lat: 37, lng: 126 })
-    })
-
-    setZoom.mockClear()
-    fireEvent.click(screen.getByRole('button', { name: '지도 확대' }))
-
-    expect(setZoom).toHaveBeenCalledWith(18)
   })
 
   it('keeps wheel zoom changes while following simulation camera before the SDK reports the new zoom', async () => {

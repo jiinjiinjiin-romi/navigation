@@ -16,13 +16,17 @@ vi.mock('../api/tmapApi', () => ({
 vi.mock('./TmapPanel', () => ({
   TmapPanel: ({
     currentPosition,
+    cameraSettings,
     route,
     simulationPosition,
+    onCameraSettingsChange,
     onSimulationFrameRendererReady,
   }: {
+    cameraSettings?: { mode: '2d' | '3d'; zoom: number; pitch: number }
     currentPosition?: { lat: number; lng: number }
     route?: { coordinates: { lat: number; lng: number }[] }
     simulationPosition?: { lat: number; lng: number }
+    onCameraSettingsChange?: (settings: Partial<{ mode: '2d' | '3d'; zoom: number; pitch: number }>) => void
     onSimulationFrameRendererReady?: (renderFrame: ((position: { lat: number; lng: number }) => void) | undefined) => void
   }) => {
     useEffect(() => {
@@ -34,10 +38,18 @@ vi.mock('./TmapPanel', () => ({
 
     return (
       <div
+        data-camera-pitch={cameraSettings?.pitch}
+        data-camera-mode={cameraSettings?.mode}
+        data-camera-zoom={cameraSettings?.zoom}
         data-route-points={route?.coordinates.length ?? 0}
         data-simulation-lat={simulationPosition?.lat}
         data-testid="tmap-panel"
       >
+        <button
+          aria-label="테스트 지도 피치 변경"
+          onClick={() => onCameraSettingsChange?.({ pitch: 24 })}
+          type="button"
+        />
         {simulationPosition
           ? `sim:${simulationPosition.lat.toFixed(4)},${simulationPosition.lng.toFixed(4)}`
           : currentPosition
@@ -177,6 +189,47 @@ describe('NavigationShell', () => {
     expect(await screen.findByText('서울특별시 중구 세종대로 110')).toBeInTheDocument()
   })
 
+  it('opens a floating settings panel for map mode, zoom, pitch, and signed-in account state', async () => {
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '설정' }))
+
+    expect(await screen.findByRole('dialog', { name: '설정' })).toBeInTheDocument()
+    expect(screen.getByText('안정현')).toBeInTheDocument()
+    expect(screen.getByText('로그인됨')).toBeInTheDocument()
+    expect(screen.queryByText('내 계정으로 길안내 설정을 저장합니다')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '2D 지도' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: '3D 지도' })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByRole('slider', { name: '지도 줌' })).toHaveValue('18.3')
+    expect(screen.queryByRole('slider', { name: '지도 피치' })).not.toBeInTheDocument()
+    expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-camera-mode', '2d')
+    expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-camera-zoom', '18.3')
+    expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-camera-pitch', '0')
+
+    fireEvent.click(screen.getByRole('button', { name: '3D 지도' }))
+    expect(screen.getByRole('button', { name: '3D 지도' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('slider', { name: '지도 피치' })).toHaveValue('45')
+    expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-camera-mode', '3d')
+    expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-camera-pitch', '45')
+
+    fireEvent.change(screen.getByRole('slider', { name: '지도 줌' }), { target: { value: '17.6' } })
+    fireEvent.change(screen.getByRole('slider', { name: '지도 피치' }), { target: { value: '35' } })
+
+    expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-camera-zoom', '17.6')
+    expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-camera-pitch', '35')
+
+    fireEvent.click(screen.getByRole('button', { name: '2D 지도' }))
+    expect(screen.queryByRole('slider', { name: '지도 피치' })).not.toBeInTheDocument()
+    expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-camera-mode', '2d')
+    expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-camera-pitch', '0')
+  })
+
   it('requests location on entry and centers the map on the granted position', async () => {
     mockGeolocationSuccess(37.5512, 127.0738)
     const queryClient = new QueryClient()
@@ -227,7 +280,7 @@ describe('NavigationShell', () => {
     expect(screen.queryByText('현재 위치에서')).not.toBeInTheDocument()
     expect(screen.queryByText('출발지는 변경할 수 있습니다')).not.toBeInTheDocument()
     expect(screen.queryByText('선택됨')).not.toBeInTheDocument()
-    expect(screen.getByDisplayValue('현재 위치')).toBeInTheDocument()
+    expect(await screen.findByDisplayValue('서울특별시 중구 세종대로 110')).toBeInTheDocument()
     expect(screen.getByPlaceholderText('목적지')).toBeInTheDocument()
     expect(screen.queryByPlaceholderText('목적지 검색')).not.toBeInTheDocument()
     fireEvent.focus(screen.getByRole('combobox', { name: '목적지' }))
