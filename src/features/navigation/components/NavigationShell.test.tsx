@@ -13,6 +13,34 @@ vi.mock('../api/tmapApi', () => ({
   getCurrentAddress: vi.fn(),
 }))
 
+vi.mock('navi-orb', () => ({
+  VoiceOrb: ({
+    state,
+    energy,
+    size,
+    colorTheme,
+    reducedMotion,
+    className,
+  }: {
+    state: string
+    energy?: number
+    size?: number | string
+    colorTheme?: string
+    reducedMotion?: boolean
+    className?: string
+  }) => (
+    <div
+      className={className}
+      data-color-theme={colorTheme}
+      data-energy={energy}
+      data-reduced-motion={String(reducedMotion)}
+      data-size={size}
+      data-state={state}
+      data-testid="voice-orb"
+    />
+  ),
+}))
+
 vi.mock('./TmapPanel', () => ({
   TmapPanel: ({
     currentPosition,
@@ -190,7 +218,7 @@ describe('NavigationShell', () => {
     return screen.findByPlaceholderText('목적지 검색')
   }
 
-  it('centers a 16:10 navigation viewport on a black stage', () => {
+  it('centers a 16:10 navigation viewport on the AI mobility stage', () => {
     const queryClient = new QueryClient()
 
     render(
@@ -209,147 +237,19 @@ describe('NavigationShell', () => {
     expect(viewport).toHaveClass('w-[min(100vw,calc(100vh*1.6))]')
   })
 
-  it('renders option 1 as a focus HUD design', () => {
+  it('renders the Navi assistant orb with the navi-orb VoiceOrb contract', () => {
     const queryClient = new QueryClient()
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell assistantVariant="focus-hud" />
+        <NavigationShell />
       </QueryClientProvider>,
     )
 
-    const layer = screen.getByRole('dialog', { name: 'AI 안전 개입 디자인 1' })
-    expect(layer).toHaveClass('right-16')
-    expect(layer).toHaveClass('top-5')
-    expect(layer).toHaveTextContent('졸음 감지')
-    expect(layer).toHaveTextContent('휴식 권장')
-    expect(layer).toHaveTextContent('잠시 쉬어가면 좋겠습니다')
-    expect(layer).toHaveTextContent('전방 주시 유지')
-    expect(layer).not.toHaveTextContent('AI가 먼저 개입')
-    expect(layer).not.toHaveTextContent('졸음쉼터 안내 중')
-  })
-
-  it('renders option 2 as an action dock design', () => {
-    const queryClient = new QueryClient()
-
-    render(
-      <QueryClientProvider client={queryClient}>
-        <NavigationShell assistantVariant="action-dock" />
-      </QueryClientProvider>,
-    )
-
-    const layer = screen.getByRole('dialog', { name: 'AI 안전 개입 디자인 2' })
-    expect(layer).toHaveClass('right-16')
-    expect(layer).toHaveClass('bottom-32')
-    expect(layer).toHaveTextContent('졸음 감지')
-    expect(layer).toHaveTextContent('휴식 권장')
-  })
-
-  it('renders option 3 as a timeline sheet design', () => {
-    const queryClient = new QueryClient()
-
-    render(
-      <QueryClientProvider client={queryClient}>
-        <NavigationShell assistantVariant="timeline-sheet" />
-      </QueryClientProvider>,
-    )
-
-    const layer = screen.getByRole('dialog', { name: 'AI 안전 개입 디자인 3' })
-    expect(layer).toHaveClass('right-16')
-    expect(layer).toHaveClass('bottom-20')
-    expect(layer).toHaveTextContent('최근 대화')
-    expect(layer).toHaveTextContent('잠시 쉬어가면 좋겠습니다')
-  })
-
-  it('plays a scenario inside the current design instead of switching design routes', () => {
-    vi.useFakeTimers()
-    const queryClient = new QueryClient()
-
-    render(
-      <QueryClientProvider client={queryClient}>
-        <NavigationShell assistantVariant="action-dock" />
-      </QueryClientProvider>,
-    )
-
-    const scenarioBar = screen.getByRole('region', { name: 'AI 시나리오 재생' })
-    expect(scenarioBar).toHaveTextContent('졸음쉼터')
-    expect(scenarioBar).toHaveTextContent('음악 추천')
-    expect(scenarioBar).toHaveTextContent('시나리오 재생')
-
-    fireEvent.click(screen.getByRole('button', { name: '음악 추천 시나리오 선택' }))
-
-    const initialLayer = screen.getByRole('dialog', { name: 'AI 안전 개입 디자인 2' })
-    expect(initialLayer).toHaveTextContent('리듬 전환 제안')
-    expect(initialLayer).not.toHaveTextContent('추천 플레이리스트')
-
-    fireEvent.click(screen.getByRole('button', { name: '시나리오 재생' }))
-
-    act(() => {
-      vi.advanceTimersByTime(1400)
-    })
-
-    const layer = screen.getByRole('dialog', { name: 'AI 안전 개입 디자인 2' })
-    expect(layer).toHaveTextContent('음악 추천')
-    expect(layer).toHaveTextContent('Morning Drive')
-    expect(layer).toHaveTextContent('음악 재생')
-
-    act(() => {
-      vi.advanceTimersByTime(1400)
-    })
-
-    expect(screen.getByRole('dialog', { name: 'AI 안전 개입 디자인 2' })).toHaveTextContent('Morning Drive 재생 중')
-    vi.useRealTimers()
-  })
-
-  it('shows generated AI and user turns while a scenario advances', () => {
-    vi.useFakeTimers()
-    const queryClient = new QueryClient()
-
-    render(
-      <QueryClientProvider client={queryClient}>
-        <NavigationShell assistantVariant="action-dock" />
-      </QueryClientProvider>,
-    )
-
-    fireEvent.click(screen.getByRole('button', { name: '음악 추천 시나리오 선택' }))
-    expect(screen.getByRole('dialog', { name: 'AI 안전 개입 디자인 2' })).toHaveTextContent('말하는 중')
-
-    fireEvent.click(screen.getByRole('button', { name: '시나리오 재생' }))
-    act(() => {
-      vi.advanceTimersByTime(1400)
-    })
-
-    const layer = screen.getByRole('dialog', { name: 'AI 안전 개입 디자인 2' })
-    expect(layer).toHaveTextContent('듣는 중')
-    expect(layer).toHaveTextContent('밝은 음악 틀어줘')
-    expect(layer).toHaveTextContent('음악 추천')
-  })
-
-  it('does not duplicate the completion title in the timeline design', () => {
-    vi.useFakeTimers()
-    const queryClient = new QueryClient()
-
-    render(
-      <QueryClientProvider client={queryClient}>
-        <NavigationShell assistantVariant="timeline-sheet" />
-      </QueryClientProvider>,
-    )
-
-    fireEvent.click(screen.getByRole('button', { name: '문자 확인 시나리오 선택' }))
-    fireEvent.click(screen.getByRole('button', { name: '시나리오 재생' }))
-    act(() => {
-      vi.advanceTimersByTime(2800)
-    })
-
-    const layer = screen.getByRole('dialog', { name: 'AI 안전 개입 디자인 3' })
-    expect(layer).not.toHaveTextContent('문자 확인 대기')
-    expect(layer.textContent?.match(/엄마에게 이 내용으로 보낼까요/g)).toHaveLength(1)
-    expect(layer).toHaveTextContent('전송 확인 필요')
-    expect(layer).toHaveTextContent('엄마에게 이 내용으로 보낼까요?')
-    expect(layer).not.toHaveTextContent('음성으로 계속 조작')
-    expect(layer).toHaveTextContent('AI')
-    expect(layer).toHaveTextContent('사용자')
-    vi.useRealTimers()
+    expect(screen.getByRole('button', { name: 'Navi 호출' })).toBeInTheDocument()
+    expect(screen.getByTestId('voice-orb')).toHaveAttribute('data-state', 'idle')
+    expect(screen.getByTestId('voice-orb')).toHaveAttribute('data-energy', '0')
+    expect(screen.getByTestId('voice-orb')).toHaveAttribute('data-color-theme', 'daylight')
   })
 
   it('starts on a current-location map without the route setup panel', async () => {
@@ -387,31 +287,32 @@ describe('NavigationShell', () => {
     fireEvent.click(screen.getByRole('button', { name: '설정' }))
 
     expect(await screen.findByRole('dialog', { name: '설정' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Navi 호출' })).not.toBeInTheDocument()
     expect(screen.getByText('안정현')).toBeInTheDocument()
     expect(screen.getByText('로그인됨')).toBeInTheDocument()
     expect(screen.queryByText('내 계정으로 길안내 설정을 저장합니다')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: '2D 지도' })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('button', { name: '3D 지도' })).toHaveAttribute('aria-pressed', 'false')
-    expect(screen.getByRole('slider', { name: '지도 줌' })).toHaveValue('18.3')
-    expect(screen.queryByRole('slider', { name: '지도 피치' })).not.toBeInTheDocument()
+    expect(screen.getByRole('slider', { name: '확대' })).toHaveValue('18.3')
+    expect(screen.queryByRole('slider', { name: '기울기' })).not.toBeInTheDocument()
     expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-camera-mode', '2d')
     expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-camera-zoom', '18.3')
     expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-camera-pitch', '0')
 
     fireEvent.click(screen.getByRole('button', { name: '3D 지도' }))
     expect(screen.getByRole('button', { name: '3D 지도' })).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByRole('slider', { name: '지도 피치' })).toHaveValue('45')
+    expect(screen.getByRole('slider', { name: '기울기' })).toHaveValue('45')
     expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-camera-mode', '3d')
     expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-camera-pitch', '45')
 
-    fireEvent.change(screen.getByRole('slider', { name: '지도 줌' }), { target: { value: '17.6' } })
-    fireEvent.change(screen.getByRole('slider', { name: '지도 피치' }), { target: { value: '35' } })
+    fireEvent.change(screen.getByRole('slider', { name: '확대' }), { target: { value: '17.6' } })
+    fireEvent.change(screen.getByRole('slider', { name: '기울기' }), { target: { value: '35' } })
 
     expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-camera-zoom', '17.6')
     expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-camera-pitch', '35')
 
     fireEvent.click(screen.getByRole('button', { name: '2D 지도' }))
-    expect(screen.queryByRole('slider', { name: '지도 피치' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('slider', { name: '기울기' })).not.toBeInTheDocument()
     expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-camera-mode', '2d')
     expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-camera-pitch', '0')
   })

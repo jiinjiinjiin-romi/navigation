@@ -1,0 +1,20 @@
+{
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "declarationMap": false,
+    "emitDeclarationOnly": true,
+    "outDir": "dist",
+    "rootDir": "src/features/orb-assistant"
+  },
+  "include": [
+    "src/features/orb-assistant/**/*.ts",
+    "src/features/orb-assistant/**/*.tsx"
+  ],
+  "exclude": [
+    "src/features/orb-assistant/**/*.test.ts",
+    "src/features/orb-assistant/**/*.test.tsx",
+    "src/features/orb-assistant/OrbAssistant.tsx"
+  ]
+}
