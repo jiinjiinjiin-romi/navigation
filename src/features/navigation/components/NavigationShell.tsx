@@ -2,21 +2,30 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import {
   ArrowBendUpRight,
   ArrowUp,
+  Article,
   Buildings,
   CaretLeft,
   CloudSun,
   Clock,
+  CarSimple,
+  ClipboardText,
   GearSix,
   HouseLine,
   MagnifyingGlass,
   MapPin,
   Minus,
+  MusicNotes,
   Play,
+  Pause,
   Plus,
+  Phone,
+  PlugsConnected,
   RoadHorizon,
+  SpeakerHigh,
   Stop,
   Timer,
   UserCircle,
+  WifiHigh,
   Warning,
   X,
 } from '@phosphor-icons/react'
@@ -47,6 +56,7 @@ import { TmapPanel, type MapCameraSettings } from './TmapPanel'
 
 type SearchFieldId = 'origin' | 'destination'
 type LocationStatus = 'checking' | 'granted' | 'denied' | 'unsupported'
+type SidePanelId = 'settings' | 'report' | 'connect'
 type MotionTiming = {
   duration: number
   ease?: [number, number, number, number]
@@ -60,6 +70,10 @@ const ADDRESS_COORDINATE_PRECISION = 5
 const WEATHER_COORDINATE_PRECISION = 3
 const ROUTE_SEARCH_SUMMARY_FIELDS_HEIGHT = 140
 const ROUTE_SEARCH_EDITOR_FIELDS_HEIGHT = 380
+const SIDE_PANEL_WIDTH = 320
+const MUSIC_POPOVER_WIDTH = 320
+const MUSIC_MINI_PLAYER_IDLE_BOTTOM = 136
+const MUSIC_MINI_PLAYER_GUIDANCE_BOTTOM = 72
 const DEFAULT_MAP_CAMERA_SETTINGS: MapCameraSettings = {
   mode: '2d',
   zoom: 18.3,
@@ -99,6 +113,26 @@ const SAVED_PLACES: Place[] = [
     coordinate: { lat: 37.4979, lng: 127.0276 },
   },
 ]
+const MUSIC_LIBRARY = [
+  {
+    id: 'drive-neon',
+    title: 'Drive Neon',
+    artist: 'Navi Session',
+    mood: '도심 주행',
+  },
+  {
+    id: 'soft-focus',
+    title: 'Soft Focus',
+    artist: 'Evening Route',
+    mood: '집중 모드',
+  },
+  {
+    id: 'night-line',
+    title: 'Night Line',
+    artist: 'Low Tide',
+    mood: '야간 드라이브',
+  },
+] as const
 const DEBUG_DRIVING_ASSIST_SEQUENCE = ([
   {
     alert: {
@@ -226,7 +260,12 @@ export function NavigationShell() {
   const [highlightedIndex, setHighlightedIndex] = useState(0)
   const [routeSearchOpen, setRouteSearchOpen] = useState(false)
   const [selectedRouteOptionId, setSelectedRouteOptionId] = useState<string>()
-  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [activeSidePanel, setActiveSidePanel] = useState<SidePanelId | null>(null)
+  const [musicModalOpen, setMusicModalOpen] = useState(false)
+  const [musicPlaying, setMusicPlaying] = useState(false)
+  const [musicTrackId, setMusicTrackId] = useState<(typeof MUSIC_LIBRARY)[number]['id']>(MUSIC_LIBRARY[0].id)
+  const [musicSearchKeyword, setMusicSearchKeyword] = useState('')
+  const [showLocationFallbackToast, setShowLocationFallbackToast] = useState(false)
   const [mapCameraSettings, setMapCameraSettings] = useState<MapCameraSettings>(DEFAULT_MAP_CAMERA_SETTINGS)
   const updateMapCameraSettings = useCallback((settings: Partial<MapCameraSettings>) => {
     setMapCameraSettings((currentSettings) => {
@@ -469,6 +508,30 @@ export function NavigationShell() {
     )
   }, [])
 
+  useEffect(() => {
+    if (locationStatus === 'granted') {
+      setShowLocationFallbackToast(false)
+      return
+    }
+
+    setShowLocationFallbackToast(true)
+    const timer = window.setTimeout(() => {
+      setShowLocationFallbackToast(false)
+    }, 5_000)
+
+    return () => window.clearTimeout(timer)
+  }, [locationStatus])
+
+  const openSidePanel = useCallback((panel: SidePanelId) => {
+    setMusicModalOpen(false)
+    setActiveSidePanel((current) => (current === panel ? null : panel))
+  }, [])
+
+  const toggleMusicModal = useCallback(() => {
+    setActiveSidePanel(null)
+    setMusicModalOpen((open) => !open)
+  }, [])
+
   const clearPendingRouteSearchEditor = useCallback(() => {
     if (routeSearchEditorTimerRef.current !== undefined) {
       window.clearTimeout(routeSearchEditorTimerRef.current)
@@ -563,7 +626,8 @@ export function NavigationShell() {
       return
     }
 
-    setSettingsOpen(false)
+    setActiveSidePanel(null)
+    setMusicModalOpen(false)
     setRouteSearchOpen(false)
     setActiveField(null)
     setHighlightedIndex(0)
@@ -756,153 +820,214 @@ export function NavigationShell() {
         data-testid="navigation-viewport"
         className={navigationViewportClassName}
       >
-        <TmapPanel
-          cameraSettings={mapCameraSettings}
-          currentPosition={currentPosition}
-          route={activeRoute}
-          routeOptions={routeOptions}
-          origin={origin}
-          destination={destination}
-          simulationPosition={simulationPosition}
-          onCameraSettingsChange={updateMapCameraSettings}
-          onSelectRouteOption={selectRouteOption}
-          onSimulationFrameRendererReady={(renderFrame) => {
-            simulationFrameRendererRef.current = renderFrame
-          }}
-          onRequestLocation={requestCurrentLocation}
-        />
-        <AppIconDock
-          motionTiming={motionTiming}
-          settingsDisabled={routeSelectionMode}
-          settingsOpen={settingsOpen}
-          onToggleSettings={() => setSettingsOpen((open) => !open)}
-        />
-        <NaviOrbControl
-          hidden={settingsOpen}
-          motionTiming={motionTiming}
-          reducedMotion={Boolean(shouldReduceMotion)}
-        />
-        <AnimatePresence initial={false} mode="wait">
-          {settingsOpen ? (
-            <SettingsPanel
+        <div
+          data-testid="navigation-content-region"
+          className={[
+            'relative h-full min-w-0 overflow-hidden',
+            'w-full',
+          ].join(' ')}
+        >
+            <TmapPanel
               cameraSettings={mapCameraSettings}
+              currentPosition={currentPosition}
+              route={activeRoute}
+              routeOptions={routeOptions}
+              origin={origin}
+              destination={destination}
+              simulationPosition={simulationPosition}
+              onCameraSettingsChange={updateMapCameraSettings}
+              onSelectRouteOption={selectRouteOption}
+              onSimulationFrameRendererReady={(renderFrame) => {
+                simulationFrameRendererRef.current = renderFrame
+              }}
+              onRequestLocation={requestCurrentLocation}
+            />
+            <NaviOrbControl
+              hidden={Boolean(activeSidePanel || musicModalOpen)}
               motionTiming={motionTiming}
+              reducedMotion={Boolean(shouldReduceMotion)}
+            />
+            {!activeRoute ? (
+              <>
+                {!routeSelectionMode ? (
+                  <IdleMapControls
+                    motionTiming={motionTiming}
+                    searchOpen={routeSearchOpen}
+                    showFallbackToast={showLocationFallbackToast}
+                    onOpenSearch={() => openRouteSearchEditor('destination')}
+                    onOpenSettings={() => openSidePanel('settings')}
+                  />
+                ) : (
+                  <RouteSelectionSummary
+                    destinationLabel={destination?.name || destinationKeyword || '목적지'}
+                    error={routeOptionsQuery.isError}
+                    loading={routeOptionsQuery.isFetching && !routeOptions?.length}
+                    motionTiming={motionTiming}
+                    optionCount={routeOptions?.length ?? 0}
+                    originLabel={origin?.name || originKeyword || currentOriginLabel}
+                    onEditRoute={() => {
+                      openRouteSearchEditor('destination')
+                    }}
+                  />
+                )}
+                <AnimatePresence initial={false}>
+                  {routeSearchOpen ? (
+                    <RouteSearchSheet
+                      activeField={activeField}
+                      activeIndex={highlightedIndex}
+                      activeLabel={activeLabel}
+                      destinationKeyword={destinationKeyword}
+                      motionTiming={motionTiming}
+                      originKeyword={originKeyword}
+                      places={activePlaces}
+                      savedPlaces={SAVED_PLACES}
+                      showSuggestions={showSuggestions}
+                      onChangeOrigin={(value) => {
+                        setOriginKeyword(value)
+                        if (!routeSelectionModeRef.current) {
+                          setOrigin(undefined)
+                        }
+                        setActiveField('origin')
+                        setHighlightedIndex(0)
+                      }}
+                      onChangeDestination={(value) => {
+                        setDestinationKeyword(value)
+                        if (!routeSelectionModeRef.current) {
+                          setDestination(undefined)
+                        }
+                        setActiveField('destination')
+                        setHighlightedIndex(0)
+                      }}
+                      onClose={() => {
+                        clearPendingRouteSearchEditor()
+                        if (routeSelectionMode) {
+                          setDestination(undefined)
+                          setDestinationKeyword('')
+                          setSelectedRouteOptionId(undefined)
+                          guidanceDistanceDisplayRef.current.clear()
+                        }
+                        setRouteSearchOpen(false)
+                        setActiveField(null)
+                      }}
+                      onBackToSummary={() => {
+                        clearPendingRouteSearchEditor()
+                        setActiveField(null)
+                        setHighlightedIndex(0)
+                      }}
+                      onFocusOrigin={() => {
+                        clearPendingRouteSearchEditor()
+                        setActiveField('origin')
+                      }}
+                      onFocusDestination={() => {
+                        clearPendingRouteSearchEditor()
+                        setActiveField('destination')
+                      }}
+                      onKeyDown={(field, event) => handleSearchKeyDown(field, event)}
+                      onSelectPlace={selectPlace}
+                      onSelectSavedPlace={selectSavedPlace}
+                      onFillOriginWithCurrentLocation={fillOriginWithCurrentLocation}
+                    />
+                  ) : null}
+                </AnimatePresence>
+                {debugDrivingAssist ?? drivingAssist ? (
+                  <DrivingAssistOverlay
+                    assist={(debugDrivingAssist ?? drivingAssist)!}
+                    motionTiming={motionTiming}
+                  />
+                ) : null}
+              </>
+            ) : (
+              <DrivingHud
+                assist={debugDrivingAssist ?? drivingAssist}
+                guidance={maneuverGuidance}
+                motionTiming={motionTiming}
+                simulationRunning={simulationRunning}
+                onToggleSimulation={simulationRunning ? stopSimulation : startSimulation}
+                onEndGuidance={endGuidance}
+              />
+            )}
+
+            <BottomStatusBar
+              arrivalLabel={arrivalLabel}
+              currentLocationLabel={currentLocationLabel}
+              currentTimeLabel={currentTimeLabel}
+              destinationLabel={destinationStatusLabel}
+              distanceLabel={drivingDistance}
+              durationLabel={`${routeMinutes}분`}
+              hasRoute={Boolean(activeRoute)}
+              motionTiming={motionTiming}
+              weatherLabel={weatherLabel}
+            />
+            <MiniPlayer
+              activeRoute={Boolean(activeRoute)}
+              motionTiming={motionTiming}
+              musicPlaying={musicPlaying}
+              selectedTrack={MUSIC_LIBRARY.find((track) => track.id === musicTrackId) ?? MUSIC_LIBRARY[0]}
+              onClose={() => setMusicPlaying(false)}
+              onTogglePlay={() => setMusicPlaying((playing) => !playing)}
+            />
+
+            <motion.div
+              data-testid="navigation-overlays"
+              className="pointer-events-none absolute inset-0 z-30"
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={motionTiming}
+            >
+              <AppIconDock
+                activeSidePanel={activeSidePanel}
+                className={[
+                  'absolute top-0 z-40 transition-[right]',
+                  motionTiming.duration === 0
+                    ? 'duration-0'
+                    : 'duration-[340ms] ease-[cubic-bezier(0.34,0,0.2,1)]',
+                  activeSidePanel
+                    ? 'right-[320px] max-sm:right-[min(20rem,calc(100vw-4rem))]'
+                    : 'right-0',
+                ].join(' ')}
+                motionTiming={motionTiming}
+                onOpenSettings={() => openSidePanel('settings')}
+                onOpenReport={() => openSidePanel('report')}
+                onOpenConnect={() => openSidePanel('connect')}
+                onToggleMusic={toggleMusicModal}
+                settingsDisabled={routeSelectionMode}
+                musicModalOpen={musicModalOpen}
+              />
+
+              <AnimatePresence initial={false} mode="wait">
+                {musicModalOpen ? (
+                  <MusicPopover
+                    motionTiming={motionTiming}
+                    musicSearchKeyword={musicSearchKeyword}
+                    musicPlaying={musicPlaying}
+                    selectedTrack={MUSIC_LIBRARY.find((track) => track.id === musicTrackId) ?? MUSIC_LIBRARY[0]}
+                    onClose={() => setMusicModalOpen(false)}
+                    onPickTrack={(trackId) => setMusicTrackId(trackId)}
+                    onSearchKeywordChange={setMusicSearchKeyword}
+                    onStartPlayback={() => {
+                      setMusicPlaying(true)
+                      setMusicModalOpen(false)
+                    }}
+                  />
+                ) : null}
+              </AnimatePresence>
+            </motion.div>
+        </div>
+
+        <AnimatePresence initial={false} mode="wait">
+          {activeSidePanel ? (
+            <SideDrawerPanel
+              cameraSettings={mapCameraSettings}
+              currentLocationLabel={currentLocationLabel}
+              locationStatus={locationStatus}
+              motionTiming={motionTiming}
+              panel={activeSidePanel}
               onChangeCameraSettings={updateMapCameraSettings}
-              onClose={() => setSettingsOpen(false)}
+              onClose={() => setActiveSidePanel(null)}
+              onRequestCurrentLocation={requestCurrentLocation}
             />
           ) : null}
         </AnimatePresence>
-        {!activeRoute ? (
-          <>
-            {!routeSelectionMode ? (
-              <IdleMapControls
-                locationStatus={locationStatus}
-                motionTiming={motionTiming}
-                searchOpen={routeSearchOpen}
-                onOpenSearch={() => openRouteSearchEditor('destination')}
-                onRequestLocation={requestCurrentLocation}
-              />
-            ) : (
-              <RouteSelectionSummary
-                destinationLabel={destination?.name || destinationKeyword || '목적지'}
-                error={routeOptionsQuery.isError}
-                loading={routeOptionsQuery.isFetching && !routeOptions?.length}
-                motionTiming={motionTiming}
-                optionCount={routeOptions?.length ?? 0}
-                originLabel={origin?.name || originKeyword || currentOriginLabel}
-                onEditRoute={() => {
-                  openRouteSearchEditor('destination')
-                }}
-              />
-            )}
-            <AnimatePresence initial={false}>
-              {routeSearchOpen ? (
-                <RouteSearchSheet
-                  activeField={activeField}
-                  activeIndex={highlightedIndex}
-                  activeLabel={activeLabel}
-                  destinationKeyword={destinationKeyword}
-                  motionTiming={motionTiming}
-                  originKeyword={originKeyword}
-                  places={activePlaces}
-                  savedPlaces={SAVED_PLACES}
-                  showSuggestions={showSuggestions}
-                  onChangeOrigin={(value) => {
-                    setOriginKeyword(value)
-                    if (!routeSelectionModeRef.current) {
-                      setOrigin(undefined)
-                    }
-                    setActiveField('origin')
-                    setHighlightedIndex(0)
-                  }}
-                  onChangeDestination={(value) => {
-                    setDestinationKeyword(value)
-                    if (!routeSelectionModeRef.current) {
-                      setDestination(undefined)
-                    }
-                    setActiveField('destination')
-                    setHighlightedIndex(0)
-                  }}
-                  onClose={() => {
-                    clearPendingRouteSearchEditor()
-                    if (routeSelectionMode) {
-                      setDestination(undefined)
-                      setDestinationKeyword('')
-                      setSelectedRouteOptionId(undefined)
-                      guidanceDistanceDisplayRef.current.clear()
-                    }
-                    setRouteSearchOpen(false)
-                    setActiveField(null)
-                  }}
-                  onBackToSummary={() => {
-                    clearPendingRouteSearchEditor()
-                    setActiveField(null)
-                    setHighlightedIndex(0)
-                  }}
-                  onFocusOrigin={() => {
-                    clearPendingRouteSearchEditor()
-                    setActiveField('origin')
-                  }}
-                  onFocusDestination={() => {
-                    clearPendingRouteSearchEditor()
-                    setActiveField('destination')
-                  }}
-                  onKeyDown={(field, event) => handleSearchKeyDown(field, event)}
-                  onSelectPlace={selectPlace}
-                  onSelectSavedPlace={selectSavedPlace}
-                  onFillOriginWithCurrentLocation={fillOriginWithCurrentLocation}
-                />
-              ) : null}
-            </AnimatePresence>
-            {debugDrivingAssist ?? drivingAssist ? (
-              <DrivingAssistOverlay
-                assist={(debugDrivingAssist ?? drivingAssist)!}
-                motionTiming={motionTiming}
-              />
-            ) : null}
-          </>
-        ) : (
-          <DrivingHud
-            assist={debugDrivingAssist ?? drivingAssist}
-            guidance={maneuverGuidance}
-            motionTiming={motionTiming}
-            simulationRunning={simulationRunning}
-            onToggleSimulation={simulationRunning ? stopSimulation : startSimulation}
-            onEndGuidance={endGuidance}
-          />
-        )}
-
-        <BottomStatusBar
-          arrivalLabel={arrivalLabel}
-          currentLocationLabel={currentLocationLabel}
-          currentTimeLabel={currentTimeLabel}
-          destinationLabel={destinationStatusLabel}
-          distanceLabel={drivingDistance}
-          durationLabel={`${routeMinutes}분`}
-          hasRoute={Boolean(activeRoute)}
-          motionTiming={motionTiming}
-          weatherLabel={weatherLabel}
-        />
       </section>
     </main>
   )
@@ -950,52 +1075,110 @@ function NaviOrbControl({
 }
 
 function AppIconDock({
+  activeSidePanel,
+  className,
   motionTiming,
+  musicModalOpen,
   settingsDisabled,
-  settingsOpen,
-  onToggleSettings,
+  onOpenSettings,
+  onOpenReport,
+  onOpenConnect,
+  onToggleMusic,
 }: {
+  activeSidePanel: SidePanelId | null
+  className?: string
   motionTiming: MotionTiming
+  musicModalOpen: boolean
   settingsDisabled: boolean
-  settingsOpen: boolean
-  onToggleSettings: () => void
+  onOpenSettings: () => void
+  onOpenReport: () => void
+  onOpenConnect: () => void
+  onToggleMusic: () => void
 }) {
+  const railButtonClassName = (active: boolean, disabled = false) => [
+    'grid size-11 place-items-center rounded-xl text-[var(--nav-ink)] transition',
+    active
+      ? 'bg-[var(--nav-primary-soft)] text-[var(--nav-primary)] shadow-[inset_0_0_0_1px_rgb(23_70_162/0.10)]'
+      : 'hover:bg-[var(--nav-panel)] hover:text-[var(--nav-primary)]',
+    disabled ? 'cursor-not-allowed opacity-40 hover:bg-transparent hover:text-[var(--nav-ink)]' : '',
+  ].join(' ')
+
   return (
     <motion.div
-      aria-label="앱 바로가기"
-      className="pointer-events-none absolute inset-y-0 right-0 z-30 flex w-11 flex-col items-center pt-5 max-sm:pt-3"
-      initial={{ opacity: 0, y: -8, scale: 0.98 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
+      aria-label="오른쪽 도구 모음"
+      className={['pointer-events-none flex flex-none items-start', className].filter(Boolean).join(' ')}
+      initial={{ opacity: 0, y: -6 }}
+      animate={{ opacity: 1, y: 0 }}
       transition={motionTiming}
     >
-      <span
-        aria-hidden="true"
-        className="absolute inset-y-0 right-0 w-11 bg-white/76 shadow-[-4px_0_14px_rgb(15_23_42/0.08)] backdrop-blur-xl"
-      />
-      <button
-        aria-label="설정"
-        aria-pressed={settingsOpen}
-        className="pointer-events-auto relative grid size-8 place-items-center rounded-full text-[var(--nav-ink)] transition hover:bg-[var(--nav-panel)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)] active:bg-[var(--nav-selection)] disabled:pointer-events-none disabled:opacity-40"
-        disabled={settingsDisabled}
-        onClick={onToggleSettings}
-        type="button"
+      <div
+        data-testid="right-rail-dock"
+        className="pointer-events-auto inline-flex flex-col gap-1 rounded-bl-[1.15rem] rounded-r-none rounded-tl-none border-b border-white/70 bg-white p-1.5"
       >
-        <GearSix className="size-5" weight="bold" />
-      </button>
+        <button
+          aria-controls="settings-drawer"
+          aria-expanded={activeSidePanel === 'settings'}
+          aria-label="설정"
+          className={railButtonClassName(activeSidePanel === 'settings')}
+          disabled={settingsDisabled}
+          onClick={onOpenSettings}
+          type="button"
+        >
+          <GearSix className="size-5" weight="bold" />
+        </button>
+        <button
+          aria-controls="report-drawer"
+          aria-expanded={activeSidePanel === 'report'}
+          aria-label="보고서"
+          className={railButtonClassName(activeSidePanel === 'report')}
+          onClick={onOpenReport}
+          type="button"
+        >
+          <ClipboardText className="size-5" weight="bold" />
+        </button>
+        <button
+          aria-controls="connect-drawer"
+          aria-expanded={activeSidePanel === 'connect'}
+          aria-label="연동 상태"
+          className={railButtonClassName(activeSidePanel === 'connect')}
+          onClick={onOpenConnect}
+          type="button"
+        >
+          <PlugsConnected className="size-5" weight="bold" />
+        </button>
+        <button
+          aria-controls="music-popover"
+          aria-expanded={musicModalOpen}
+          aria-label="음악"
+          className={railButtonClassName(musicModalOpen)}
+          onClick={onToggleMusic}
+          type="button"
+        >
+          <MusicNotes className="size-5" weight="bold" />
+        </button>
+      </div>
     </motion.div>
   )
 }
 
-function SettingsPanel({
+function SideDrawerPanel({
   cameraSettings,
+  currentLocationLabel,
+  locationStatus,
   motionTiming,
+  panel,
   onChangeCameraSettings,
   onClose,
+  onRequestCurrentLocation,
 }: {
   cameraSettings: MapCameraSettings
+  currentLocationLabel: string
+  locationStatus: LocationStatus
   motionTiming: MotionTiming
+  panel: SidePanelId
   onChangeCameraSettings: (settings: Partial<MapCameraSettings>) => void
   onClose: () => void
+  onRequestCurrentLocation: () => void
 }) {
   const itemTransition = {
     ...motionTiming,
@@ -1015,6 +1198,113 @@ function SettingsPanel({
       transition: itemTransition,
     },
   }
+  const drawerTransition = {
+    ease: motionTiming.duration === 0 ? undefined : [0.34, 0, 0.2, 1] as [number, number, number, number],
+    duration: motionTiming.duration === 0 ? 0 : 0.34,
+  }
+  const drawerOffset = motionTiming.duration === 0 ? 0 : SIDE_PANEL_WIDTH
+  const drawerMeta = {
+    settings: {
+      label: '설정',
+      icon: GearSix,
+    },
+    report: {
+      label: '보고서',
+      icon: Article,
+    },
+    connect: {
+      label: '연동 상태',
+      icon: PlugsConnected,
+    },
+  }[panel]
+  const content = panel === 'settings' ? (
+    <SettingsDrawerContent
+      cameraSettings={cameraSettings}
+      currentLocationLabel={currentLocationLabel}
+      itemVariants={itemVariants}
+      locationStatus={locationStatus}
+      onChangeCameraSettings={onChangeCameraSettings}
+      onRequestCurrentLocation={onRequestCurrentLocation}
+    />
+  ) : panel === 'report' ? (
+    <ReportDrawerContent itemVariants={itemVariants} />
+  ) : (
+    <ConnectDrawerContent itemVariants={itemVariants} />
+  )
+
+  return (
+    <motion.aside
+      aria-label={drawerMeta.label}
+      className="pointer-events-auto absolute bottom-0 right-0 top-0 z-20 w-[320px] overflow-hidden bg-white text-[var(--nav-ink)] shadow-[0_14px_36px_rgb(15_23_42/0.12)] max-sm:w-[min(20rem,calc(100vw-4rem))]"
+      id={`${panel}-drawer`}
+      data-testid={`${panel}-drawer`}
+      exit={{ opacity: 1, x: drawerOffset }}
+      initial={{ opacity: 1, x: drawerOffset }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={drawerTransition}
+      role="dialog"
+    >
+      <div className="flex h-full max-h-full w-full min-w-0 flex-col">
+        <div className="flex items-center justify-between gap-3 pb-1 px-4 pt-3.5">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--nav-panel)] text-[var(--nav-primary)]">
+              <drawerMeta.icon className="size-4" weight="bold" />
+            </span>
+            <h2 className="truncate text-[15px] font-bold tracking-normal">{drawerMeta.label}</h2>
+          </div>
+          <button
+            aria-label={`${drawerMeta.label} 닫기`}
+            className="grid size-10 place-items-center rounded-full text-[var(--nav-muted)] transition hover:bg-[var(--nav-panel)] hover:text-[var(--nav-ink)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
+            onClick={onClose}
+            type="button"
+          >
+            <X className="size-4" weight="bold" />
+          </button>
+        </div>
+        <motion.div
+          animate="visible"
+          className="grid gap-3 overflow-auto px-4 py-4"
+          initial="hidden"
+          variants={{
+            hidden: {
+              transition: {
+                staggerChildren: motionTiming.duration === 0 ? 0 : 0.035,
+                staggerDirection: -1,
+              },
+            },
+            visible: {
+              transition: {
+                delayChildren: motionTiming.duration === 0 ? 0 : 0.04,
+                staggerChildren: motionTiming.duration === 0 ? 0 : 0.045,
+              },
+            },
+          }}
+        >
+          {content}
+        </motion.div>
+      </div>
+    </motion.aside>
+  )
+}
+
+function SettingsDrawerContent({
+  cameraSettings,
+  currentLocationLabel,
+  itemVariants,
+  locationStatus,
+  onChangeCameraSettings,
+  onRequestCurrentLocation,
+}: {
+  cameraSettings: MapCameraSettings
+  currentLocationLabel: string
+  itemVariants: {
+    hidden: { opacity: number; y: number; scale: number; transition: MotionTiming }
+    visible: { opacity: number; y: number; scale: number; transition: MotionTiming }
+  }
+  locationStatus: LocationStatus
+  onChangeCameraSettings: (settings: Partial<MapCameraSettings>) => void
+  onRequestCurrentLocation: () => void
+}) {
   const updateZoom = (zoom: number) => {
     onChangeCameraSettings({
       zoom: clamp(zoom, MAP_SETTINGS_ZOOM_MIN, MAP_SETTINGS_ZOOM_MAX),
@@ -1030,25 +1320,285 @@ function SettingsPanel({
   }
 
   return (
+    <>
+      <motion.div variants={itemVariants}>
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <span className="text-sm font-bold">지도</span>
+        </div>
+        <div className="grid grid-cols-2 gap-1 rounded-full bg-[var(--nav-panel)] p-1" role="group" aria-label="지도 모드">
+          {(['2d', '3d'] as const).map((mode) => {
+            const selected = cameraSettings.mode === mode
+            const label = mode === '2d' ? '2D 지도' : '3D 지도'
+
+            return (
+              <button
+                aria-pressed={selected}
+                className={[
+                  'h-10 rounded-full text-sm font-bold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]',
+                  selected
+                    ? 'bg-white text-[var(--nav-primary)]'
+                    : 'text-[var(--nav-muted)] hover:bg-white/70 hover:text-[var(--nav-ink)]',
+                ].join(' ')}
+                key={mode}
+                onClick={() => updateMode(mode)}
+                type="button"
+              >
+                {label}
+              </button>
+            )
+          })}
+        </div>
+      </motion.div>
+      <motion.div variants={itemVariants}>
+        <SettingSlider
+          label="확대"
+          max={MAP_SETTINGS_ZOOM_MAX}
+          min={MAP_SETTINGS_ZOOM_MIN}
+          step={MAP_SETTINGS_ZOOM_STEP}
+          value={cameraSettings.zoom}
+          valueLabel={cameraSettings.zoom.toFixed(1)}
+          onDecrease={() => updateZoom(cameraSettings.zoom - MAP_SETTINGS_ZOOM_STEP)}
+          onIncrease={() => updateZoom(cameraSettings.zoom + MAP_SETTINGS_ZOOM_STEP)}
+          onChange={updateZoom}
+        />
+      </motion.div>
+      {cameraSettings.mode === '3d' ? (
+        <motion.div variants={itemVariants}>
+          <SettingSlider
+            label="기울기"
+            max={MAP_SETTINGS_PITCH_MAX}
+            min={MAP_SETTINGS_PITCH_MIN}
+            resetLabel="0°"
+            step={MAP_SETTINGS_PITCH_STEP}
+            value={cameraSettings.pitch}
+            valueLabel={`${Math.round(cameraSettings.pitch)}°`}
+            onDecrease={() => updatePitch(cameraSettings.pitch - MAP_SETTINGS_PITCH_STEP)}
+            onIncrease={() => updatePitch(cameraSettings.pitch + MAP_SETTINGS_PITCH_STEP)}
+            onReset={() => updatePitch(0)}
+            onChange={updatePitch}
+          />
+        </motion.div>
+      ) : null}
+      <motion.div
+        className="flex items-center justify-between gap-3 pt-1"
+        variants={itemVariants}
+      >
+        <div className="flex min-w-0 items-center gap-2.5">
+          <UserCircle className="size-7 shrink-0 text-[var(--nav-muted)]" weight="fill" />
+          <div className="min-w-0">
+            <div className="truncate text-sm font-bold text-[var(--nav-ink)]">안정현</div>
+            <div className="mt-0.5 truncate text-xs font-semibold text-[var(--nav-muted)]">로그인됨</div>
+          </div>
+        </div>
+      </motion.div>
+      <motion.div
+        className="rounded-2xl bg-[var(--nav-panel)] p-3"
+        variants={itemVariants}
+      >
+        <div className="flex items-center gap-2">
+          <MapPin className="size-4 text-[var(--nav-primary)]" weight="fill" />
+          <span className="text-sm font-bold">현재 위치</span>
+        </div>
+        <p className="mt-2 text-sm leading-5 text-[var(--nav-muted)]">
+          {locationStatus === 'granted'
+            ? `${currentLocationLabel} 기준으로 탐색 중`
+            : '세종대학교를 현재 위치로 사용 중입니다'}
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-white px-3 text-[13px] font-semibold text-[var(--nav-primary)] transition hover:bg-[var(--nav-selection)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
+            onClick={onRequestCurrentLocation}
+            type="button"
+          >
+            <Clock className="size-4" weight="bold" />
+            현재 위치 다시 받기
+          </button>
+          <span className="inline-flex min-h-10 items-center rounded-xl bg-white px-3 text-[13px] font-semibold text-[var(--nav-muted)]">
+            {locationStatus === 'granted' ? 'GPS 추적 중' : '권한 재시도 가능'}
+          </span>
+        </div>
+      </motion.div>
+    </>
+  )
+}
+
+function ReportDrawerContent({
+  itemVariants,
+}: {
+  itemVariants: {
+    hidden: { opacity: number; y: number; scale: number; transition: MotionTiming }
+    visible: { opacity: number; y: number; scale: number; transition: MotionTiming }
+  }
+}) {
+  return (
+    <>
+      <motion.div className="rounded-2xl bg-[var(--nav-panel)] p-3" variants={itemVariants}>
+        <div className="flex items-center gap-2">
+          <Article className="size-4 text-[var(--nav-primary)]" weight="bold" />
+          <span className="text-sm font-bold">운행 리포트</span>
+        </div>
+        <div className="mt-3 grid gap-2 text-sm">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-[var(--nav-muted)]">안전 상태</span>
+            <span className="font-semibold text-[var(--nav-guidance)]">양호</span>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-[var(--nav-muted)]">최근 감지</span>
+            <span className="font-semibold">급커브 1건</span>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-[var(--nav-muted)]">오늘 운행</span>
+            <span className="font-semibold">42분 · 11.8 km</span>
+          </div>
+        </div>
+      </motion.div>
+      <motion.div className="rounded-2xl bg-[var(--nav-panel)] p-3" variants={itemVariants}>
+        <div className="flex items-center gap-2">
+          <Warning className="size-4 text-[var(--nav-warning)]" weight="fill" />
+          <span className="text-sm font-bold">점검 메모</span>
+        </div>
+        <p className="mt-2 text-sm leading-5 text-[var(--nav-muted)]">
+          주행 중 감속 구간과 제한속도 알림이 정상적으로 기록되고 있습니다.
+        </p>
+        <button
+          className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-xl bg-white px-3 text-[13px] font-semibold text-[var(--nav-primary)] transition hover:bg-[var(--nav-selection)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
+          type="button"
+        >
+          <ClipboardText className="size-4" weight="bold" />
+          리포트 확인
+        </button>
+      </motion.div>
+    </>
+  )
+}
+
+function ConnectDrawerContent({
+  itemVariants,
+}: {
+  itemVariants: {
+    hidden: { opacity: number; y: number; scale: number; transition: MotionTiming }
+    visible: { opacity: number; y: number; scale: number; transition: MotionTiming }
+  }
+}) {
+  const [lastCheckedLabel, setLastCheckedLabel] = useState('방금 전')
+
+  const refreshConnection = () => {
+    setLastCheckedLabel('지금')
+  }
+
+  return (
+    <>
+      <motion.div className="rounded-2xl bg-[var(--nav-panel)] p-3" variants={itemVariants}>
+        <div className="flex items-center gap-2">
+          <PlugsConnected className="size-4 text-[var(--nav-primary)]" weight="bold" />
+          <span className="text-sm font-bold">연결 상태</span>
+        </div>
+        <div className="mt-3 grid gap-2 text-sm">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-[var(--nav-muted)]">차량</span>
+            <span className="font-semibold text-[var(--nav-guidance)]">연결됨</span>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-[var(--nav-muted)]">휴대폰</span>
+            <span className="font-semibold">동기화됨</span>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <span className="flex items-center gap-2 text-[var(--nav-muted)]">
+              <SpeakerHigh className="size-4" weight="bold" />
+              오디오
+            </span>
+            <span className="font-semibold">정상</span>
+          </div>
+        </div>
+      </motion.div>
+      <motion.div className="rounded-2xl bg-[var(--nav-panel)] p-3" variants={itemVariants}>
+        <div className="flex items-center gap-2">
+          <WifiHigh className="size-4 text-[var(--nav-primary)]" weight="bold" />
+          <span className="text-sm font-bold">최근 확인</span>
+        </div>
+        <p className="mt-2 text-sm leading-5 text-[var(--nav-muted)]">
+          마지막 확인은 {lastCheckedLabel}입니다. 연결이 흔들리면 다시 확인할 수 있습니다.
+        </p>
+        <button
+          className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-xl bg-white px-3 text-[13px] font-semibold text-[var(--nav-primary)] transition hover:bg-[var(--nav-selection)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
+          onClick={refreshConnection}
+          type="button"
+        >
+          <CarSimple className="size-4" weight="bold" />
+          연결 다시 확인
+        </button>
+      </motion.div>
+      <motion.div className="rounded-2xl bg-[var(--nav-panel)] p-3" variants={itemVariants}>
+        <div className="flex items-center gap-2">
+          <Phone className="size-4 text-[var(--nav-primary)]" weight="bold" />
+          <span className="text-sm font-bold">기기 정보</span>
+        </div>
+        <p className="mt-2 text-sm leading-5 text-[var(--nav-muted)]">
+          Navi 앱과 차량 연결이 유지되는 동안 안내, 음악, 리포트가 동기화됩니다.
+        </p>
+      </motion.div>
+    </>
+  )
+}
+
+function MusicPopover({
+  motionTiming,
+  musicSearchKeyword,
+  musicPlaying,
+  selectedTrack,
+  onClose,
+  onPickTrack,
+  onSearchKeywordChange,
+  onStartPlayback,
+}: {
+  motionTiming: MotionTiming
+  musicSearchKeyword: string
+  musicPlaying: boolean
+  selectedTrack: (typeof MUSIC_LIBRARY)[number]
+  onClose: () => void
+  onPickTrack: (trackId: (typeof MUSIC_LIBRARY)[number]['id']) => void
+  onSearchKeywordChange: (value: string) => void
+  onStartPlayback: () => void
+}) {
+  const filteredTracks = MUSIC_LIBRARY.filter((track) => {
+    const keyword = musicSearchKeyword.trim().toLowerCase()
+
+    if (!keyword) {
+      return true
+    }
+
+    return (
+      track.title.toLowerCase().includes(keyword) ||
+      track.artist.toLowerCase().includes(keyword) ||
+      track.mood.toLowerCase().includes(keyword)
+    )
+  })
+
+  return (
     <motion.section
-      aria-label="설정"
-      className="pointer-events-auto absolute right-15 top-5 z-40 w-[min(22rem,calc(100%-5.5rem))] rounded-[1.15rem] bg-white/90 text-[var(--nav-ink)] shadow-[0_16px_36px_rgb(15_23_42/0.14)] backdrop-blur-xl max-sm:right-13 max-sm:top-3 max-sm:w-[min(19rem,calc(100%-4.5rem))]"
-      data-testid="settings-panel"
-      exit={{ opacity: 0, x: 12, scale: motionTiming.duration === 0 ? 1 : 0.985 }}
-      initial={{ opacity: 0, x: 12, scale: motionTiming.duration === 0 ? 1 : 0.985 }}
-      animate={{ opacity: 1, x: 0, scale: 1 }}
+      aria-label="음악"
+      className="pointer-events-auto absolute right-[4.25rem] top-3 z-50 rounded-[1.15rem] bg-white/94 text-[var(--nav-ink)] shadow-[0_12px_30px_rgb(15_23_42/0.12)] backdrop-blur-xl max-sm:right-2 max-sm:top-2"
+      id="music-popover"
+      data-testid="music-popover"
+      exit={{ opacity: 0, y: -8, scale: 0.985 }}
+      initial={{ opacity: 0, y: -6, scale: 0.985 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
       role="dialog"
+      style={{ maxWidth: 'calc(100% - 5rem)', width: MUSIC_POPOVER_WIDTH }}
       transition={motionTiming}
     >
       <div className="flex items-center justify-between gap-3 px-4 pt-3.5">
         <div className="flex min-w-0 items-center gap-2">
-          <span className="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--nav-panel)] text-[var(--nav-ink)]">
-            <GearSix className="size-4" weight="bold" />
+          <span className="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--nav-panel)] text-[var(--nav-primary)]">
+            <MusicNotes className="size-4" weight="bold" />
           </span>
-          <h2 className="text-[15px] font-bold tracking-normal">설정</h2>
+          <div className="min-w-0">
+            <h2 className="truncate text-[15px] font-bold tracking-normal">음악</h2>
+            <p className="truncate text-xs text-[var(--nav-muted)]">{musicPlaying ? '재생 중' : '선택 후 재생'}</p>
+          </div>
         </div>
         <button
-          aria-label="설정 닫기"
+          aria-label="음악 닫기"
           className="grid size-10 place-items-center rounded-full text-[var(--nav-muted)] transition hover:bg-[var(--nav-panel)] hover:text-[var(--nav-ink)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
           onClick={onClose}
           type="button"
@@ -1056,7 +1606,6 @@ function SettingsPanel({
           <X className="size-4" weight="bold" />
         </button>
       </div>
-
       <motion.div
         animate="visible"
         className="grid gap-3 px-4 py-4"
@@ -1076,78 +1625,130 @@ function SettingsPanel({
           },
         }}
       >
-        <motion.div variants={itemVariants}>
-          <div className="mb-2 flex items-center justify-between gap-3">
-            <span className="text-sm font-bold">지도</span>
+        <motion.label className="grid gap-2" variants={{ hidden: { opacity: 0, y: 8 }, visible: { opacity: 1, y: 0 } }}>
+          <span className="text-sm font-bold">검색</span>
+          <div className="flex min-h-11 items-center gap-2 rounded-xl border border-[var(--nav-border)] bg-white px-3 text-[var(--nav-muted)]">
+            <MagnifyingGlass className="size-4 shrink-0" weight="bold" />
+            <input
+              aria-label="음악 검색"
+              className="min-w-0 flex-1 bg-transparent text-sm font-medium text-[var(--nav-ink)] outline-none placeholder:text-[var(--nav-subtle)]"
+              onChange={(event) => onSearchKeywordChange(event.target.value)}
+              placeholder="곡, 분위기, 아티스트"
+              value={musicSearchKeyword}
+            />
           </div>
-          <div className="grid grid-cols-2 gap-1 rounded-full bg-[var(--nav-panel)] p-1" role="group" aria-label="지도 모드">
-            {(['2d', '3d'] as const).map((mode) => {
-              const selected = cameraSettings.mode === mode
-              const label = mode === '2d' ? '2D 지도' : '3D 지도'
+        </motion.label>
+        <motion.div className="grid gap-2" variants={{ hidden: { opacity: 0, y: 8 }, visible: { opacity: 1, y: 0 } }}>
+          <span className="text-sm font-bold">최근 선택</span>
+          <div className="grid gap-2">
+            {filteredTracks.map((track) => {
+              const active = track.id === selectedTrack.id
 
               return (
                 <button
-                  aria-pressed={selected}
+                  aria-pressed={active}
                   className={[
-                    'h-10 rounded-full text-sm font-bold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]',
-                    selected
-                      ? 'bg-white text-[var(--nav-primary)]'
-                      : 'text-[var(--nav-muted)] hover:bg-white/70 hover:text-[var(--nav-ink)]',
+                    'flex min-h-11 items-center justify-between gap-3 rounded-xl border px-3 py-2 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]',
+                    active
+                      ? 'border-[var(--nav-primary)] bg-[var(--nav-primary-soft)]'
+                      : 'border-[var(--nav-border)] bg-white hover:bg-[var(--nav-panel)]',
                   ].join(' ')}
-                  key={mode}
-                  onClick={() => updateMode(mode)}
+                  key={track.id}
+                  onClick={() => onPickTrack(track.id)}
                   type="button"
                 >
-                  {label}
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-semibold">{track.title}</span>
+                    <span className="block truncate text-xs text-[var(--nav-muted)]">{track.artist}</span>
+                  </span>
+                  <span className="shrink-0 rounded-full bg-[var(--nav-panel)] px-2 py-1 text-[11px] font-semibold text-[var(--nav-muted)]">
+                    {track.mood}
+                  </span>
                 </button>
               )
             })}
           </div>
         </motion.div>
-        <motion.div variants={itemVariants}>
-          <SettingSlider
-            label="확대"
-            max={MAP_SETTINGS_ZOOM_MAX}
-            min={MAP_SETTINGS_ZOOM_MIN}
-            step={MAP_SETTINGS_ZOOM_STEP}
-            value={cameraSettings.zoom}
-            valueLabel={cameraSettings.zoom.toFixed(1)}
-            onDecrease={() => updateZoom(cameraSettings.zoom - MAP_SETTINGS_ZOOM_STEP)}
-            onIncrease={() => updateZoom(cameraSettings.zoom + MAP_SETTINGS_ZOOM_STEP)}
-            onChange={updateZoom}
-          />
-        </motion.div>
-        {cameraSettings.mode === '3d' ? (
-          <motion.div variants={itemVariants}>
-            <SettingSlider
-              label="기울기"
-              max={MAP_SETTINGS_PITCH_MAX}
-              min={MAP_SETTINGS_PITCH_MIN}
-              resetLabel="0°"
-              step={MAP_SETTINGS_PITCH_STEP}
-              value={cameraSettings.pitch}
-              valueLabel={`${Math.round(cameraSettings.pitch)}°`}
-              onDecrease={() => updatePitch(cameraSettings.pitch - MAP_SETTINGS_PITCH_STEP)}
-              onIncrease={() => updatePitch(cameraSettings.pitch + MAP_SETTINGS_PITCH_STEP)}
-              onReset={() => updatePitch(0)}
-              onChange={updatePitch}
-            />
-          </motion.div>
-        ) : null}
-        <motion.div
-          className="flex items-center justify-between gap-3 pt-1"
-          variants={itemVariants}
-        >
-          <div className="flex min-w-0 items-center gap-2.5">
-            <UserCircle className="size-7 shrink-0 text-[var(--nav-muted)]" weight="fill" />
-            <div className="min-w-0">
-              <div className="truncate text-sm font-bold text-[var(--nav-ink)]">안정현</div>
-              <div className="mt-0.5 truncate text-xs font-semibold text-[var(--nav-muted)]">로그인됨</div>
-            </div>
-          </div>
+        <motion.div className="flex gap-2" variants={{ hidden: { opacity: 0, y: 8 }, visible: { opacity: 1, y: 0 } }}>
+          <button
+            className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[var(--nav-primary)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--nav-primary-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
+            onClick={onStartPlayback}
+            type="button"
+          >
+            <Play className="size-4" weight="fill" />
+            재생
+          </button>
+          <button
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[var(--nav-panel)] px-4 text-sm font-semibold text-[var(--nav-ink)] transition hover:bg-[var(--nav-selection)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
+            onClick={onClose}
+            type="button"
+          >
+            닫기
+          </button>
         </motion.div>
       </motion.div>
     </motion.section>
+  )
+}
+
+function MiniPlayer({
+  activeRoute,
+  motionTiming,
+  musicPlaying,
+  selectedTrack,
+  onClose,
+  onTogglePlay,
+}: {
+  activeRoute: boolean
+  motionTiming: MotionTiming
+  musicPlaying: boolean
+  selectedTrack: (typeof MUSIC_LIBRARY)[number]
+  onClose: () => void
+  onTogglePlay: () => void
+}) {
+  if (!musicPlaying) {
+    return null
+  }
+
+  const bottom = activeRoute ? MUSIC_MINI_PLAYER_GUIDANCE_BOTTOM : MUSIC_MINI_PLAYER_IDLE_BOTTOM
+  const isPlaying = musicPlaying
+
+  return (
+    <motion.div
+      className="pointer-events-none absolute left-1/2 z-40 w-[min(24rem,calc(100%-1rem))] -translate-x-1/2"
+      data-testid="music-mini-player"
+      style={{ bottom }}
+      initial={{ opacity: 0, y: 12, scale: 0.99 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: 8, scale: 0.99 }}
+      transition={motionTiming}
+    >
+      <div className="pointer-events-auto flex items-center gap-3 rounded-full bg-white/92 px-3 py-2 shadow-[0_8px_18px_rgb(15_23_42/0.12)] backdrop-blur-md">
+        <div className="grid size-11 shrink-0 place-items-center rounded-full bg-[var(--nav-panel)] text-[var(--nav-primary)]">
+          <MusicNotes className="size-5" weight="bold" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-semibold text-[var(--nav-ink)]">{selectedTrack.title}</div>
+          <div className="truncate text-xs text-[var(--nav-muted)]">{selectedTrack.artist} · 재생 중</div>
+        </div>
+        <button
+          aria-label={isPlaying ? '음악 일시정지' : '음악 재생'}
+          className="grid size-10 place-items-center rounded-full bg-[var(--nav-panel)] text-[var(--nav-ink)] transition hover:bg-[var(--nav-selection)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
+          onClick={onTogglePlay}
+          type="button"
+        >
+          {isPlaying ? <Pause className="size-4" weight="fill" /> : <Play className="size-4" weight="fill" />}
+        </button>
+        <button
+          aria-label="음악 닫기"
+          className="grid size-10 place-items-center rounded-full bg-[var(--nav-panel)] text-[var(--nav-muted)] transition hover:bg-[var(--nav-selection)] hover:text-[var(--nav-ink)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
+          onClick={onClose}
+          type="button"
+        >
+          <X className="size-4" weight="bold" />
+        </button>
+      </div>
+    </motion.div>
   )
 }
 
@@ -1580,25 +2181,19 @@ function RouteSearchSheet({
 }
 
 function IdleMapControls({
-  locationStatus,
   motionTiming,
   searchOpen,
+  showFallbackToast,
+  onOpenSettings,
   onOpenSearch,
-  onRequestLocation,
 }: {
-  locationStatus: LocationStatus
   motionTiming: MotionTiming
   searchOpen: boolean
+  showFallbackToast: boolean
+  onOpenSettings: () => void
   onOpenSearch: () => void
-  onRequestLocation: () => void
 }) {
   const navigationBlocked = false
-  const locationMessage = locationStatus === 'checking'
-    ? '세종대학교 기준으로 시작합니다'
-    : locationStatus === 'unsupported'
-      ? '세종대학교를 현재 위치로 사용 중입니다'
-      : '세종대학교를 현재 위치로 사용 중입니다'
-  const showLocationFallbackMessage = locationStatus !== 'granted'
 
   return (
     <div className="pointer-events-none absolute inset-0 text-[var(--nav-ink)]">
@@ -1611,29 +2206,24 @@ function IdleMapControls({
             exit={{ opacity: 0, y: 12, scale: 0.985 }}
             transition={motionTiming}
           >
-            <AnimatePresence initial={false}>
-              {showLocationFallbackMessage ? (
-                <motion.div
-                  className="pointer-events-auto mb-2 flex min-h-11 items-center justify-between gap-3 rounded-full bg-white/86 px-4 py-2 text-sm font-medium text-[var(--nav-muted)] shadow-[0_8px_18px_rgb(15_23_42/0.10)] backdrop-blur max-sm:rounded-2xl max-sm:text-xs"
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 6 }}
-                  transition={motionTiming}
+            {showFallbackToast ? (
+              <motion.div
+                className="pointer-events-auto mb-2 flex min-h-11 items-center justify-between gap-3 rounded-full bg-white/86 px-4 py-2 text-sm font-medium text-[var(--nav-muted)] shadow-[0_8px_18px_rgb(15_23_42/0.10)] backdrop-blur max-sm:rounded-2xl max-sm:text-xs"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={motionTiming}
+              >
+                <span className="min-w-0 truncate">세종대학교를 현재 위치로 사용 중입니다</span>
+                <motion.button
+                  className="shrink-0 rounded-full bg-[var(--nav-primary)] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[var(--nav-primary-hover)]"
+                  onClick={onOpenSettings}
+                  type="button"
+                  whileTap={motionTiming.duration === 0 ? undefined : { scale: 0.96 }}
                 >
-                  <span className="min-w-0 truncate">{locationMessage}</span>
-                  {locationStatus === 'denied' || locationStatus === 'unsupported' ? (
-                    <motion.button
-                      className="shrink-0 rounded-full bg-[var(--nav-primary)] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[var(--nav-primary-hover)]"
-                      onClick={onRequestLocation}
-                      type="button"
-                      whileTap={motionTiming.duration === 0 ? undefined : { scale: 0.96 }}
-                    >
-                      다시 허용
-                    </motion.button>
-                  ) : null}
-                </motion.div>
-              ) : null}
-            </AnimatePresence>
+                  설정 열기
+                </motion.button>
+              </motion.div>
+            ) : null}
             <motion.button
               className="pointer-events-auto flex h-15 w-full items-center gap-3.5 rounded-full bg-white/90 px-5 text-left text-base font-semibold text-[var(--nav-ink)] shadow-[0_12px_28px_rgb(15_23_42/0.12)] backdrop-blur transition hover:bg-white disabled:cursor-not-allowed disabled:bg-white/80 disabled:text-[var(--nav-subtle)] max-sm:h-14 max-sm:px-5"
               disabled={navigationBlocked}
