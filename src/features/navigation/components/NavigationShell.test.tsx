@@ -268,6 +268,10 @@ describe('NavigationShell', () => {
     expect(screen.queryByPlaceholderText('출발지를 입력하세요')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: /어디로 갈까요/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '설정' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '보고서' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '연동 상태' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '음악' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '설정' })).toHaveAttribute('aria-expanded', 'false')
     await waitFor(() => {
       expect(screen.getByTestId('bottom-status-bar')).toHaveClass('grid-cols-3')
     })
@@ -275,7 +279,7 @@ describe('NavigationShell', () => {
     expect(await screen.findByText('서울특별시 중구 세종대로 110')).toBeInTheDocument()
   })
 
-  it('opens a floating settings panel for map mode, zoom, pitch, and signed-in account state', async () => {
+  it('opens the connected settings drawer for map mode, zoom, pitch, signed-in account, and location retry', async () => {
     const queryClient = new QueryClient()
 
     render(
@@ -287,10 +291,13 @@ describe('NavigationShell', () => {
     fireEvent.click(screen.getByRole('button', { name: '설정' }))
 
     expect(await screen.findByRole('dialog', { name: '설정' })).toBeInTheDocument()
+    expect(screen.getByTestId('settings-drawer')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Navi 호출' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '설정' })).toHaveAttribute('aria-expanded', 'true')
     expect(screen.getByText('안정현')).toBeInTheDocument()
     expect(screen.getByText('로그인됨')).toBeInTheDocument()
     expect(screen.queryByText('내 계정으로 길안내 설정을 저장합니다')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '현재 위치 다시 받기' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '2D 지도' })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('button', { name: '3D 지도' })).toHaveAttribute('aria-pressed', 'false')
     expect(screen.getByRole('slider', { name: '확대' })).toHaveValue('18.3')
@@ -315,6 +322,106 @@ describe('NavigationShell', () => {
     expect(screen.queryByRole('slider', { name: '기울기' })).not.toBeInTheDocument()
     expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-camera-mode', '2d')
     expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-camera-pitch', '0')
+  })
+
+  it('keeps the rail inside the navigation viewport and connects the drawer on its right side', async () => {
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '설정' }))
+
+    const viewport = screen.getByTestId('navigation-viewport')
+    const contentRegion = screen.getByTestId('navigation-content-region')
+    const overlays = screen.getByTestId('navigation-overlays')
+    const railDock = screen.getByTestId('right-rail-dock')
+    const drawer = await screen.findByRole('dialog', { name: '설정' })
+    const railRoot = railDock.closest('[aria-label="오른쪽 도구 모음"]')
+
+    expect(viewport).toContainElement(overlays)
+    expect(viewport).toContainElement(railDock)
+    expect(viewport).toContainElement(drawer)
+    expect(viewport).toContainElement(contentRegion)
+    expect(viewport).not.toHaveClass('md:w-[calc(100%-320px)]')
+    expect(contentRegion).toHaveClass('w-full')
+    expect(contentRegion).not.toHaveClass('md:w-[calc(100%-320px)]')
+    expect(railRoot).not.toBeNull()
+    expect(railRoot).toHaveClass('absolute')
+    expect(railRoot).toHaveClass('top-0')
+    expect(railRoot).toHaveClass('right-[320px]')
+    expect(railRoot).not.toHaveClass('right-0')
+    expect(railDock).toHaveClass('rounded-bl-[1.15rem]')
+    expect(railDock).toHaveClass('rounded-tl-none')
+    expect(railDock).not.toHaveClass('rounded-l-[1.15rem]')
+    expect(railDock).toHaveClass('border-b')
+    expect(railDock).not.toHaveClass('border-l')
+    expect(drawer).toHaveClass('bg-white')
+    expect(drawer).not.toHaveClass('rounded-l-[1.15rem]')
+    expect(drawer).not.toHaveClass('rounded-r-[1.15rem]')
+    expect(drawer).not.toHaveClass('max-sm:bottom-2')
+    expect(drawer).not.toHaveClass('max-sm:right-2')
+    expect(drawer).toHaveClass('absolute')
+    expect(drawer).toHaveClass('top-0')
+    expect(drawer).toHaveClass('right-0')
+  })
+
+  it('opens the report drawer and the connect drawer from the rail', async () => {
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '보고서' }))
+    expect(await screen.findByRole('dialog', { name: '보고서' })).toBeInTheDocument()
+    expect(screen.getByTestId('report-drawer')).toBeInTheDocument()
+    expect(screen.getByText('운행 리포트')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '보고서' })).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByRole('button', { name: '리포트 확인' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '보고서 닫기' }))
+    expect(await screen.findByRole('button', { name: '연동 상태' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '연동 상태' }))
+    expect(await screen.findByRole('dialog', { name: '연동 상태' })).toBeInTheDocument()
+    expect(screen.getByTestId('connect-drawer')).toBeInTheDocument()
+    expect(screen.getByText('연결 상태')).toBeInTheDocument()
+    expect(screen.getByText('기기 정보')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '연결 다시 확인' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '연동 상태' })).toHaveAttribute('aria-expanded', 'true')
+  })
+
+  it('opens the music popover and starts the mini player from the rail', async () => {
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '음악' }))
+
+    expect(await screen.findByRole('dialog', { name: '음악' })).toBeInTheDocument()
+    expect(screen.getByTestId('music-popover')).toBeInTheDocument()
+    expect(screen.getByLabelText('음악 검색')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Drive Neon/ })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /Soft Focus/ }))
+    fireEvent.click(screen.getByRole('button', { name: '재생' }))
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: '음악' })).not.toBeInTheDocument()
+    })
+    expect(screen.getByTestId('music-mini-player')).toBeInTheDocument()
+    expect(screen.getByText('Soft Focus')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '음악 일시정지' })).toBeInTheDocument()
   })
 
   it('requests location on entry and centers the map on the granted position', async () => {
@@ -353,6 +460,36 @@ describe('NavigationShell', () => {
 
     expect(screen.getByDisplayValue('세종대학교')).toBeInTheDocument()
     expect(await screen.findByPlaceholderText('목적지 검색')).toHaveFocus()
+  })
+
+  it('hides the fallback location toast after 5 seconds and keeps retry available in settings', async () => {
+    mockGeolocationError()
+    const queryClient = new QueryClient()
+
+    vi.useFakeTimers()
+
+    try {
+      render(
+        <QueryClientProvider client={queryClient}>
+          <NavigationShell />
+        </QueryClientProvider>,
+      )
+
+      expect(screen.getByText('세종대학교를 현재 위치로 사용 중입니다')).toBeInTheDocument()
+
+      await act(async () => {
+        vi.advanceTimersByTime(5000)
+      })
+
+      expect(screen.queryByText('세종대학교를 현재 위치로 사용 중입니다')).not.toBeInTheDocument()
+
+      fireEvent.click(screen.getByRole('button', { name: '설정' }))
+
+      expect(screen.getByRole('dialog', { name: '설정' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: '현재 위치 다시 받기' })).toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('opens destination search as a navigation bottom sheet from the current location', async () => {
