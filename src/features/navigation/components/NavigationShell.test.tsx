@@ -231,8 +231,9 @@ describe('NavigationShell', () => {
     const viewport = screen.getByTestId('navigation-viewport')
 
     expect(stage).toHaveClass('bg-black')
-    expect(stage).toHaveClass('grid')
-    expect(stage).toHaveClass('place-items-center')
+    expect(stage).toHaveClass('flex')
+    expect(stage).toHaveClass('items-center')
+    expect(stage).toHaveClass('justify-center')
     expect(viewport).toHaveClass('aspect-[16/10]')
     expect(viewport).toHaveClass('w-[min(100vw,calc(100vh*1.6))]')
   })
@@ -250,6 +251,64 @@ describe('NavigationShell', () => {
     expect(screen.getByTestId('voice-orb')).toHaveAttribute('data-state', 'idle')
     expect(screen.getByTestId('voice-orb')).toHaveAttribute('data-energy', '0')
     expect(screen.getByTestId('voice-orb')).toHaveAttribute('data-color-theme', 'daylight')
+  })
+
+  it('steps through the dummy Navi assistant scenario without auto-playing it', () => {
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell />
+      </QueryClientProvider>,
+    )
+
+    expect(screen.getByTestId('navi-assistant-debug-bar')).toBeInTheDocument()
+    expect(screen.getByText('대기')).toBeInTheDocument()
+    expect(screen.getByText('1 / 5')).toBeInTheDocument()
+    expect(screen.queryByTestId('navi-assistant-panel')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '다음 AI 시나리오 단계' }))
+
+    expect(screen.getByTestId('navi-assistant-panel')).toBeInTheDocument()
+    expect(screen.getByTestId('navi-assistant-panel')).toHaveClass('overflow-visible')
+    expect(screen.getByRole('button', { name: 'Navi AI 에이전트 닫기' })).toBeInTheDocument()
+    expect(screen.getByText('오늘 피곤한 하루였나봐요. 잠 깰 수 있게 도와드릴까요?')).toBeInTheDocument()
+    expect(screen.getByTestId('voice-orb')).toHaveAttribute('data-state', 'speaking')
+
+    fireEvent.click(screen.getByRole('button', { name: '다음 AI 시나리오 단계' }))
+    expect(screen.getByText('듣는 중...')).toBeInTheDocument()
+    expect(screen.getByText('가까운 졸음쉼터랑 기분 전환할 음악 추천해줘')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '다음 AI 시나리오 단계' }))
+    expect(screen.getByText('생각 중...')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '다음 AI 시나리오 단계' }))
+    expect(screen.getByTestId('navi-assistant-recommendations')).toBeInTheDocument()
+    expect(screen.getByText('서울만남 졸음쉼터')).toBeInTheDocument()
+    expect(screen.getByText('Drive Boost')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'AI 시나리오 초기화' }))
+    expect(screen.queryByTestId('navi-assistant-panel')).not.toBeInTheDocument()
+    expect(screen.getByText('1 / 5')).toBeInTheDocument()
+  })
+
+  it('closes the expanded Navi assistant panel back to the floating orb', () => {
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '다음 AI 시나리오 단계' }))
+    expect(screen.getByTestId('navi-assistant-panel')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Navi AI 에이전트 닫기' }))
+
+    expect(screen.queryByTestId('navi-assistant-panel')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Navi 호출' })).toBeInTheDocument()
+    expect(screen.getByTestId('voice-orb')).toHaveAttribute('data-state', 'idle')
   })
 
   it('starts on a current-location map without the route setup panel', async () => {
@@ -1374,7 +1433,8 @@ describe('NavigationShell', () => {
     })
 
     expect(await screen.findByRole('option', { name: /검색 결과 7/ })).toBeInTheDocument()
-    expect(screen.getAllByRole('option')).toHaveLength(7)
+    const destinationResults = screen.getByRole('listbox', { name: '도착지 검색 결과' })
+    expect(within(destinationResults).getAllByRole('option')).toHaveLength(7)
 
     for (let index = 0; index < 6; index += 1) {
       fireEvent.keyDown(destinationInput, { key: 'ArrowDown' })
