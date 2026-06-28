@@ -150,6 +150,94 @@
   --sidebar-ring: oklch(0.708 0 0);
 }
 
+.navi-assistant-aura {
+  overflow: hidden;
+  background:
+    linear-gradient(145deg, rgb(255 255 255 / 0.88), rgb(249 250 252 / 0.74)),
+    radial-gradient(circle at 28% 16%, rgb(109 93 246 / 0.22), transparent 34%),
+    radial-gradient(circle at 74% 26%, rgb(0 168 255 / 0.16), transparent 32%),
+    radial-gradient(circle at 30% 78%, rgb(217 70 239 / 0.18), transparent 36%);
+  backdrop-filter: blur(22px) saturate(1.22);
+  border: 1px solid rgb(255 255 255 / 0.7);
+}
+
+.navi-assistant-aura::before,
+.navi-assistant-aura::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.navi-assistant-aura::before {
+  inset: -32%;
+  background:
+    radial-gradient(circle at 18% 24%, rgb(109 93 246 / 0.46), transparent 28%),
+    radial-gradient(circle at 78% 28%, rgb(0 168 255 / 0.34), transparent 30%),
+    radial-gradient(circle at 52% 78%, rgb(217 70 239 / 0.30), transparent 32%),
+    radial-gradient(circle at 76% 82%, rgb(255 210 130 / 0.34), transparent 28%);
+  filter: blur(30px);
+  opacity: 0.86;
+  transform: translate3d(-3%, -2%, 0) scale(1.03);
+  animation: navi-assistant-aura-drift 9s ease-in-out infinite alternate;
+}
+
+.navi-assistant-aura::after {
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.64), transparent 36%),
+    radial-gradient(circle at 50% 0%, rgb(255 255 255 / 0.48), transparent 42%);
+  opacity: 0.72;
+}
+
+@keyframes navi-assistant-aura-drift {
+  0% {
+    transform: translate3d(-4%, -3%, 0) scale(1.04) rotate(0deg);
+  }
+
+  50% {
+    transform: translate3d(3%, 2%, 0) scale(1.08) rotate(8deg);
+  }
+
+  100% {
+    transform: translate3d(-1%, 4%, 0) scale(1.05) rotate(-5deg);
+  }
+}
+
+.navi-assistant-user-word {
+  opacity: 0;
+  filter: blur(4px);
+  transform: translate3d(0, 6px, 0);
+  animation: navi-assistant-user-word-in 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--navi-assistant-user-word-delay, 0s);
+}
+
+@keyframes navi-assistant-user-word-in {
+  from {
+    opacity: 0;
+    filter: blur(4px);
+    transform: translate3d(0, 6px, 0);
+  }
+
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .navi-assistant-aura::before {
+    animation: none;
+  }
+
+  .navi-assistant-user-word {
+    opacity: 1;
+    filter: none;
+    transform: none;
+    animation: none;
+  }
+}
+
 .dark {
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);

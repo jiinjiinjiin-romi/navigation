@@ -34,7 +34,7 @@ import {
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { VoiceOrb } from 'navi-orb'
 import type { OrbAssistantState, OrbColorTheme } from 'navi-orb'
-import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type CSSProperties, type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getCurrentAddress, getRoadMatch, getRouteOptions, searchPlaces } from '../api/tmapApi'
 import { createRoundedRoutePath } from '../map/routeGeometry'
 import { createRouteSimulationPlan, getSimulatedRoutePosition } from '../simulation/routeSimulation'
@@ -94,6 +94,10 @@ const NAVI_ORB_STANDBY_STATE: OrbAssistantState = 'idle'
 const NAVI_ORB_THEME: OrbColorTheme = 'daylight'
 const NAVI_ORB_CONTROL_SIZE = 132
 const NAVI_ASSISTANT_PANEL_ORB_SIZE = 132
+const NAVI_ASSISTANT_TEXT_REVEAL_DELAY_SECONDS = 0.52
+const NAVI_ASSISTANT_TEXT_STAGGER_SECONDS = 0.018
+const NAVI_ASSISTANT_USER_TEXT_DELAY_SECONDS = 0.72
+const NAVI_ASSISTANT_USER_WORD_STAGGER_SECONDS = 0.08
 const DRIVING_ASSIST_DEBUG_QUERY_PARAM = 'debugSigns'
 const DRIVING_ASSIST_DEBUG_SEQUENCE_INTERVAL_MS = 1400
 const DEFAULT_CURRENT_LOCATION_PLACE: Place = {
@@ -841,7 +845,7 @@ export function NavigationShell() {
     ? currentLocationLabel
     : DEFAULT_CURRENT_LOCATION_PLACE.name
   const destinationStatusLabel = destination?.address || destination?.name || '목적지'
-  const weatherLabel = weatherQuery.data ?? (weatherQuery.isError ? '날씨 정보 없음' : '날씨 확인 중')
+  const weatherLabel = weatherQuery.data ?? (weatherQuery.isError ? '정보 없음' : '확인 중')
   const travelledDistanceMeters = activeRoute
     ? Math.max(0, activeRoute.summary.distanceMeters - remainingDistanceMeters)
     : 0
@@ -1522,7 +1526,7 @@ function NaviOrbControl({
     <motion.div
       aria-label="Navi AI 에이전트"
       className={[
-        'pointer-events-auto absolute right-6 top-6 z-40 text-center text-[var(--nav-ink)] max-sm:right-3 max-sm:top-3',
+        'pointer-events-none absolute right-6 top-6 z-40 text-center text-[var(--nav-ink)] max-sm:right-3 max-sm:top-3',
         'overflow-visible',
       ].join(' ')}
       data-testid={expanded ? 'navi-assistant-panel' : undefined}
@@ -1537,7 +1541,7 @@ function NaviOrbControl({
           ? assistantStep.recommendations?.length
             ? 'min(22.25rem, calc(100vw - 2rem))'
             : 'min(20.75rem, calc(100vw - 2rem))'
-          : '8.25rem',
+          : 'min(20.75rem, calc(100vw - 2rem))',
       }}
       transition={{
         borderRadius: {
@@ -1560,11 +1564,14 @@ function NaviOrbControl({
     >
       <motion.div
         aria-hidden="true"
-        className="absolute inset-0 rounded-[inherit] bg-white"
+        className="navi-assistant-aura absolute inset-0 rounded-[inherit]"
+        data-testid="navi-assistant-aura"
         initial={false}
         animate={{
           opacity: expanded ? 1 : 0,
-          boxShadow: expanded ? '0 18px 46px rgba(16, 24, 40, 0.18)' : '0 18px 46px rgba(16, 24, 40, 0)',
+          boxShadow: expanded
+            ? '0 18px 46px rgba(16, 24, 40, 0.16), 0 18px 54px rgba(109, 93, 246, 0.18)'
+            : '0 18px 46px rgba(16, 24, 40, 0)',
         }}
         transition={{
           delay: expanded && motionTiming.duration !== 0 ? 0.12 : 0,
@@ -1575,7 +1582,7 @@ function NaviOrbControl({
       {expanded ? (
         <motion.button
           aria-label="Navi AI 에이전트 닫기"
-          className="absolute right-3 top-3 z-10 grid size-9 place-items-center rounded-full bg-[var(--nav-panel)] text-[var(--nav-muted)] transition hover:bg-[var(--nav-selection)] hover:text-[var(--nav-ink)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-ai-primary)]"
+          className="pointer-events-auto absolute right-3 top-3 z-10 grid size-9 place-items-center rounded-full bg-[var(--nav-panel)] text-[var(--nav-muted)] transition hover:bg-[var(--nav-selection)] hover:text-[var(--nav-ink)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-ai-primary)]"
           initial={{ opacity: 0, scale: 0.92 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{
@@ -1591,7 +1598,7 @@ function NaviOrbControl({
       ) : (
         <button
           aria-label="Navi 호출"
-          className="absolute inset-0 z-10 rounded-full bg-transparent outline-none transition focus-visible:ring-2 focus-visible:ring-[var(--nav-ai-secondary)]"
+          className="pointer-events-auto absolute right-0 top-0 z-10 size-[8.25rem] rounded-full bg-transparent outline-none transition focus-visible:ring-2 focus-visible:ring-[var(--nav-ai-secondary)]"
           data-testid="navi-orb-control"
           onClick={onWakeCall}
           type="button"
@@ -1600,16 +1607,16 @@ function NaviOrbControl({
         </button>
       )}
       <motion.div
-        className={[
-          'relative h-full min-h-0',
-          expanded
-            ? 'flex flex-col items-center px-5 pb-5 pt-7'
-            : 'grid place-items-center',
-        ].join(' ')}
+        className="relative h-full min-h-0"
       >
         <motion.div
-          className="mx-auto grid place-items-center overflow-visible"
-          layout
+          className="absolute grid place-items-center overflow-visible"
+          data-testid="navi-assistant-orb-slot"
+          animate={{
+            left: expanded ? '50%' : '100%',
+            top: expanded ? 28 : 0,
+            x: expanded ? '-50%' : '-100%',
+          }}
           style={{
             height: NAVI_ASSISTANT_PANEL_ORB_SIZE,
             width: NAVI_ASSISTANT_PANEL_ORB_SIZE,
@@ -1630,31 +1637,42 @@ function NaviOrbControl({
           />
         </motion.div>
         {expanded ? (
-          <>
+          <div
+            className="relative z-[1] flex h-full min-h-0 flex-col items-center px-5 pb-5 pt-[12rem]"
+            data-testid="navi-assistant-content"
+          >
             <motion.div
-              className="mt-3 grid min-h-25 w-full content-center justify-items-center gap-2"
-              key={assistantStep.id}
+              className="flex min-h-25 w-full flex-col items-center"
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{
                 ...motionTiming,
-                delay: motionTiming.duration === 0 ? 0 : 0.28,
+                delay: motionTiming.duration === 0 ? 0 : NAVI_ASSISTANT_TEXT_REVEAL_DELAY_SECONDS,
                 duration: motionTiming.duration === 0 ? 0 : 0.18,
               }}
             >
-              {assistantStep.statusLabel ? (
-                <div className="text-sm font-bold text-[var(--nav-ai-primary)]">{assistantStep.statusLabel}</div>
-              ) : null}
-              {assistantStep.userText ? (
-                <p className="max-w-[16rem] text-pretty text-xl font-bold leading-8 tracking-normal">
-                  {assistantStep.userText}
-                </p>
-              ) : null}
-              {assistantStep.text ? (
-                <p className="max-w-[17rem] text-pretty text-xl font-bold leading-8 tracking-normal">
-                  {assistantStep.text}
-                </p>
-              ) : null}
+              <div className="flex h-5 items-center justify-center">
+                {assistantStep.statusLabel ? (
+                  <div className="text-sm font-bold text-[var(--nav-ai-primary)]">{assistantStep.statusLabel}</div>
+                ) : null}
+              </div>
+              <div className="mt-2 flex min-h-[4.5rem] w-full items-center justify-center">
+                {assistantStep.userText ? (
+                  <AssistantUserText
+                    animateWords={assistantStep.mode === 'user-listening'}
+                    motionTiming={motionTiming}
+                    reducedMotion={reducedMotion}
+                    text={assistantStep.userText}
+                  />
+                ) : null}
+                {assistantStep.text ? (
+                  <AssistantSpeechText
+                    motionTiming={motionTiming}
+                    reducedMotion={reducedMotion}
+                    text={assistantStep.text}
+                  />
+                ) : null}
+              </div>
             </motion.div>
             <AnimatePresence initial={false}>
               {assistantStep.recommendations?.length ? (
@@ -1664,10 +1682,135 @@ function NaviOrbControl({
                 />
               ) : null}
             </AnimatePresence>
-          </>
+          </div>
         ) : null}
       </motion.div>
     </motion.div>
+  )
+}
+
+function AssistantSpeechText({
+  motionTiming,
+  reducedMotion,
+  text,
+}: {
+  motionTiming: MotionTiming
+  reducedMotion: boolean
+  text: string
+}) {
+  if (reducedMotion || motionTiming.duration === 0) {
+    return (
+      <p className="max-w-[17rem] text-pretty text-xl font-bold leading-8 tracking-normal">
+        {text}
+      </p>
+    )
+  }
+
+  return (
+    <p
+      aria-label={text}
+      className="max-w-[17rem] text-pretty text-xl font-bold leading-8 tracking-normal"
+      data-testid="navi-assistant-speech-text"
+    >
+      <span className="sr-only">{text}</span>
+      <span aria-hidden="true">
+        {Array.from(text).map((character, index) => (
+          <motion.span
+            className="inline-block whitespace-pre-wrap"
+            initial={{ opacity: 0, y: 7, filter: 'blur(5px)' }}
+            animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+            key={`${character}-${index}`}
+            transition={{
+              delay: NAVI_ASSISTANT_TEXT_REVEAL_DELAY_SECONDS + index * NAVI_ASSISTANT_TEXT_STAGGER_SECONDS,
+              duration: 0.18,
+              ease: [0.22, 1, 0.36, 1],
+            }}
+          >
+            {character}
+          </motion.span>
+        ))}
+      </span>
+    </p>
+  )
+}
+
+function AssistantUserText({
+  animateWords,
+  motionTiming,
+  reducedMotion,
+  text,
+}: {
+  animateWords: boolean
+  motionTiming: MotionTiming
+  reducedMotion: boolean
+  text: string
+}) {
+  const [shouldReveal, setShouldReveal] = useState(!animateWords)
+
+  useEffect(() => {
+    if (!animateWords || reducedMotion || motionTiming.duration === 0) {
+      setShouldReveal(true)
+      return
+    }
+
+    setShouldReveal(false)
+
+    const revealTimer = window.setTimeout(() => {
+      setShouldReveal(true)
+    }, NAVI_ASSISTANT_USER_TEXT_DELAY_SECONDS * 1000)
+
+    return () => {
+      window.clearTimeout(revealTimer)
+    }
+  }, [animateWords, motionTiming.duration, reducedMotion, text])
+
+  if (!animateWords || reducedMotion || motionTiming.duration === 0) {
+    return (
+      <p
+        aria-label={text}
+        className="max-w-[16rem] text-pretty text-xl font-bold leading-8 tracking-normal"
+        data-testid="navi-assistant-user-text"
+      >
+        {text}
+      </p>
+    )
+  }
+
+  if (!shouldReveal) {
+    return null
+  }
+
+  const words = text.split(/(\s+)/)
+
+  return (
+    <p
+      aria-label={text}
+      className="max-w-[16rem] text-pretty text-xl font-bold leading-8 tracking-normal"
+      data-testid="navi-assistant-user-text"
+    >
+      <span className="sr-only">{text}</span>
+      <span aria-hidden="true">
+        {words.map((word, index) => {
+          const visibleWordIndex = words.slice(0, index).filter((part) => part.trim()).length
+          const isSpace = !word.trim()
+
+          return (
+            <span
+              className={[
+                'inline-block whitespace-pre-wrap',
+                isSpace ? '' : 'navi-assistant-user-word',
+              ].join(' ')}
+              key={`${word}-${index}`}
+              style={{
+                '--navi-assistant-user-word-delay': `${visibleWordIndex * NAVI_ASSISTANT_USER_WORD_STAGGER_SECONDS}s`,
+              } as CSSProperties}
+            >
+              {word}
+            </span>
+          )
+        })}
+      </span>
+    </p>
   )
 }
 
@@ -2048,6 +2191,24 @@ function SettingsDrawerContent({
   onChangeCameraSettings: (settings: Partial<MapCameraSettings>) => void
   onRequestCurrentLocation: () => void
 }) {
+  const mapModeControlTransition = {
+    ease: itemVariants.visible.transition.duration === 0 ? undefined : [0.34, 0, 0.2, 1] as [number, number, number, number],
+    duration: itemVariants.visible.transition.duration === 0 ? 0 : 0.72,
+  }
+  const mapModeItemVariants = {
+    hidden: {
+      opacity: 0,
+      y: itemVariants.hidden.y,
+      scale: itemVariants.hidden.scale,
+      transition: mapModeControlTransition,
+    },
+    visible: {
+      opacity: 1,
+      y: 0,
+      scale: 1,
+      transition: mapModeControlTransition,
+    },
+  }
   const updateZoom = (zoom: number) => {
     onChangeCameraSettings({
       zoom: clamp(zoom, MAP_SETTINGS_ZOOM_MIN, MAP_SETTINGS_ZOOM_MAX),
@@ -2077,7 +2238,7 @@ function SettingsDrawerContent({
               <button
                 aria-pressed={selected}
                 className={[
-                  'h-10 rounded-full text-sm font-bold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]',
+                  'h-10 rounded-full text-sm font-bold transition duration-[600ms] ease-[cubic-bezier(0.34,0,0.2,1)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]',
                   selected
                     ? 'bg-white text-[var(--nav-primary)]'
                     : 'text-[var(--nav-muted)] hover:bg-white/70 hover:text-[var(--nav-ink)]',
@@ -2106,7 +2267,7 @@ function SettingsDrawerContent({
         />
       </motion.div>
       {cameraSettings.mode === '3d' ? (
-        <motion.div variants={itemVariants}>
+        <motion.div variants={mapModeItemVariants}>
           <SettingSlider
             label="기울기"
             max={MAP_SETTINGS_PITCH_MAX}
@@ -3183,23 +3344,23 @@ function BottomStatusBar({
 }) {
   const items = hasRoute
     ? [
-        { label: '도착', value: `${arrivalLabel} 예정`, icon: <Clock className="h-4 w-4" weight="bold" /> },
-        { label: '남은시간', value: durationLabel, icon: <Timer className="h-4 w-4" weight="bold" /> },
-        { label: '목적지', value: destinationLabel, icon: <MapPin className="h-4 w-4" weight="bold" /> },
-        { label: '남은거리', value: distanceLabel, icon: <RoadHorizon className="h-4 w-4" weight="bold" /> },
-        { label: '날씨', value: weatherLabel, icon: <CloudSun className="h-4 w-4" weight="bold" /> },
+        { label: '도착', value: `${arrivalLabel} 예정`, icon: <Clock className="h-5 w-5" weight="bold" /> },
+        { label: '남은시간', value: durationLabel, icon: <Timer className="h-5 w-5" weight="bold" /> },
+        { label: '목적지', value: destinationLabel, icon: <MapPin className="h-5 w-5" weight="bold" /> },
+        { label: '남은거리', value: distanceLabel, icon: <RoadHorizon className="h-5 w-5" weight="bold" /> },
+        { label: '날씨', value: weatherLabel, icon: <CloudSun className="h-5 w-5" weight="bold" /> },
       ]
     : [
-        { label: '시간', value: currentTimeLabel, icon: <Clock className="h-4 w-4" weight="bold" /> },
-        { label: '현재 위치', value: currentLocationLabel, icon: <MapPin className="h-4 w-4" weight="bold" /> },
-        { label: '날씨', value: weatherLabel, icon: <CloudSun className="h-4 w-4" weight="bold" /> },
+        { label: '시간', value: currentTimeLabel, icon: <Clock className="h-5 w-5" weight="bold" /> },
+        { label: '현재 위치', value: currentLocationLabel, icon: <MapPin className="h-5 w-5" weight="bold" /> },
+        { label: '날씨', value: weatherLabel, icon: <CloudSun className="h-5 w-5" weight="bold" /> },
       ]
 
   return (
     <motion.div
       data-testid="bottom-status-bar"
       className={[
-        'absolute bottom-0 left-0 right-0 z-30 grid h-14 items-center rounded-tl-xl rounded-tr-none bg-white text-[var(--nav-ink)] shadow-[0_-8px_24px_rgba(15,23,42,0.10)] max-sm:h-13',
+        'absolute bottom-0 left-0 right-0 z-30 grid h-16 items-center rounded-tl-xl rounded-tr-none bg-white text-[var(--nav-ink)] shadow-[0_-8px_24px_rgba(15,23,42,0.10)] max-sm:h-14',
         hasRoute ? 'grid-cols-5' : 'grid-cols-3',
       ].join(' ')}
       initial={{ opacity: 0, y: 16 }}
@@ -3208,14 +3369,12 @@ function BottomStatusBar({
     >
       {items.map((item) => (
         <div
-          className="flex min-w-0 items-center justify-center gap-2 border-r border-[var(--nav-border)] px-3 text-center last:border-r-0 max-sm:px-1.5"
+          aria-label={`${item.label} ${item.value}`}
+          className="flex min-w-0 items-center justify-center gap-2.5 border-r border-[var(--nav-border)] px-4 text-center last:border-r-0 max-sm:gap-1.5 max-sm:px-1.5"
           key={item.label}
         >
-          <span className="shrink-0 text-[var(--nav-muted)] max-sm:hidden">{item.icon}</span>
-          <span className="grid min-w-0 gap-0.5">
-            <span className="text-[11px] font-medium leading-none text-[var(--nav-muted)] max-sm:text-[10px]">{item.label}</span>
-            <span className="truncate text-sm font-semibold leading-tight max-sm:text-xs">{item.value}</span>
-          </span>
+          <span className="shrink-0 text-[var(--nav-muted)]">{item.icon}</span>
+          <span className="min-w-0 truncate text-base font-bold leading-tight max-sm:text-sm">{item.value}</span>
         </div>
       ))}
     </motion.div>
@@ -3753,7 +3912,7 @@ async function getCurrentWeatherLabel(position: Coordinate) {
   const weatherCode = data.current?.weather_code
 
   if (typeof temperature !== 'number') {
-    return '날씨 정보 없음'
+    return '정보 없음'
   }
 
   return `${getWeatherConditionLabel(weatherCode)} ${Math.round(temperature)}°`

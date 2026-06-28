@@ -248,12 +248,13 @@ describe('NavigationShell', () => {
     )
 
     expect(screen.getByRole('button', { name: 'Navi 호출' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Navi 호출' })).toHaveClass('right-0')
     expect(screen.getByTestId('voice-orb')).toHaveAttribute('data-state', 'idle')
     expect(screen.getByTestId('voice-orb')).toHaveAttribute('data-energy', '0')
     expect(screen.getByTestId('voice-orb')).toHaveAttribute('data-color-theme', 'daylight')
   })
 
-  it('steps through the dummy Navi assistant scenario without auto-playing it', () => {
+  it('steps through the dummy Navi assistant scenario without auto-playing it', async () => {
     const queryClient = new QueryClient()
 
     render(
@@ -271,16 +272,33 @@ describe('NavigationShell', () => {
 
     expect(screen.getByTestId('navi-assistant-panel')).toBeInTheDocument()
     expect(screen.getByTestId('navi-assistant-panel')).toHaveClass('overflow-visible')
+    expect(screen.getByTestId('navi-assistant-panel')).toHaveClass('pointer-events-none')
+    expect(screen.getByTestId('navi-assistant-aura')).toHaveClass('navi-assistant-aura')
+    expect(screen.getByTestId('navi-assistant-orb-slot')).toHaveClass('absolute')
+    expect(screen.getByTestId('navi-assistant-content')).toHaveClass('pt-[12rem]')
     expect(screen.getByRole('button', { name: 'Navi AI 에이전트 닫기' })).toBeInTheDocument()
     expect(screen.getByText('오늘 피곤한 하루였나봐요. 잠 깰 수 있게 도와드릴까요?')).toBeInTheDocument()
+    expect(screen.getByTestId('navi-assistant-speech-text')).toHaveAttribute(
+      'aria-label',
+      '오늘 피곤한 하루였나봐요. 잠 깰 수 있게 도와드릴까요?',
+    )
     expect(screen.getByTestId('voice-orb')).toHaveAttribute('data-state', 'speaking')
 
     fireEvent.click(screen.getByRole('button', { name: '다음 AI 시나리오 단계' }))
     expect(screen.getByText('듣는 중...')).toBeInTheDocument()
-    expect(screen.getByText('가까운 졸음쉼터랑 기분 전환할 음악 추천해줘')).toBeInTheDocument()
+    expect(screen.queryByTestId('navi-assistant-user-text')).not.toBeInTheDocument()
+    expect(await screen.findByTestId('navi-assistant-user-text')).toHaveAttribute(
+      'aria-label',
+      '가까운 졸음쉼터랑 기분 전환할 음악 추천해줘',
+    )
 
     fireEvent.click(screen.getByRole('button', { name: '다음 AI 시나리오 단계' }))
     expect(screen.getByText('생각 중...')).toBeInTheDocument()
+    expect(screen.getByTestId('navi-assistant-user-text')).toHaveAttribute(
+      'aria-label',
+      '가까운 졸음쉼터랑 기분 전환할 음악 추천해줘',
+    )
+    expect(screen.getByTestId('navi-assistant-user-text').querySelector('.navi-assistant-user-word')).toBeNull()
 
     fireEvent.click(screen.getByRole('button', { name: '다음 AI 시나리오 단계' }))
     expect(screen.getByTestId('navi-assistant-recommendations')).toBeInTheDocument()
@@ -334,6 +352,10 @@ describe('NavigationShell', () => {
     await waitFor(() => {
       expect(screen.getByTestId('bottom-status-bar')).toHaveClass('grid-cols-3')
     })
+    expect(screen.getByTestId('bottom-status-bar')).toHaveClass('h-16')
+    expect(screen.queryByText('시간')).not.toBeInTheDocument()
+    expect(screen.queryByText('현재 위치')).not.toBeInTheDocument()
+    expect(screen.queryByText('날씨')).not.toBeInTheDocument()
     expect(await screen.findByLabelText('제한속도 50km/h')).toBeInTheDocument()
     expect(await screen.findByText('서울특별시 중구 세종대로 110')).toBeInTheDocument()
   })
@@ -701,11 +723,12 @@ describe('NavigationShell', () => {
     expect(bottomStatusBar).not.toHaveClass('backdrop-blur-xl')
     expect(bottomStatusBar).toHaveClass('rounded-tl-xl')
     expect(bottomStatusBar).toHaveClass('rounded-tr-none')
-    expect(screen.getByText('도착')).toBeInTheDocument()
-    expect(screen.getByText('남은거리')).toBeInTheDocument()
-    expect(bottomStatusBar).toHaveTextContent(/도착.*남은시간.*목적지.*남은거리.*날씨/)
-    expect(bottomStatusBar).toContainElement(screen.getByText('남은시간'))
-    expect(bottomStatusBar).toContainElement(screen.getByText('목적지'))
+    expect(bottomStatusBar).toHaveClass('h-16')
+    expect(screen.queryByText('도착')).not.toBeInTheDocument()
+    expect(screen.queryByText('남은시간')).not.toBeInTheDocument()
+    expect(screen.queryByText('목적지')).not.toBeInTheDocument()
+    expect(screen.queryByText('남은거리')).not.toBeInTheDocument()
+    expect(screen.queryByText('날씨')).not.toBeInTheDocument()
     expect(bottomStatusBar).toContainElement(screen.getByText('서울 강남구'))
     expect(screen.getByText('좌회전')).toBeInTheDocument()
     expect(screen.getByText('500')).toBeInTheDocument()
