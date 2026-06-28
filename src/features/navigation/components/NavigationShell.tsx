@@ -977,7 +977,7 @@ export function NavigationShell() {
               <AppIconDock
                 activeSidePanel={activeSidePanel}
                 className={[
-                  'absolute top-0 z-40 transition-[right]',
+                  'absolute bottom-14 z-40 transition-[right] max-sm:bottom-13',
                   motionTiming.duration === 0
                     ? 'duration-0'
                     : 'duration-[340ms] ease-[cubic-bezier(0.34,0,0.2,1)]',
@@ -1113,7 +1113,7 @@ function AppIconDock({
     >
       <div
         data-testid="right-rail-dock"
-        className="pointer-events-auto inline-flex flex-col gap-1 rounded-bl-[1.15rem] rounded-r-none rounded-tl-none border-b border-white/70 bg-white p-1.5"
+        className="pointer-events-auto inline-flex flex-col gap-1 rounded-bl-none rounded-r-none rounded-tl-[1.15rem] border-t border-white/70 bg-white p-1.5"
       >
         <button
           aria-controls="settings-drawer"
@@ -1577,7 +1577,7 @@ function MusicPopover({
   return (
     <motion.section
       aria-label="음악"
-      className="pointer-events-auto absolute right-[4.25rem] top-3 z-50 rounded-[1.15rem] bg-white/94 text-[var(--nav-ink)] shadow-[0_12px_30px_rgb(15_23_42/0.12)] backdrop-blur-xl max-sm:right-2 max-sm:top-2"
+      className="pointer-events-auto absolute bottom-14 right-[4.25rem] z-50 rounded-[1.15rem] bg-white/94 text-[var(--nav-ink)] shadow-[0_12px_30px_rgb(15_23_42/0.12)] backdrop-blur-xl max-sm:bottom-13 max-sm:right-2"
       id="music-popover"
       data-testid="music-popover"
       exit={{ opacity: 0, y: -8, scale: 0.985 }}
@@ -2456,7 +2456,7 @@ function BottomStatusBar({
     <motion.div
       data-testid="bottom-status-bar"
       className={[
-        'absolute bottom-0 left-0 right-0 z-30 grid h-14 items-center rounded-t-xl bg-white/82 text-[var(--nav-ink)] shadow-[0_-8px_24px_rgba(15,23,42,0.10)] backdrop-blur-xl max-sm:h-13',
+        'absolute bottom-0 left-0 right-0 z-30 grid h-14 items-center rounded-tl-xl rounded-tr-none bg-white text-[var(--nav-ink)] shadow-[0_-8px_24px_rgba(15,23,42,0.10)] max-sm:h-13',
         hasRoute ? 'grid-cols-5' : 'grid-cols-3',
       ].join(' ')}
       initial={{ opacity: 0, y: 16 }}
