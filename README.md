@@ -7,11 +7,17 @@ React, Vite, and Tailwind frontend for a TMAP-powered web navigation demo. The a
 - Loads TMAP vector map SDK v3 through the backend proxy.
 - Keeps the TMAP app key out of frontend code.
 - Searches origin and destination with TMAP POI search.
-- Requests car routes from TMAP route guidance with `trafficInfo=Y`.
+- Falls back to Sejong University as the current location when browser location is denied or unavailable.
+- Opens destination search directly from the root `어디로 갈까요?` control.
+- Requests multiple TMAP car route candidates with `trafficInfo=Y` by `searchOption`: recommended, fastest, shortest, and highway-priority.
+- Renders route-option overview in forced 2D so origin, destination, and all candidate routes can be compared before guidance starts.
 - Renders route lines with congestion-aware segment colors when TMAP returns traffic data.
+- Restores the user's previous 2D/3D map mode and pitch after a route option is selected.
 - Runs a route-snapped driving simulation with `requestAnimationFrame`.
 - Rotates and pans the vector map under the arrow marker so the driving direction stays upward.
+- Clips the remaining route-line head in the same animation frame as marker movement, while keeping text and instruction updates throttled.
 - Updates next guidance, remaining distance/time, ETA, current address, and road status.
+- Provides a floating settings panel for map mode, zoom, 3D pitch, and signed-in user display; settings are locked during route selection.
 - Uses local Pretendard as the default UI font.
 
 ## Project Layout
@@ -98,7 +104,7 @@ POST /api/tmap/road-match
 GET  /api/tmap/reverse-geocode?lat=...&lng=...
 ```
 
-The backend sends `appKey` in request headers and normalizes SDK asset loading so the browser does not call TMAP with the key directly.
+The backend sends `appKey` in request headers and normalizes SDK asset loading so the browser does not call TMAP with the key directly. `/api/tmap/routes` validates finite origin/destination coordinates before proxying the request.
 
 ## Verification
 
