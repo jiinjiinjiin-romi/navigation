@@ -1435,7 +1435,7 @@ export function NavigationShell() {
               <AppIconDock
                 activeSidePanel={activeSidePanel}
                 className={[
-                  'absolute bottom-14 z-40 transition-[right] max-sm:bottom-13',
+                  'absolute bottom-[43px] z-40 transition-[right] max-sm:bottom-[37px]',
                   motionTiming.duration === 0
                     ? 'duration-0'
                     : 'duration-[340ms] ease-[cubic-bezier(0.34,0,0.2,1)]',
@@ -3104,7 +3104,7 @@ function IdleMapControls({
       <AnimatePresence initial={false}>
         {!searchOpen ? (
           <motion.div
-            className="absolute bottom-20 left-1/2 w-[min(26rem,calc(100%-2rem))] -translate-x-1/2 max-sm:bottom-18 max-sm:w-[min(22rem,calc(100%-1.5rem))]"
+            className="absolute bottom-[59px] left-1/2 w-[min(26rem,calc(100%-2rem))] -translate-x-1/2 max-sm:bottom-[53px] max-sm:w-[min(22rem,calc(100%-1.5rem))]"
             initial={{ opacity: 0, y: 14, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 12, scale: 0.985 }}
@@ -3360,7 +3360,7 @@ function BottomStatusBar({
     <motion.div
       data-testid="bottom-status-bar"
       className={[
-        'absolute bottom-0 left-0 right-0 z-30 grid h-16 items-center rounded-tl-xl rounded-tr-none bg-white text-[var(--nav-ink)] shadow-[0_-8px_24px_rgba(15,23,42,0.10)] max-sm:h-14',
+        'absolute bottom-0 left-0 right-0 z-30 grid h-[43px] items-center rounded-tl-xl rounded-tr-none bg-white text-[var(--nav-ink)] shadow-[0_-8px_24px_rgba(15,23,42,0.10)] max-sm:h-[37px]',
         hasRoute ? 'grid-cols-5' : 'grid-cols-3',
       ].join(' ')}
       initial={{ opacity: 0, y: 16 }}
