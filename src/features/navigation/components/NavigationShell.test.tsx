@@ -94,7 +94,7 @@ vi.mock('./TmapPanel', () => ({
 	            type="button"
 	            onClick={() => onSelectRouteOption?.(option.id)}
 	          >
-	            {`${option.label} 여기서 경로 선택`}
+	            {`${option.label} 선택`}
 	          </button>
 	        ))}
 	        {simulationPosition
@@ -797,7 +797,7 @@ describe('NavigationShell', () => {
     expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-route-options', '2')
     expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-route-points', '0')
 
-    fireEvent.click(screen.getByRole('button', { name: '최소시간 여기서 경로 선택' }))
+    fireEvent.click(screen.getByRole('button', { name: '최소시간 선택' }))
 
     await waitFor(() => {
       expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-route-options', '0')
@@ -867,7 +867,7 @@ describe('NavigationShell', () => {
       expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-camera-mode', '2d')
     })
     expect(await screen.findByText('2개 경로')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: '최소시간 여기서 경로 선택' }))
+    fireEvent.click(screen.getByRole('button', { name: '최소시간 선택' }))
 
     await waitFor(() => {
       expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-route-options', '0')
@@ -1076,7 +1076,7 @@ describe('NavigationShell', () => {
     await waitFor(() => {
       expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-route-options', '0')
     })
-    expect(screen.queryByRole('button', { name: '추천 여기서 경로 선택' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '추천 선택' })).not.toBeInTheDocument()
   })
 
   it('cancels route selection when the destination editor is closed with an empty destination', async () => {

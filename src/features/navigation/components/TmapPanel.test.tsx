@@ -180,6 +180,11 @@ describe('TmapPanel', () => {
         strokeColor: '#F97316',
       }),
     )
+    const routeLineCalls = vi.mocked(window.Tmapv3!.Polyline).mock.calls.map(([options]) => options)
+    expect(routeLineCalls.filter((options) => options.strokeOpacity === 0.72)).toHaveLength(2)
+    expect(routeLineCalls.filter((options) => options.strokeWeight === 6)).toHaveLength(2)
+    expect(routeLineCalls.filter((options) => options.strokeOpacity === 0.58)).toHaveLength(2)
+    expect(routeLineCalls.filter((options) => options.strokeWeight === 11)).toHaveLength(2)
     expect(window.Tmapv3!.Marker).toHaveBeenCalledWith(
       expect.objectContaining({
         iconHTML: expect.stringContaining('data-route-option-id="route-recommended"'),
@@ -187,7 +192,37 @@ describe('TmapPanel', () => {
     )
     expect(window.Tmapv3!.Marker).toHaveBeenCalledWith(
       expect.objectContaining({
-        iconHTML: expect.stringContaining('여기서 경로 선택'),
+        iconHTML: expect.stringContaining('최적 경로'),
+      }),
+    )
+    expect(window.Tmapv3!.Marker).toHaveBeenCalledWith(
+      expect.objectContaining({
+        iconHTML: expect.stringContaining('>선택</button>'),
+      }),
+    )
+    expect(window.Tmapv3!.Marker).toHaveBeenCalledWith(
+      expect.objectContaining({
+        iconHTML: expect.stringContaining('top:-18px'),
+      }),
+    )
+    expect(window.Tmapv3!.Marker).toHaveBeenCalledWith(
+      expect.objectContaining({
+        iconHTML: expect.stringContaining('background:#eef4fb'),
+      }),
+    )
+    expect(window.Tmapv3!.Marker).toHaveBeenCalledWith(
+      expect.objectContaining({
+        iconHTML: expect.stringContaining('min-width: 224px'),
+      }),
+    )
+    expect(window.Tmapv3!.Marker).toHaveBeenCalledWith(
+      expect.objectContaining({
+        iconHTML: expect.stringContaining('background: rgba(255,255,255,0.995)'),
+      }),
+    )
+    expect(window.Tmapv3!.Marker).toHaveBeenCalledWith(
+      expect.objectContaining({
+        iconHTML: expect.stringContaining('font-size:16px'),
       }),
     )
     expect(setCenter).toHaveBeenLastCalledWith(
@@ -213,7 +248,7 @@ describe('TmapPanel', () => {
     expect(window.Tmapv3!.Polyline).toHaveBeenCalledTimes(4)
     expect(polylineSetOptions).toHaveBeenCalledWith(
       expect.objectContaining({
-        strokeOpacity: 0.95,
+        strokeOpacity: 0.96,
         strokeWeight: 8,
       }),
     )
@@ -271,7 +306,7 @@ describe('TmapPanel', () => {
     await waitFor(() => {
       expect(window.Tmapv3!.Marker).toHaveBeenCalledWith(
         expect.objectContaining({
-          iconHTML: expect.stringContaining('여기서 경로 선택'),
+          iconHTML: expect.stringContaining('>선택</button>'),
         }),
       )
     })
@@ -518,6 +553,7 @@ describe('TmapPanel', () => {
     await waitFor(() => {
       expect(animationFrames.length).toBeGreaterThan(0)
     })
+    expect(setPitch).not.toHaveBeenCalledWith(45)
 
     act(() => {
       animationFrames.shift()?.(0)
@@ -525,14 +561,21 @@ describe('TmapPanel', () => {
     expect(setPitch).toHaveBeenLastCalledWith(0)
 
     act(() => {
-      animationFrames.shift()?.(120)
+      animationFrames.shift()?.(96)
+    })
+    const earlyPitch = setPitch.mock.calls[setPitch.mock.calls.length - 1]?.[0]
+    expect(earlyPitch).toBeGreaterThan(0)
+    expect(earlyPitch).toBeLessThan(3)
+
+    act(() => {
+      animationFrames.shift()?.(480)
     })
     const midPitch = setPitch.mock.calls[setPitch.mock.calls.length - 1]?.[0]
     expect(midPitch).toBeGreaterThan(0)
     expect(midPitch).toBeLessThan(45)
 
     act(() => {
-      animationFrames.shift()?.(240)
+      animationFrames.shift()?.(960)
     })
     expect(setPitch).toHaveBeenLastCalledWith(45)
     expect(markerSetOptions).toHaveBeenLastCalledWith(
@@ -585,7 +628,7 @@ describe('TmapPanel', () => {
       expect(animationFrames.length).toBeGreaterThanOrEqual(2)
     })
 
-    ;[0, 120, 240, 360].forEach((timestamp) => {
+    ;[0, 240, 480, 720, 960].forEach((timestamp) => {
       const frame = animationFrames.shift()
       if (!frame) {
         return

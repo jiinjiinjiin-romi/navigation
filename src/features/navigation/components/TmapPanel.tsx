@@ -36,9 +36,10 @@ const MAP_TOP_DOWN_PITCH = 0
 const ROUTE_SELECTION_MIN_ZOOM = 10
 const ROUTE_SELECTION_MAX_ZOOM = 16
 const ROUTE_SELECTION_ZOOM_OUT_MARGIN = 0.9
+const ROUTE_OPTION_LABEL_OFFSET_METERS = 560
 const CAMERA_FOLLOW_OFFSET_Y = 180
 const CAMERA_ANIMATION_MS = 220
-const MAP_MODE_TRANSITION_MS = 240
+const MAP_MODE_TRANSITION_MS = 960
 const COMPASS_CAMERA_ANIMATION_MS = 640
 const CURRENT_LOCATION_DOUBLE_PRESS_MS = 1200
 const ROUTE_LINE_STROKE_WEIGHT = 13
@@ -376,10 +377,9 @@ export function TmapPanel({
 
   const updateRouteOptionOverlayPreview = useCallback((previewOptionId?: string) => {
     const overlays = routeOptionOverlayRefs.current
-    const activeOptionId = previewOptionId ?? overlays[0]?.id
 
     overlays.forEach((overlay) => {
-      const isActive = overlay.id === activeOptionId
+      const isActive = previewOptionId ? overlay.id === previewOptionId : false
       const lineStyle = getRouteOptionOverlayLineStyle(isActive)
 
       overlay.lines.forEach(({ kind, line }) => {
@@ -520,7 +520,7 @@ export function TmapPanel({
       }
 
       const progress = Math.min((timestamp - startedAt) / MAP_MODE_TRANSITION_MS, 1)
-      const easedProgress = easeOutQuart(progress)
+      const easedProgress = easeInOutCubic(progress)
       const interpolatedPitch = fromPitch + (nextPitch - fromPitch) * easedProgress
 
       applyMapPitch(interpolatedPitch)
@@ -600,13 +600,16 @@ export function TmapPanel({
     }
 
     const shouldApplyMap = options.applyMap ?? true
+    const defaultPitch = mapModePitchFrameRef.current !== undefined
+      ? getCurrentMapPitch()
+      : shouldApplyMap
+        ? getSettingsMapPitch()
+        : getDisplayMapPitch()
     const nextCamera = {
       position,
       bearing: typeof bearing === 'number' ? bearing : renderedBearingRef.current,
       markerBearing: options.markerBearing ?? 0,
-      pitch: options.pitch ?? (
-        shouldApplyMap ? getSettingsMapPitch() : getDisplayMapPitch()
-      ),
+      pitch: options.pitch ?? defaultPitch,
     }
     const shouldReduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
 
@@ -839,8 +842,11 @@ export function TmapPanel({
     setRouteDirectionZoom(nextZoom)
 
     if (modeChanged) {
-      applyMapCameraSettings(mapRef.current, nextZoom, getCurrentMapPitch())
       animateMapModePitch(nextPitch)
+      return
+    }
+
+    if (mapModePitchFrameRef.current !== undefined) {
       return
     }
 
@@ -893,8 +899,9 @@ export function TmapPanel({
       displayPosition,
       cameraBearing.mapBearing,
       {
-        animated: Boolean(route?.coordinates.length),
+        animated: Boolean(route?.coordinates.length || mapModePitchFrameRef.current !== undefined),
         applyMap: !hasRouteSelectionOptions && (!route?.coordinates.length || shouldFollowCamera),
+        animatePosition: mapModePitchFrameRef.current === undefined,
         markerBearing,
       },
     )
@@ -982,9 +989,8 @@ export function TmapPanel({
     }
 
     clearRouteOptionOverlays()
-    const activeOptionId = routeOptions[0]?.id
     routeOptionOverlayRefs.current = routeOptions.map((option, index) => (
-      createRouteOptionOverlay(option, index, activeOptionId, mapRef.current)
+      createRouteOptionOverlay(option, index, undefined, mapRef.current)
     ))
     routeOptionOverlaySignatureRef.current = overlaySignature
 
@@ -1505,6 +1511,17 @@ function interpolateCoordinate(from: Coordinate, to: Coordinate, progress: numbe
   }
 }
 
+function offsetCoordinateByBearing(coordinate: Coordinate, bearing: number, meters: number): Coordinate {
+  const earthMetersPerDegree = 111_320
+  const bearingRad = normalizeBearing(bearing) * Math.PI / 180
+  const latitudeScale = Math.max(0.2, Math.cos(coordinate.lat * Math.PI / 180))
+
+  return {
+    lat: coordinate.lat + (Math.cos(bearingRad) * meters) / earthMetersPerDegree,
+    lng: coordinate.lng + (Math.sin(bearingRad) * meters) / (earthMetersPerDegree * latitudeScale),
+  }
+}
+
 function easeInOutCubic(progress: number) {
   return progress < 0.5
     ? 4 * progress * progress * progress
@@ -1770,7 +1787,7 @@ function createRouteOptionOverlay(
   const isActive = option.id === activeOptionId
   const lineStyle = getRouteOptionOverlayLineStyle(isActive)
   const segments = getRouteOptionLineSegments(option.route)
-  const labelCoordinate = getRouteCoordinateAtRatio(option.route.coordinates, getRouteOptionLabelRatio(index))
+  const labelCoordinate = getRouteOptionLabelCoordinate(option.route.coordinates, index)
     ?? option.route.coordinates[Math.floor(option.route.coordinates.length / 2)]
     ?? option.route.coordinates[0]
   const marker = new window.Tmapv3!.Marker({
@@ -1829,20 +1846,21 @@ function getRouteOptionLineSegments(route: NavigationRoute): RouteTrafficSegment
 
 function getRouteOptionOverlayLineStyle(active: boolean) {
   return {
-    borderOpacity: active ? 0.88 : 0.16,
-    borderWeight: active ? 13 : 9,
-    strokeOpacity: active ? 0.95 : 0.28,
-    strokeWeight: active ? 8 : 5,
+    borderOpacity: active ? 0.9 : 0.58,
+    borderWeight: active ? 13 : 11,
+    strokeOpacity: active ? 0.96 : 0.72,
+    strokeWeight: active ? 8 : 6,
   }
 }
 
 function createRouteOptionBubbleHtml(option: NavigationRouteOption, index: number, active: boolean) {
-  const laneOffset = [-28, 24, -72, 68][index % 4]
+  const laneOffset = [-18, -10, -26, -14][index % 4]
   const durationLabel = formatRouteDuration(option.route.summary.durationSeconds)
   const distanceLabel = formatRouteDistance(option.route.summary.distanceMeters)
   const arrivalLabel = formatRouteOptionArrival(option.route.summary.durationSeconds)
-  const opacity = active ? '1' : '0.78'
-  const scale = active ? '1' : '0.96'
+  const opacity = active ? '1' : '0.96'
+  const scale = active ? '1.02' : '1'
+  const displayLabel = option.isRecommended && option.label === '추천' ? '최적 경로' : option.label
 
   return `
     <div
@@ -1852,39 +1870,40 @@ function createRouteOptionBubbleHtml(option: NavigationRouteOption, index: numbe
         transform: translate(-50%, calc(-100% + ${laneOffset}px)) scale(${scale});
         transform-origin: 50% 100%;
         opacity: ${opacity};
-        min-width: 168px;
-        max-width: 204px;
+        min-width: 224px;
+        max-width: 260px;
         border-radius: 14px;
-        background: rgba(255,255,255,0.97);
+        background: rgba(255,255,255,0.995);
         color: #172033;
-        box-shadow: 0 8px 20px rgba(15,23,42,0.16);
-        border: 1px solid rgba(148,163,184,0.28);
-        padding: 10px;
+        box-shadow: 0 12px 28px rgba(15,23,42,0.18);
+        border: 1px solid rgba(148,163,184,0.34);
+        padding: 14px;
         pointer-events: auto;
         font-family: Pretendard, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
       "
     >
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;">
-        <span style="width:9px;height:9px;border-radius:999px;background:${escapeHtml(option.color)};box-shadow:0 0 0 3px rgba(14,165,233,0.12);"></span>
-        <span style="font-size:13px;font-weight:800;line-height:1.1;">${escapeHtml(option.label)}</span>
-        <span style="margin-left:auto;font-size:11px;font-weight:700;color:#667085;">${escapeHtml(arrivalLabel)} 도착</span>
+      ${option.isRecommended ? '<div style="position:absolute;left:12px;top:-18px;border-radius:999px;background:#1746A2;color:#fff;font-size:12px;font-weight:900;line-height:1;padding:7px 10px;box-shadow:0 8px 16px rgba(23,70,162,0.22);">추천</div>' : ''}
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:9px;min-width:0;">
+        <span style="width:10px;height:10px;flex:0 0 auto;border-radius:999px;background:${escapeHtml(option.color)};box-shadow:0 0 0 4px rgba(14,165,233,0.13);"></span>
+        <span style="min-width:0;flex:1 1 auto;font-size:16px;font-weight:900;line-height:1.22;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(displayLabel)}</span>
+        <span style="flex:0 0 auto;font-size:12px;font-weight:800;color:#667085;white-space:nowrap;">${escapeHtml(arrivalLabel)} 도착</span>
       </div>
-      <div style="font-size:12px;font-weight:700;color:#475467;margin-bottom:9px;">${escapeHtml(durationLabel)} · ${escapeHtml(distanceLabel)}</div>
+      <div style="font-size:14px;font-weight:800;color:#475467;margin-bottom:12px;">${escapeHtml(durationLabel)} · ${escapeHtml(distanceLabel)}</div>
       <button
         type="button"
         data-route-option-select
         style="
           width:100%;
-          height:30px;
+          height:36px;
           border:0;
           border-radius:999px;
-          background:${active ? escapeHtml(option.color) : '#eef4fb'};
-          color:${active ? '#ffffff' : '#172033'};
-          font-size:12px;
-          font-weight:800;
+          background:#eef4fb;
+          color:#172033;
+          font-size:14px;
+          font-weight:900;
           cursor:pointer;
         "
-      >여기서 경로 선택</button>
+      >선택</button>
     </div>
   `
 }
@@ -2058,6 +2077,21 @@ function getRouteOptionLabelRatio(index: number) {
   return [0.42, 0.56, 0.35, 0.66][index % 4]
 }
 
+function getRouteOptionLabelCoordinate(coordinates: Coordinate[], index: number) {
+  const anchor = getRouteAnchorAtDistance(
+    coordinates,
+    getRouteDistanceMeters(coordinates) * getRouteOptionLabelRatio(index),
+  )
+  const coordinate = anchor?.coordinate ?? getRouteCoordinateAtRatio(coordinates, getRouteOptionLabelRatio(index))
+  if (!coordinate) {
+    return undefined
+  }
+
+  const side = index % 2 === 0 ? 1 : -1
+  const offsetMeters = ROUTE_OPTION_LABEL_OFFSET_METERS + (index % 3) * 120
+  return offsetCoordinateByBearing(coordinate, (anchor?.bearing ?? 0) + 90 * side, offsetMeters)
+}
+
 function getRouteCoordinateAtRatio(coordinates: Coordinate[], ratio: number) {
   if (!coordinates.length) {
     return undefined
@@ -2078,6 +2112,9 @@ function getRouteOptionBoundsCoordinates(
   return [
     ...anchors.filter((coordinate): coordinate is Coordinate => Boolean(coordinate)),
     ...options.flatMap((option) => option.route.coordinates),
+    ...options
+      .map((option, index) => getRouteOptionLabelCoordinate(option.route.coordinates, index))
+      .filter((coordinate): coordinate is Coordinate => Boolean(coordinate)),
   ]
 }
 
