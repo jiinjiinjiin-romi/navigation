@@ -21,6 +21,7 @@ interface TmapPanelProps {
   simulationPosition?: Coordinate
   activeRouteOptionId?: string
   onCameraSettingsChange?: (settings: Partial<MapCameraSettings>) => void
+  onRouteOptionsOverlayReady?: (ready: boolean) => void
   onRouteOptionPreviewChange?: (id: string | undefined) => void
   onSimulationFrameRendererReady?: (renderFrame: ((position: Coordinate) => void) | undefined) => void
   onRequestLocation?: () => void
@@ -167,6 +168,7 @@ export function TmapPanel({
   simulationPosition,
   activeRouteOptionId,
   onCameraSettingsChange,
+  onRouteOptionsOverlayReady,
   onRouteOptionPreviewChange,
   onSimulationFrameRendererReady,
   onRequestLocation,
@@ -180,6 +182,7 @@ export function TmapPanel({
   const routeOptionOverlaySignatureRef = useRef<string | undefined>(undefined)
   const routeOptionActiveIdRef = useRef<string | undefined>(undefined)
   const routeOptionOverlayBuildFrameRef = useRef<number | undefined>(undefined)
+  const routeOptionOverlayVisibleRef = useRef(false)
   const routeDirectionMarkerRefs = useRef<RouteDirectionMarker[]>([])
   const routeLineSignatureRef = useRef<string | undefined>(undefined)
   const routeLineStructureSignatureRef = useRef<string | undefined>(undefined)
@@ -220,7 +223,7 @@ export function TmapPanel({
         ? currentBearing
         : nextBearing
     })
-  }, [])
+  }, [onRouteOptionsOverlayReady])
 
   const resolveCameraCenter = useCallback((position: Coordinate) => {
     const tmap = window.Tmapv3
@@ -399,11 +402,13 @@ export function TmapPanel({
       window.cancelAnimationFrame(routeOptionOverlayBuildFrameRef.current)
       routeOptionOverlayBuildFrameRef.current = undefined
     }
+    onRouteOptionsOverlayReady?.(false)
     routeOptionOverlayRefs.current.forEach((overlay) => {
       overlay.baseLines.forEach(disposeRouteOptionPolyline)
     })
     disposeRouteOptionRenderedLines(routeOptionActiveLineRefs.current)
     routeOptionActiveLineRefs.current = []
+    routeOptionOverlayVisibleRef.current = false
     routeOptionOverlayRefs.current = []
     routeOptionHitTestCacheRef.current = undefined
     routeOptionOverlaySignatureRef.current = undefined
@@ -427,7 +432,7 @@ export function TmapPanel({
         activeOverlay.option,
         activeOverlay.segments,
         true,
-        mapRef.current,
+        routeOptionOverlayVisibleRef.current ? mapRef.current : undefined,
       )
     }
     routeOptionActiveIdRef.current = activeOptionId
@@ -952,6 +957,7 @@ export function TmapPanel({
     }
 
     if (route?.coordinates.length || !routeOptions?.length) {
+      onRouteOptionsOverlayReady?.(false)
       clearRouteOptionOverlays()
       return
     }
@@ -962,7 +968,12 @@ export function TmapPanel({
     }
 
     clearRouteOptionOverlays()
+    onRouteOptionsOverlayReady?.(false)
     const activeOptionId = getActiveRouteOptionId(routeOptions, activeRouteOptionId)
+    const renderRouteOptions = [
+      ...routeOptions.filter((option) => option.id === activeOptionId),
+      ...routeOptions.filter((option) => option.id !== activeOptionId),
+    ]
     const map = mapRef.current
 
     const routeOptionBoundsCoordinates = getRouteOptionBoundsCoordinates(routeOptions, [
@@ -1005,6 +1016,9 @@ export function TmapPanel({
         map,
       )
       updateRouteOptionOverlayPreview(activeOptionId, true)
+      revealRouteOptionOverlays(routeOptionOverlayRefs.current, routeOptionActiveLineRefs.current, map)
+      routeOptionOverlayVisibleRef.current = true
+      onRouteOptionsOverlayReady?.(true)
       markRoutePerformance('route-option-overlay-end')
       measureRoutePerformance('route-option-overlay-total', 'route-option-overlay-start', 'route-option-overlay-end')
     }
@@ -1014,19 +1028,19 @@ export function TmapPanel({
         return
       }
 
-      const option = routeOptions[index]
+      const option = renderRouteOptions[index]
       if (!option) {
         finishRouteOptionOverlayBuild()
         return
       }
 
-      const overlay = createRouteOptionOverlay(option, map)
+      const overlay = createRouteOptionOverlay(option)
       routeOptionOverlayRefs.current = [
         ...routeOptionOverlayRefs.current,
         overlay,
       ]
 
-      if (index + 1 >= routeOptions.length) {
+      if (index + 1 >= renderRouteOptions.length) {
         finishRouteOptionOverlayBuild()
         return
       }
@@ -1037,7 +1051,9 @@ export function TmapPanel({
     }
 
     routeOptionOverlayBuildFrameRef.current = window.requestAnimationFrame(() => {
-      buildBaseRouteOptionOverlay(0)
+      routeOptionOverlayBuildFrameRef.current = window.requestAnimationFrame(() => {
+        buildBaseRouteOptionOverlay(0)
+      })
     })
 
     return () => {
@@ -1052,6 +1068,7 @@ export function TmapPanel({
     activeRouteOptionId,
     destination?.coordinate,
     onRouteOptionPreviewChange,
+    onRouteOptionsOverlayReady,
     origin?.coordinate,
     route?.coordinates.length,
     routeOptions,
@@ -1835,7 +1852,7 @@ function createRouteLinePolylines(
 
 function createRouteOptionOverlay(
   option: NavigationRouteOption,
-  map: Window['Tmapv3Map'],
+  map?: Window['Tmapv3Map'] | null,
 ): RouteOptionOverlay {
   const segments = getRouteOptionLineSegments(option.route)
   const baseLines = createRouteOptionPolylines(option, segments, false, map)
@@ -1903,6 +1920,21 @@ function disposeRouteOptionPolyline(renderedLine: RouteOptionRenderedLine) {
 
 function disposeRouteOptionRenderedLines(lines: RouteOptionRenderedLine[]) {
   lines.forEach(disposeRouteOptionPolyline)
+}
+
+function revealRouteOptionOverlays(
+  overlays: RouteOptionOverlay[],
+  activeLines: RouteOptionRenderedLine[],
+  map: Window['Tmapv3Map'],
+) {
+  overlays.forEach((overlay) => {
+    overlay.baseLines.forEach((renderedLine) => {
+      renderedLine.line.setMap?.(map)
+    })
+  })
+  activeLines.forEach((renderedLine) => {
+    renderedLine.line.setMap?.(map)
+  })
 }
 
 function getHiddenRouteOptionPath(path: unknown[]) {

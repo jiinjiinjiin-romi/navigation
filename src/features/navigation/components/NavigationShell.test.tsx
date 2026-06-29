@@ -6,6 +6,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NavigationShell } from './NavigationShell'
 import { getCurrentAddress, getRoadMatch, getRouteOptions, searchPlaces } from '../api/tmapApi'
 
+let routeOptionsOverlayReadyByDefault = true
+let latestRouteOptionsOverlayReady: ((ready: boolean) => void) | undefined
+
 vi.mock('../api/tmapApi', () => ({
   searchPlaces: vi.fn(),
   getRouteOptions: vi.fn(),
@@ -50,6 +53,7 @@ vi.mock('./TmapPanel', () => ({
     simulationPosition,
     activeRouteOptionId,
     onCameraSettingsChange,
+    onRouteOptionsOverlayReady,
     onRouteOptionPreviewChange,
     onSimulationFrameRendererReady,
   }: {
@@ -60,9 +64,21 @@ vi.mock('./TmapPanel', () => ({
     simulationPosition?: { lat: number; lng: number }
     activeRouteOptionId?: string
     onCameraSettingsChange?: (settings: Partial<{ mode: '2d' | '3d'; zoom: number; pitch: number }>) => void
+    onRouteOptionsOverlayReady?: (ready: boolean) => void
     onRouteOptionPreviewChange?: (id: string | undefined) => void
     onSimulationFrameRendererReady?: (renderFrame: ((position: { lat: number; lng: number }) => void) | undefined) => void
   }) => {
+    useEffect(() => {
+      latestRouteOptionsOverlayReady = onRouteOptionsOverlayReady
+      onRouteOptionsOverlayReady?.(Boolean(routeOptions?.length) && routeOptionsOverlayReadyByDefault)
+
+      return () => {
+        if (latestRouteOptionsOverlayReady === onRouteOptionsOverlayReady) {
+          latestRouteOptionsOverlayReady = undefined
+        }
+      }
+    }, [onRouteOptionsOverlayReady, routeOptions?.length])
+
     useEffect(() => {
       onSimulationFrameRendererReady?.((position) => {
         window.__lastRenderedSimulationFrame = position
@@ -148,6 +164,8 @@ describe('NavigationShell', () => {
   }
 
   beforeEach(() => {
+    routeOptionsOverlayReadyByDefault = true
+    latestRouteOptionsOverlayReady = undefined
     vi.useRealTimers()
     window.history.replaceState(null, '', '/')
     mockedSearchPlaces.mockReset()
@@ -904,6 +922,77 @@ describe('NavigationShell', () => {
     })
 
     expect(await screen.findByText('2개 경로')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.queryByTestId('route-search-loading-modal')).not.toBeInTheDocument()
+    })
+  })
+
+  it('keeps route cards hidden until route overlays are ready', async () => {
+    routeOptionsOverlayReadyByDefault = false
+    mockedGetRouteOptions.mockResolvedValue([
+      {
+        id: 'route-recommended',
+        label: '추천',
+        searchOption: '0',
+        color: '#0EA5E9',
+        isRecommended: true,
+        route: {
+          coordinates: [
+            { lat: 37.5665, lng: 126.978 },
+            { lat: 37.4979, lng: 127.0276 },
+          ],
+          summary: {
+            distanceMeters: 12340,
+            durationSeconds: 1320,
+          },
+        },
+      },
+      {
+        id: 'route-fastest',
+        label: '최소시간',
+        searchOption: '2',
+        color: '#F97316',
+        isRecommended: false,
+        route: {
+          coordinates: [
+            { lat: 37.5665, lng: 126.978 },
+            { lat: 37.51, lng: 127.01 },
+            { lat: 37.4979, lng: 127.0276 },
+          ],
+          summary: {
+            distanceMeters: 12800,
+            durationSeconds: 1260,
+          },
+        },
+      },
+    ])
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell />
+      </QueryClientProvider>,
+    )
+
+    await openDestinationEditor()
+    fireEvent.click(await screen.findByRole('button', { name: '도착지를 회사로 설정' }))
+
+    await waitFor(() => {
+      expect(mockedGetRouteOptions).toHaveBeenCalled()
+    })
+    expect(await screen.findByTestId('route-search-loading-modal')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '최적 경로 경로 보기' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '최소시간 경로 보기' })).not.toBeInTheDocument()
+
+    act(() => {
+      latestRouteOptionsOverlayReady?.(true)
+    })
+
+    expect(await screen.findByText('2개 경로')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '최적 경로 경로 보기' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '최소시간 경로 보기' })).toBeInTheDocument()
     await waitFor(() => {
       expect(screen.queryByTestId('route-search-loading-modal')).not.toBeInTheDocument()
     })

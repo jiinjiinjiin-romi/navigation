@@ -687,6 +687,7 @@ export function NavigationShell() {
   const [highlightedIndex, setHighlightedIndex] = useState(0)
   const [routeSearchOpen, setRouteSearchOpen] = useState(false)
   const [routeOptionsSearchReady, setRouteOptionsSearchReady] = useState(false)
+  const [routeOptionsOverlayReady, setRouteOptionsOverlayReady] = useState(false)
   const [selectedRouteOptionId, setSelectedRouteOptionId] = useState<string>()
   const [activeSidePanel, setActiveSidePanel] = useState<SidePanelId | null>(null)
   const [musicModalOpen, setMusicModalOpen] = useState(false)
@@ -810,10 +811,16 @@ export function NavigationShell() {
   const routeOptions = routeSelectionMode && !hasRouteSearchDraftMismatch
     ? routeOptionsQuery.data ?? []
     : undefined
+  const routeOptionsReady = Boolean(routeOptions?.length && routeOptionsOverlayReady)
+  const visibleRouteOptions = routeOptionsReady ? routeOptions : []
   const routeOptionsLoading = routeSelectionMode &&
     !hasRouteSearchDraftMismatch &&
-    !routeOptions?.length &&
-    (!routeOptionsSearchReady || routeOptionsQuery.isFetching)
+    !routeOptionsReady &&
+    (
+      !routeOptionsSearchReady ||
+      routeOptionsQuery.isFetching ||
+      Boolean(routeOptions?.length)
+    )
   const [previewRouteOptionId, setPreviewRouteOptionId] = useState<string | undefined>(undefined)
   const activeRouteOptionId = useMemo(() => (
     routeOptions?.some((option) => option.id === previewRouteOptionId)
@@ -1161,6 +1168,7 @@ export function NavigationShell() {
       routeSelectionMode &&
       !hasRouteSearchDraftMismatch &&
       !routeOptionsQuery.isFetching &&
+      routeOptionsReady &&
       routeOptions?.length === 1
     ) {
       selectRouteOption(routeOptions[0].id)
@@ -1168,6 +1176,7 @@ export function NavigationShell() {
   }, [
     hasRouteSearchDraftMismatch,
     routeOptions,
+    routeOptionsReady,
     routeOptionsQuery.isFetching,
     routeSelectionMode,
     selectRouteOption,
@@ -1356,6 +1365,7 @@ export function NavigationShell() {
               simulationPosition={simulationPosition}
               activeRouteOptionId={activeRouteOptionId}
               onCameraSettingsChange={updateMapCameraSettings}
+              onRouteOptionsOverlayReady={setRouteOptionsOverlayReady}
               onRouteOptionPreviewChange={setPreviewRouteOptionId}
               onSimulationFrameRendererReady={(renderFrame) => {
                 simulationFrameRendererRef.current = renderFrame
@@ -1392,7 +1402,7 @@ export function NavigationShell() {
                     optionCount={routeOptions?.length ?? 0}
                     originLabel={origin?.name || originKeyword || currentOriginLabel}
                     activeRouteOptionId={activeRouteOptionId}
-                    routeOptions={routeOptions ?? []}
+                    routeOptions={visibleRouteOptions ?? []}
                     onEditRoute={() => {
                       openRouteSearchEditor('destination')
                     }}
