@@ -1757,7 +1757,7 @@ describe('NavigationShell', () => {
     expect(screen.getByRole('button', { name: '시뮬레이션 중지' })).toBeInTheDocument()
     expect(screen.getByTestId('primary-maneuver-card')).toBeInTheDocument()
     expect(screen.getByText('좌회전')).toBeInTheDocument()
-    expect(screen.getByTestId('tmap-panel')).toHaveTextContent('sim:37.5665,126.9780')
+    expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-route-points', '2')
 
     fireEvent.click(screen.getByRole('button', { name: '시뮬레이션 중지' }))
 
@@ -1999,6 +1999,74 @@ describe('NavigationShell', () => {
       expect(screen.getByText('494')).toBeInTheDocument()
       expect(screen.getByText('894m')).toBeInTheDocument()
     })
+
+    requestAnimationFrameSpy.mockRestore()
+    cancelAnimationFrameSpy.mockRestore()
+  })
+
+  it('starts simulation camera frames after the zero-progress route point', async () => {
+    const rafCallbacks: FrameRequestCallback[] = []
+    const requestAnimationFrameSpy = vi
+      .spyOn(window, 'requestAnimationFrame')
+      .mockImplementation((callback) => {
+        rafCallbacks.push(callback)
+        return rafCallbacks.length
+      })
+    const cancelAnimationFrameSpy = vi
+      .spyOn(window, 'cancelAnimationFrame')
+      .mockImplementation(() => undefined)
+
+    mockedSearchPlaces.mockResolvedValue([
+      {
+        id: 'destination',
+        name: '강남역',
+        address: '서울 강남구',
+        coordinate: { lat: 37.4979, lng: 127.0276 },
+      },
+    ])
+    mockedGetRoute.mockResolvedValue({
+      coordinates: [
+        { lat: 37.5665, lng: 126.978 },
+        { lat: 37.4979, lng: 127.0276 },
+      ],
+      summary: {
+        distanceMeters: 1000,
+        durationSeconds: 60,
+      },
+    })
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell />
+      </QueryClientProvider>,
+    )
+
+    const destinationInput = await openDestinationEditor()
+    fireEvent.change(destinationInput, {
+      target: { value: '강남역' },
+    })
+    fireEvent.click(await screen.findByRole('option', { name: /강남역/ }))
+    await screen.findByRole('button', { name: '시뮬레이션 시작' })
+
+    fireEvent.click(screen.getByRole('button', { name: '시뮬레이션 시작' }))
+
+    await waitFor(() => {
+      expect(rafCallbacks.length).toBeGreaterThan(0)
+    })
+
+    await act(async () => {
+      rafCallbacks.shift()?.(1000)
+    })
+    expect(window.__lastRenderedSimulationFrame).toEqual({ lat: 37.5665, lng: 126.978 })
+
+    await act(async () => {
+      rafCallbacks.shift()?.(1016)
+    })
+    expect(window.__lastRenderedSimulationFrame?.lat).toBeLessThan(37.5665)
+    expect(window.__lastRenderedSimulationFrame?.lng).toBeGreaterThan(126.978)
 
     requestAnimationFrameSpy.mockRestore()
     cancelAnimationFrameSpy.mockRestore()

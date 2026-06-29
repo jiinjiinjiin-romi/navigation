@@ -1309,6 +1309,7 @@ export function NavigationShell() {
           skipCamera: true,
           skipRouteLineHead: true,
         })
+        simulationStartedAtRef.current = timestamp
         simulationSkipInitialUiUpdateRef.current = false
         simulationSkipInitialFrameWorkRef.current = false
         simulationLastUiUpdateAtRef.current = timestamp

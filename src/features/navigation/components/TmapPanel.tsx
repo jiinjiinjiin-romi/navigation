@@ -118,6 +118,7 @@ interface CameraAnimation {
   durationMs: number
   animatePosition: boolean
   applyMap: boolean
+  resolveCenterAfterCamera?: boolean
   mode?: 'compass'
   startedAt?: number
 }
@@ -736,7 +737,9 @@ export function TmapPanel({
         pitch: animation.from.pitch + (animation.to.pitch - animation.from.pitch) * easedProgress,
       }
 
-      renderNavigationCamera(nextCamera, animation.applyMap)
+      renderNavigationCamera(nextCamera, animation.applyMap, {
+        resolveCenterAfterCamera: animation.resolveCenterAfterCamera,
+      })
 
       if (progress >= 1) {
         cameraAnimationRef.current = undefined
@@ -785,6 +788,7 @@ export function TmapPanel({
 
     if (cameraAnimationRef.current?.mode === 'compass' && options.mode !== 'compass' && !shouldReduceMotion) {
       cameraAnimationRef.current.to = nextCamera
+      cameraAnimationRef.current.resolveCenterAfterCamera = options.resolveCenterAfterCamera
       return
     }
 
@@ -792,6 +796,7 @@ export function TmapPanel({
       cameraAnimationRef.current.to = nextCamera
       cameraAnimationRef.current.applyMap = shouldApplyMap
       cameraAnimationRef.current.animatePosition = options.animatePosition ?? cameraAnimationRef.current.animatePosition
+      cameraAnimationRef.current.resolveCenterAfterCamera = options.resolveCenterAfterCamera
       if (options.mode) {
         cameraAnimationRef.current.mode = options.mode
       }
@@ -825,6 +830,7 @@ export function TmapPanel({
       durationMs: options.durationMs ?? CAMERA_ANIMATION_MS,
       animatePosition: options.animatePosition ?? true,
       applyMap: shouldApplyMap,
+      resolveCenterAfterCamera: options.resolveCenterAfterCamera,
       mode: options.mode,
     }
     startCameraAnimation()
@@ -1026,6 +1032,13 @@ export function TmapPanel({
     setRouteDirectionZoom(nextZoom)
 
     if (modeChanged) {
+      if (routeSelectionCameraActive || previousRouteSelectionCameraActiveRef.current) {
+        stopMapModePitchAnimation()
+        applyMapCameraSettings(mapRef.current, nextZoom, nextPitch)
+        syncRenderedPitch(nextPitch)
+        return
+      }
+
       const shouldRestoreNavigationCamera = Boolean(
         !previousRouteSelectionCameraActiveRef.current &&
         !routeSelectionCameraActive &&
@@ -1122,13 +1135,14 @@ export function TmapPanel({
             route?.coordinates.length ||
             mapModePitchFrameRef.current !== undefined ||
             cameraAnimationRef.current,
-          ),
+          ) && !previousRouteSelectionCameraActiveRef.current,
         applyMap: !routeSelectionCameraActive && (!route?.coordinates.length || shouldFollowCamera),
         animatePosition: mapModePitchFrameRef.current === undefined,
         markerBearing,
+        resolveCenterAfterCamera: previousRouteSelectionCameraActiveRef.current && cameraSettings?.mode === '3d',
       },
     )
-  }, [applyNavigationCamera, currentPosition, getCurrentMapBearing, getDisplayMapPitch, getSettingsMapPitch, northUpLocked, route?.coordinates, routeSelectionCameraActive, status])
+  }, [applyNavigationCamera, cameraSettings?.mode, currentPosition, getCurrentMapBearing, getDisplayMapPitch, getSettingsMapPitch, northUpLocked, route?.coordinates, routeSelectionCameraActive, status])
 
   useEffect(() => {
     if (!window.Tmapv3 || !mapRef.current || status !== 'ready') {
@@ -1550,9 +1564,10 @@ export function TmapPanel({
         animated: false,
         applyMap: shouldFollowCamera,
         markerBearing,
+        resolveCenterAfterCamera: cameraSettings?.mode === '3d',
       },
     )
-  }, [applyNavigationCamera, getCurrentMapBearing, getDisplayMapPitch, getSettingsMapPitch, northUpLocked, progressPosition, route?.coordinates, simulationPosition, status])
+  }, [applyNavigationCamera, cameraSettings?.mode, getCurrentMapBearing, getDisplayMapPitch, getSettingsMapPitch, northUpLocked, progressPosition, route?.coordinates, simulationPosition, status])
 
   useEffect(() => {
     if (!onSimulationFrameRendererReady || !window.Tmapv3 || !mapRef.current || status !== 'ready') {
@@ -1582,6 +1597,7 @@ export function TmapPanel({
             animated: false,
             applyMap: shouldFollowCamera,
             markerBearing,
+            resolveCenterAfterCamera: cameraSettings?.mode === '3d',
           },
         )
       }
@@ -1594,6 +1610,7 @@ export function TmapPanel({
     return () => onSimulationFrameRendererReady(undefined)
   }, [
     applyNavigationCamera,
+    cameraSettings?.mode,
     getCurrentMapBearing,
     northUpLocked,
     onSimulationFrameRendererReady,
@@ -1703,7 +1720,10 @@ export function TmapPanel({
       camera,
       () => resolveCameraCenter(currentPosition),
       nextZoom,
-      { preserveZoom: !resetZoom },
+      {
+        preserveZoom: !resetZoom,
+        resolveCenterAfterCamera: cameraSettings?.mode === '3d',
+      },
     )
     renderedBearingRef.current = bearing
     renderedPitchRef.current = pitch
@@ -1714,6 +1734,7 @@ export function TmapPanel({
     updateCurrentMarkerTransform(markerBearing, pitch)
   }, [
     currentPosition,
+    cameraSettings?.mode,
     getCurrentMapBearing,
     getSettingsMapPitch,
     onCameraSettingsChange,
@@ -1741,23 +1762,17 @@ export function TmapPanel({
         )
         const targetPitch = getSettingsMapPitch()
         const mapBearing = cameraBearing.mapBearing ?? renderedBearingRef.current
-        const fromCamera = {
-          position: displayPosition,
-          bearing: mapBearing,
-          markerBearing: cameraBearing.markerBearing,
-          pitch: MAP_TOP_DOWN_PITCH,
-        }
 
         applyNavigationCamera(
           displayPosition,
           mapBearing,
           {
-            animated: cameraSettings?.mode === '3d',
+            animated: false,
             durationMs: MAP_MODE_TRANSITION_MS,
-            fromCamera: cameraSettings?.mode === '3d' ? fromCamera : undefined,
+            fromCamera: undefined,
             markerBearing: cameraBearing.markerBearing,
             pitch: targetPitch,
-            resolveCenterAfterCamera: cameraSettings?.mode !== '3d',
+            resolveCenterAfterCamera: true,
           },
         )
         return
