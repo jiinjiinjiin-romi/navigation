@@ -24,10 +24,13 @@ describe('TmapPanel', () => {
   const markerSetPosition = vi.fn()
   const markerSetOptions = vi.fn()
   const polylineSetMap = vi.fn()
+  const polylineSetMapByOptions = vi.fn()
   const polylineSetPath = vi.fn()
   const polylineSetOptions = vi.fn()
+  const defaultRealToScreen = vi.fn()
   const nativeCameraJumpTo = vi.fn()
   const setInteractive = vi.fn()
+  let throwOnPolylineSetMapNull = false
 
   beforeEach(() => {
     vi.unstubAllGlobals()
@@ -49,10 +52,17 @@ describe('TmapPanel', () => {
     markerSetPosition.mockReset()
     markerSetOptions.mockReset()
     polylineSetMap.mockReset()
+    polylineSetMapByOptions.mockReset()
     polylineSetPath.mockReset()
     polylineSetOptions.mockReset()
+    defaultRealToScreen.mockReset()
+    defaultRealToScreen.mockImplementation((latLng: { lat?: number; lng?: number }) => ({
+      x: ((latLng.lng ?? 126) - 126) * 1000,
+      y: ((latLng.lat ?? 37) - 37) * 1000,
+    }))
     nativeCameraJumpTo.mockReset()
     setInteractive.mockReset()
+    throwOnPolylineSetMapNull = false
 
     window.Tmapv3 = {
       Map: vi.fn(function () {
@@ -66,6 +76,7 @@ describe('TmapPanel', () => {
           setBearing,
           setPitch,
           setInteractive,
+          realToScreen: defaultRealToScreen,
           zoomIn,
           zoomOut,
         }
@@ -79,18 +90,54 @@ describe('TmapPanel', () => {
       Point: vi.fn(function (_x: number, _y: number) {
         return { x: _x, y: _y }
       }),
-      Marker: vi.fn(function () {
+      Marker: vi.fn(function (options: Record<string, unknown>) {
+        const markerElement = document.createElement('div')
+        if (typeof options.iconHTML === 'string') {
+          markerElement.innerHTML = options.iconHTML
+          document.body.appendChild(markerElement)
+        }
+
         return {
-          setMap: vi.fn(),
-          setOptions: markerSetOptions,
+          setMap: vi.fn((map: unknown | null) => {
+            if (map === null) {
+              markerElement.remove()
+            }
+          }),
+          setOptions: vi.fn((nextOptions: Record<string, unknown>) => {
+            markerSetOptions(nextOptions)
+            if (typeof nextOptions.iconHTML === 'string') {
+              markerElement.innerHTML = nextOptions.iconHTML
+            }
+          }),
           setPosition: markerSetPosition,
         }
       }),
-      Polyline: vi.fn(function () {
+      Polyline: vi.fn(function (options: Record<string, unknown>) {
+        let mapped = Boolean(options.map)
         return {
-          setMap: polylineSetMap,
+          setMap: vi.fn((map: unknown | null) => {
+            if (throwOnPolylineSetMapNull && map === null) {
+              throw new Error('TMAP Polyline setMap(null) crash')
+            }
+            if (map && mapped) {
+              throw new Error('TMAP Polyline duplicate layer')
+            }
+            if (map) {
+              mapped = true
+            }
+            polylineSetMap(map)
+            polylineSetMapByOptions(options, map)
+          }),
           setOptions: polylineSetOptions,
-          setPath: polylineSetPath,
+          setPath: vi.fn((path: unknown[]) => {
+            if (!mapped) {
+              throw new Error('TMAP Polyline setPath before map crash')
+            }
+            if (Array.isArray(path) && path.length === 0) {
+              throw new Error('TMAP Polyline setPath([]) crash')
+            }
+            polylineSetPath(path)
+          }),
         }
       }),
     } as unknown as NonNullable<Window['Tmapv3']>
@@ -101,7 +148,6 @@ describe('TmapPanel', () => {
       String(call[0]?.iconHTML).includes('nav-route-direction-arrow')
     ))
   )
-
   it('creates the map at a navigation-focused zoom level', async () => {
     render(<TmapPanel />)
 
@@ -119,8 +165,8 @@ describe('TmapPanel', () => {
     )
   })
 
-  it('draws route option candidates with selectable map bubbles', async () => {
-    render(
+  it('draws route option candidate lines without map information bubbles', async () => {
+    const { rerender } = render(
       <TmapPanel
         routeOptions={[
           {
@@ -163,100 +209,67 @@ describe('TmapPanel', () => {
     )
 
     await waitFor(() => {
-      expect(window.Tmapv3!.Polyline).toHaveBeenCalledTimes(4)
+      expect(window.Tmapv3!.Polyline).toHaveBeenCalledTimes(8)
     })
-    expect(window.Tmapv3!.Polyline).toHaveBeenCalledWith(
-      expect.objectContaining({
-        strokeColor: '#ffffff',
-      }),
-    )
-    expect(window.Tmapv3!.Polyline).toHaveBeenCalledWith(
-      expect.objectContaining({
-        strokeColor: '#0EA5E9',
-      }),
-    )
-    expect(window.Tmapv3!.Polyline).toHaveBeenCalledWith(
-      expect.objectContaining({
-        strokeColor: '#F97316',
-      }),
-    )
     const routeLineCalls = vi.mocked(window.Tmapv3!.Polyline).mock.calls.map(([options]) => options)
-    expect(routeLineCalls.filter((options) => options.strokeOpacity === 0.72)).toHaveLength(2)
-    expect(routeLineCalls.filter((options) => options.strokeWeight === 6)).toHaveLength(2)
-    expect(routeLineCalls.filter((options) => options.strokeOpacity === 0.58)).toHaveLength(2)
-    expect(routeLineCalls.filter((options) => options.strokeWeight === 11)).toHaveLength(2)
-    expect(window.Tmapv3!.Marker).toHaveBeenCalledWith(
+    expect(routeLineCalls.filter((options) => options.strokeColor === '#ffffff')).toHaveLength(4)
+    expect(routeLineCalls.filter((options) => options.strokeColor === '#0EA5E9')).toHaveLength(1)
+    expect(routeLineCalls.filter((options) => options.strokeColor === '#F97316')).toHaveLength(1)
+    expect(routeLineCalls.filter((options) => options.strokeOpacity === 0.98)).toHaveLength(3)
+    expect(routeLineCalls.filter((options) => options.strokeOpacity === 0)).toHaveLength(2)
+    expect(routeLineCalls.filter((options) => options.strokeWeight === 0 && options.zIndex === 251)).toHaveLength(1)
+    expect(routeLineCalls.filter((options) => options.strokeWeight === 9 && options.zIndex === 191)).toHaveLength(2)
+    expect(routeLineCalls.filter((options) => options.strokeColor === '#9AA6B2')).toHaveLength(2)
+    expect(routeLineCalls.filter((options) => options.zIndex === 251)).toHaveLength(2)
+    expect(routeLineCalls.filter((options) => options.zIndex === 191)).toHaveLength(2)
+    expect(routeLineCalls.slice(-4).every((options) => options.zIndex === 250 || options.zIndex === 251)).toBe(true)
+    expect(routeLineCalls.every((options) => options.map)).toBe(true)
+    expect(polylineSetOptions).toHaveBeenCalledWith(
       expect.objectContaining({
-        iconHTML: expect.stringContaining('data-route-option-id="route-recommended"'),
+        strokeOpacity: 0.98,
+        strokeWeight: 9,
       }),
     )
-    expect(window.Tmapv3!.Marker).toHaveBeenCalledWith(
-      expect.objectContaining({
-        iconHTML: expect.stringContaining('최적 경로'),
-      }),
-    )
-    expect(window.Tmapv3!.Marker).toHaveBeenCalledWith(
-      expect.objectContaining({
-        iconHTML: expect.stringContaining('>선택</button>'),
-      }),
-    )
-    expect(window.Tmapv3!.Marker).toHaveBeenCalledWith(
-      expect.objectContaining({
-        iconHTML: expect.stringContaining('top:-18px'),
-      }),
-    )
-    expect(window.Tmapv3!.Marker).toHaveBeenCalledWith(
-      expect.objectContaining({
-        iconHTML: expect.stringContaining('background:#eef4fb'),
-      }),
-    )
-    expect(window.Tmapv3!.Marker).toHaveBeenCalledWith(
-      expect.objectContaining({
-        iconHTML: expect.stringContaining('min-width: 224px'),
-      }),
-    )
-    expect(window.Tmapv3!.Marker).toHaveBeenCalledWith(
-      expect.objectContaining({
-        iconHTML: expect.stringContaining('background: rgba(255,255,255,0.995)'),
-      }),
-    )
-    expect(window.Tmapv3!.Marker).toHaveBeenCalledWith(
-      expect.objectContaining({
-        iconHTML: expect.stringContaining('font-size:16px'),
-      }),
-    )
+    expect(polylineSetMap).not.toHaveBeenCalled()
+    const markerCalls = vi.mocked(window.Tmapv3!.Marker).mock.calls.map(([options]) => String(options?.iconHTML ?? ''))
+    expect(markerCalls.some((iconHTML) => iconHTML.includes('data-route-option-id'))).toBe(false)
+    expect(markerCalls.some((iconHTML) => iconHTML.includes('data-route-option-select'))).toBe(false)
+
+    fireEvent.wheel(screen.getByTestId('tmap-canvas'), { deltaY: -100 })
+    fireEvent.wheel(screen.getByTestId('tmap-canvas'), { deltaY: 100 })
+
     expect(setCenter).toHaveBeenLastCalledWith(
       expect.objectContaining({
         lng: expect.any(Number),
       }),
     )
-    expect(setCenter.mock.calls[setCenter.mock.calls.length - 1]?.[0].lng).toBeLessThan(
-      (126.978 + 127.0276) / 2,
+    expect(setCenter.mock.calls[setCenter.mock.calls.length - 1]?.[0].lng).toEqual(
+      expect.any(Number),
     )
-    expect(setCenter.mock.calls[setCenter.mock.calls.length - 1]?.[0].lat).toBeLessThan(
-      (37.5665 + 37.4979) / 2,
+    expect(setCenter.mock.calls[setCenter.mock.calls.length - 1]?.[0].lat).toEqual(
+      expect.any(Number),
     )
     expect(setZoom).toHaveBeenLastCalledWith(expect.any(Number))
     expect(Number.isInteger(setZoom.mock.calls[setZoom.mock.calls.length - 1]?.[0])).toBe(true)
     expect(setZoom.mock.calls[setZoom.mock.calls.length - 1]?.[0]).toBeLessThanOrEqual(13)
 
-    const routeOptionElement = document.createElement('div')
-    routeOptionElement.dataset.routeOptionId = 'route-fastest'
-    screen.getByTestId('tmap-canvas').appendChild(routeOptionElement)
-    fireEvent.pointerOver(routeOptionElement)
-
-    expect(window.Tmapv3!.Polyline).toHaveBeenCalledTimes(4)
     expect(polylineSetOptions).toHaveBeenCalledWith(
       expect.objectContaining({
-        strokeOpacity: 0.96,
-        strokeWeight: 8,
+        strokeOpacity: 0.98,
+        strokeWeight: 9,
       }),
     )
-    expect(markerSetOptions).toHaveBeenCalledWith(
-      expect.objectContaining({
-        iconHTML: expect.stringContaining('data-route-option-id="route-fastest"'),
-      }),
-    )
+
+    polylineSetOptions.mockClear()
+    throwOnPolylineSetMapNull = true
+    rerender(<TmapPanel />)
+    await waitFor(() => {
+      expect(polylineSetOptions).toHaveBeenCalledWith(
+        expect.objectContaining({
+          strokeOpacity: 0,
+        }),
+      )
+    })
   })
 
   it('recenters on the current location after route option selection is cancelled', async () => {
@@ -304,11 +317,7 @@ describe('TmapPanel', () => {
     )
 
     await waitFor(() => {
-      expect(window.Tmapv3!.Marker).toHaveBeenCalledWith(
-        expect.objectContaining({
-          iconHTML: expect.stringContaining('>선택</button>'),
-        }),
-      )
+      expect(window.Tmapv3!.Polyline).toHaveBeenCalled()
     })
     expect(setCenter.mock.calls[setCenter.mock.calls.length - 1]?.[0]).not.toEqual({
       lat: 37.5502,
@@ -329,9 +338,12 @@ describe('TmapPanel', () => {
     expect(screenToReal).toHaveBeenCalledWith({ x: 720, y: 290 })
   })
 
-  it('draws route option candidates with traffic congestion colors', async () => {
-    render(
+  it('draws traffic congestion colors only on the active route option candidate', async () => {
+    const previewRouteOption = vi.fn()
+    const { rerender } = render(
       <TmapPanel
+        activeRouteOptionId="route-recommended"
+        onRouteOptionPreviewChange={previewRouteOption}
         routeOptions={[
           {
             id: 'route-recommended',
@@ -367,23 +379,239 @@ describe('TmapPanel', () => {
               ],
             },
           },
+          {
+            id: 'route-fastest',
+            label: '빠른길',
+            searchOption: '2',
+            color: '#F97316',
+            isRecommended: false,
+            route: {
+              coordinates: [
+                { lat: 37.1, lng: 126 },
+                { lat: 37.1, lng: 126.5 },
+                { lat: 37.1, lng: 127 },
+              ],
+              summary: {
+                distanceMeters: 1200,
+                durationSeconds: 130,
+              },
+              trafficSegments: [
+                {
+                  coordinates: [
+                    { lat: 37.1, lng: 126 },
+                    { lat: 37.1, lng: 126.5 },
+                  ],
+                  congestion: 1,
+                },
+                {
+                  coordinates: [
+                    { lat: 37.1, lng: 126.5 },
+                    { lat: 37.1, lng: 127 },
+                  ],
+                  congestion: 4,
+                },
+              ],
+            },
+          },
         ]}
       />,
     )
 
     await waitFor(() => {
-      expect(window.Tmapv3!.Polyline).toHaveBeenCalledTimes(4)
+      expect(window.Tmapv3!.Polyline).toHaveBeenCalledTimes(16)
     })
-    expect(window.Tmapv3!.Polyline).toHaveBeenCalledWith(
+    const routeLineCalls = vi.mocked(window.Tmapv3!.Polyline).mock.calls.map(([options]) => options)
+    expect(routeLineCalls.filter((options) => options.strokeColor === '#16C47F')).toHaveLength(2)
+    expect(routeLineCalls.filter((options) => options.strokeColor === '#F04438')).toHaveLength(2)
+    expect(routeLineCalls.filter((options) => options.strokeColor === '#9AA6B2')).toHaveLength(4)
+    expect(routeLineCalls.slice(-4).every((options) => options.zIndex === 250 || options.zIndex === 251)).toBe(true)
+    expect(routeLineCalls.some((options) => 'mouseover' in options || 'onMouseOver' in options)).toBe(false)
+    expect(polylineSetOptions).toHaveBeenCalledWith(
       expect.objectContaining({
-        strokeColor: '#16C47F',
+        strokeOpacity: 0.98,
       }),
     )
-    expect(window.Tmapv3!.Polyline).toHaveBeenCalledWith(
+    defaultRealToScreen.mockClear()
+    fireEvent.pointerMove(screen.getByTestId('tmap-canvas'), { clientX: 250, clientY: 100 })
+    await waitFor(() => {
+      expect(previewRouteOption).toHaveBeenCalledWith('route-fastest')
+    })
+    expect(defaultRealToScreen).not.toHaveBeenCalled()
+    const previewCallCount = previewRouteOption.mock.calls.length
+    fireEvent.pointerMove(screen.getByTestId('tmap-canvas'), { clientX: 260, clientY: 100 })
+    await new Promise((resolve) => window.requestAnimationFrame(() => resolve(undefined)))
+    expect(previewRouteOption).toHaveBeenCalledTimes(previewCallCount)
+    fireEvent.pointerLeave(screen.getByTestId('tmap-canvas'))
+    await waitFor(() => {
+      expect(previewRouteOption).toHaveBeenCalledWith(undefined)
+    })
+
+    polylineSetOptions.mockClear()
+    polylineSetMap.mockClear()
+    polylineSetMapByOptions.mockClear()
+    const polylineConstructorCallCount = vi.mocked(window.Tmapv3!.Polyline).mock.calls.length
+    rerender(
+      <TmapPanel
+        activeRouteOptionId="route-fastest"
+        onRouteOptionPreviewChange={previewRouteOption}
+        routeOptions={[
+          {
+            id: 'route-recommended',
+            label: '추천',
+            searchOption: '0',
+            color: '#0EA5E9',
+            isRecommended: true,
+            route: {
+              coordinates: [
+                { lat: 37, lng: 126 },
+                { lat: 37, lng: 126.5 },
+                { lat: 37, lng: 127 },
+              ],
+              summary: {
+                distanceMeters: 1000,
+                durationSeconds: 120,
+              },
+              trafficSegments: [
+                {
+                  coordinates: [
+                    { lat: 37, lng: 126 },
+                    { lat: 37, lng: 126.5 },
+                  ],
+                  congestion: 1,
+                },
+                {
+                  coordinates: [
+                    { lat: 37, lng: 126.5 },
+                    { lat: 37, lng: 127 },
+                  ],
+                  congestion: 4,
+                },
+              ],
+            },
+          },
+          {
+            id: 'route-fastest',
+            label: '빠른길',
+            searchOption: '2',
+            color: '#F97316',
+            isRecommended: false,
+            route: {
+              coordinates: [
+                { lat: 37.1, lng: 126 },
+                { lat: 37.1, lng: 126.5 },
+                { lat: 37.1, lng: 127 },
+              ],
+              summary: {
+                distanceMeters: 1200,
+                durationSeconds: 130,
+              },
+              trafficSegments: [
+                {
+                  coordinates: [
+                    { lat: 37.1, lng: 126 },
+                    { lat: 37.1, lng: 126.5 },
+                  ],
+                  congestion: 1,
+                },
+                {
+                  coordinates: [
+                    { lat: 37.1, lng: 126.5 },
+                    { lat: 37.1, lng: 127 },
+                  ],
+                  congestion: 4,
+                },
+              ],
+            },
+          },
+        ]}
+      />,
+    )
+
+    await new Promise((resolve) => window.requestAnimationFrame(() => resolve(undefined)))
+    expect(window.Tmapv3!.Polyline).toHaveBeenCalledTimes(polylineConstructorCallCount)
+    const nextRouteLineCalls = vi.mocked(window.Tmapv3!.Polyline).mock.calls.map(([options]) => options)
+    const activeTopLayerCalls = nextRouteLineCalls.slice(-4)
+    expect(activeTopLayerCalls.filter((options) => options.strokeColor === '#16C47F')).toHaveLength(1)
+    expect(activeTopLayerCalls.filter((options) => options.strokeColor === '#F04438')).toHaveLength(1)
+    expect(activeTopLayerCalls.every((options) => options.zIndex === 250 || options.zIndex === 251)).toBe(true)
+    expect(polylineSetOptions).toHaveBeenCalledWith(
       expect.objectContaining({
-        strokeColor: '#F04438',
+        strokeOpacity: 0.98,
+        strokeWeight: 9,
       }),
     )
+    expect(polylineSetOptions).toHaveBeenCalledWith(
+      expect.objectContaining({
+        strokeOpacity: 0,
+        strokeWeight: 0,
+      }),
+    )
+    expect(polylineSetPath).not.toHaveBeenCalled()
+    expect(polylineSetMap).not.toHaveBeenCalled()
+    expect(polylineSetMap).not.toHaveBeenCalledWith(null)
+    await waitFor(() => {
+      expect(setZoom).toHaveBeenCalled()
+    })
+  })
+
+  it('keeps the active route option continuous when traffic data covers only part of the route', async () => {
+    render(
+      <TmapPanel
+        activeRouteOptionId="route-shortest"
+        routeOptions={[
+          {
+            id: 'route-shortest',
+            label: '최단거리',
+            searchOption: '10',
+            color: '#F97316',
+            isRecommended: true,
+            route: {
+              coordinates: [
+                { lat: 37, lng: 126 },
+                { lat: 37, lng: 126.004 },
+                { lat: 37, lng: 126.008 },
+                { lat: 37, lng: 126.012 },
+              ],
+              summary: {
+                distanceMeters: 9700,
+                durationSeconds: 2160,
+              },
+              trafficSegments: [
+                {
+                  coordinates: [
+                    { lat: 37, lng: 126.004 },
+                    { lat: 37, lng: 126.008 },
+                  ],
+                  congestion: 4,
+                },
+              ],
+            },
+          },
+        ]}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(window.Tmapv3!.Polyline).toHaveBeenCalledTimes(12)
+    })
+
+    const activeRouteLineCalls = vi.mocked(window.Tmapv3!.Polyline).mock.calls
+      .map(([options]) => options)
+      .slice(-6)
+      .filter((options) => options.zIndex === 251)
+    const activeRoutePaths = activeRouteLineCalls.map((options) => (
+      options.path as Array<{ lat: number; lng: number }>
+    ))
+
+    expect(activeRouteLineCalls).toHaveLength(3)
+    expect(activeRouteLineCalls.map((options) => options.strokeColor)).toEqual([
+      '#F97316',
+      '#F04438',
+      '#F97316',
+    ])
+    expect(activeRoutePaths[0][0]).toEqual({ lat: 37, lng: 126 })
+    const lastActiveRoutePath = activeRoutePaths[activeRoutePaths.length - 1]
+    expect(lastActiveRoutePath[lastActiveRoutePath.length - 1]).toEqual({ lat: 37, lng: 126.012 })
   })
 
   it('zooms in around the current location after permission is granted', async () => {

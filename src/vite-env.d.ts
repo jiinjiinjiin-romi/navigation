@@ -10,6 +10,8 @@ interface Window {
     setZoom?: (zoom: number) => void
     setBearing?: (bearing: number) => void
     setPitch?: (pitch: number) => void
+    realToScreen?: (latLng: unknown) => unknown
+    screenToReal?: (point: unknown) => unknown
     setInteractive?: (options: Record<string, unknown>) => void
     vsmMap?: () => {
       getCamera?: () => {

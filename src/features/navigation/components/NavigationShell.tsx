@@ -39,7 +39,7 @@ import { getCurrentAddress, getRoadMatch, getRouteOptions, searchPlaces } from '
 import { createRoundedRoutePath } from '../map/routeGeometry'
 import { createRouteSimulationPlan, getSimulatedRoutePosition } from '../simulation/routeSimulation'
 import { getSimulationDurationMs } from '../simulation/simulationTiming'
-import type { Coordinate, NavigationRoute, Place, RoadMatchPoint, RouteManeuver, SafetyAlert } from '../types'
+import type { Coordinate, NavigationRoute, NavigationRouteOption, Place, RoadMatchPoint, RouteManeuver, SafetyAlert } from '../types'
 import accidentSignSrc from '../assets/road-signs/141.png'
 import bridgeSignSrc from '../assets/road-signs/122.png'
 import boxTunnelSignSrc from '../assets/road-signs/130.png'
@@ -802,6 +802,12 @@ export function NavigationShell() {
   const routeOptions = routeSelectionMode && !hasRouteSearchDraftMismatch
     ? routeOptionsQuery.data ?? []
     : undefined
+  const [previewRouteOptionId, setPreviewRouteOptionId] = useState<string | undefined>(undefined)
+  const activeRouteOptionId = useMemo(() => (
+    routeOptions?.some((option) => option.id === previewRouteOptionId)
+      ? previewRouteOptionId
+      : getDefaultRouteOptionId(routeOptions ?? [])
+  ), [previewRouteOptionId, routeOptions])
   const roadMatchQuery = useQuery({
     queryKey: ['road-match', selectedRouteOptionId, activeRoute?.coordinates.length],
     queryFn: ({ signal }) => getRoadMatch(activeRoute!.coordinates, undefined, signal),
@@ -824,6 +830,11 @@ export function NavigationShell() {
   useEffect(() => {
     guidanceDistanceDisplayRef.current.clear()
   }, [activeRoute])
+  useEffect(() => {
+    if (!routeOptions?.some((option) => option.id === previewRouteOptionId)) {
+      setPreviewRouteOptionId(undefined)
+    }
+  }, [previewRouteOptionId, routeOptions])
   useEffect(() => {
     routeSelectionModeRef.current = routeSelectionMode
   }, [routeSelectionMode])
@@ -1106,6 +1117,23 @@ export function NavigationShell() {
     restoreRouteSelectionCameraSettings()
   }, [restoreRouteSelectionCameraSettings])
 
+  useEffect(() => {
+    if (
+      routeSelectionMode &&
+      !hasRouteSearchDraftMismatch &&
+      !routeOptionsQuery.isFetching &&
+      routeOptions?.length === 1
+    ) {
+      selectRouteOption(routeOptions[0].id)
+    }
+  }, [
+    hasRouteSearchDraftMismatch,
+    routeOptions,
+    routeOptionsQuery.isFetching,
+    routeSelectionMode,
+    selectRouteOption,
+  ])
+
   const selectPlace = (field: SearchFieldId, place: Place) => {
     stopSimulation()
     setSelectedRouteOptionId(undefined)
@@ -1287,8 +1315,9 @@ export function NavigationShell() {
               origin={origin}
               destination={destination}
               simulationPosition={simulationPosition}
+              activeRouteOptionId={activeRouteOptionId}
               onCameraSettingsChange={updateMapCameraSettings}
-              onSelectRouteOption={selectRouteOption}
+              onRouteOptionPreviewChange={setPreviewRouteOptionId}
               onSimulationFrameRendererReady={(renderFrame) => {
                 simulationFrameRendererRef.current = renderFrame
               }}
@@ -1323,9 +1352,13 @@ export function NavigationShell() {
                     motionTiming={motionTiming}
                     optionCount={routeOptions?.length ?? 0}
                     originLabel={origin?.name || originKeyword || currentOriginLabel}
+                    activeRouteOptionId={activeRouteOptionId}
+                    routeOptions={routeOptions ?? []}
                     onEditRoute={() => {
                       openRouteSearchEditor('destination')
                     }}
+                    onPreviewRouteOption={setPreviewRouteOptionId}
+                    onSelectRouteOption={selectRouteOption}
                   />
                 )}
                 <AnimatePresence initial={false}>
@@ -3147,6 +3180,7 @@ function IdleMapControls({
 }
 
 function RouteSelectionSummary({
+  activeRouteOptionId,
   destinationLabel,
   error,
   loading,
@@ -3154,7 +3188,11 @@ function RouteSelectionSummary({
   optionCount,
   originLabel,
   onEditRoute,
+  onPreviewRouteOption,
+  onSelectRouteOption,
+  routeOptions,
 }: {
+  activeRouteOptionId?: string
   destinationLabel: string
   error: boolean
   loading: boolean
@@ -3162,23 +3200,85 @@ function RouteSelectionSummary({
   optionCount: number
   originLabel: string
   onEditRoute: () => void
+  onPreviewRouteOption: (id: string | undefined) => void
+  onSelectRouteOption: (id: string) => void
+  routeOptions: NavigationRouteOption[]
 }) {
   const statusLabel = error
     ? '경로를 찾지 못했습니다'
     : loading
       ? '경로 찾는 중'
       : `${optionCount}개 경로`
+  const activeId = activeRouteOptionId ?? getDefaultRouteOptionId(routeOptions)
 
   return (
     <motion.div
-      className="pointer-events-none absolute bottom-20 left-1/2 z-20 w-[min(32rem,calc(100%-2rem))] -translate-x-1/2 text-[var(--nav-ink)] max-sm:bottom-[4.5rem] max-sm:w-[calc(100%-1.5rem)]"
+      className="pointer-events-none absolute bottom-20 left-1/2 z-20 w-[calc(100%-2rem)] -translate-x-1/2 text-[var(--nav-ink)] max-sm:bottom-[4.5rem] max-sm:w-[calc(100%-1.5rem)]"
       data-testid="route-selection-summary"
       initial={{ opacity: 0, y: 14, scale: 0.985 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: 10, scale: 0.985 }}
       transition={motionTiming}
     >
-      <div className="pointer-events-auto flex items-center gap-3 rounded-2xl bg-white/88 px-4 py-3 shadow-[0_10px_24px_rgb(15_23_42/0.10)] backdrop-blur-md">
+      {routeOptions.length ? (
+        <div
+          className="pointer-events-auto mx-auto mb-2 flex w-fit max-w-full gap-2 overflow-x-auto px-0.5 pb-1"
+          data-testid="route-option-cards"
+        >
+          {routeOptions.map((option) => {
+            const active = option.id === activeId
+            const label = getRouteOptionDisplayLabel(option)
+
+            return (
+              <button
+                key={option.id}
+                aria-label={`${label} 경로 선택`}
+                aria-pressed={active}
+                className={[
+                  'w-36 shrink-0 rounded-lg border px-3 py-2 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]',
+                  active
+                    ? 'border-[var(--nav-primary)] bg-[var(--nav-primary)] text-white'
+                    : 'border-white/80 bg-white/88 text-[var(--nav-ink)] hover:bg-white',
+                ].join(' ')}
+                data-testid={`route-option-card-${option.id}`}
+                onBlur={() => onPreviewRouteOption(undefined)}
+                onClick={() => onSelectRouteOption(option.id)}
+                onFocus={() => onPreviewRouteOption(option.id)}
+                onPointerEnter={() => onPreviewRouteOption(option.id)}
+                onPointerLeave={() => onPreviewRouteOption(undefined)}
+                type="button"
+              >
+                <div className="mb-1.5 flex min-w-0 items-center gap-1.5">
+                  <span
+                    aria-hidden="true"
+                    className="size-2 shrink-0 rounded-full"
+                    style={{ backgroundColor: active ? '#ffffff' : option.color }}
+                  />
+                  <span className="min-w-0 truncate text-xs font-extrabold">{label}</span>
+                  {option.isRecommended ? (
+                    <span className={[
+                      'ml-auto shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-black',
+                      active ? 'bg-white/20 text-white' : 'bg-[var(--nav-selection)] text-[var(--nav-primary)]',
+                    ].join(' ')}
+                    >
+                      추천
+                    </span>
+                  ) : null}
+                </div>
+                <div className={['text-base font-black leading-none', active ? 'text-white' : 'text-[var(--nav-ink)]'].join(' ')}>
+                  {formatRouteOptionDuration(option.route.summary.durationSeconds)}
+                </div>
+                <div className={['mt-1 truncate text-[11px] font-bold', active ? 'text-white/85' : 'text-[var(--nav-muted)]'].join(' ')}>
+                  {formatRouteOptionDistance(option.route.summary.distanceMeters)}
+                  <span className="mx-1">·</span>
+                  {formatArrivalTime(option.route.summary.durationSeconds)} 도착
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      ) : null}
+      <div className="pointer-events-auto mx-auto flex w-[min(32rem,100%)] items-center gap-3 rounded-2xl bg-white/88 px-4 py-3 shadow-[0_10px_24px_rgb(15_23_42/0.10)] backdrop-blur-md">
         <div className="grid shrink-0 content-center justify-center">
           <span className="size-2 rounded-full bg-[var(--nav-primary)]" />
           <span className="mx-auto h-6 w-px bg-[var(--nav-border)]" />
@@ -3792,6 +3892,22 @@ function getActiveSafetyAlertDistanceMeters(alert: SafetyAlert) {
 function formatMeters(distanceMeters: number) {
   const rounded = Math.max(0, Math.round(distanceMeters))
   return rounded >= 1000 ? `${(rounded / 1000).toFixed(1)}km` : `${rounded}m`
+}
+
+function formatRouteOptionDuration(durationSeconds: number) {
+  return `${Math.max(1, Math.round(durationSeconds / 60))}분`
+}
+
+function formatRouteOptionDistance(distanceMeters: number) {
+  return `${Math.max(0.1, distanceMeters / 1000).toFixed(1)} km`
+}
+
+function getRouteOptionDisplayLabel(option: NavigationRouteOption) {
+  return option.isRecommended && option.label === '추천' ? '최적 경로' : option.label
+}
+
+function getDefaultRouteOptionId(options: NavigationRouteOption[]) {
+  return options.find((option) => option.isRecommended)?.id ?? options[0]?.id
 }
 
 function getApproximateSquaredDistance(from: Coordinate, to: Coordinate) {

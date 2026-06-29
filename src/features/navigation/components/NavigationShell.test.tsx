@@ -45,60 +45,59 @@ vi.mock('./TmapPanel', () => ({
   TmapPanel: ({
     currentPosition,
     cameraSettings,
-	    route,
-	    routeOptions,
-	    simulationPosition,
-	    onCameraSettingsChange,
-	    onSelectRouteOption,
-	    onSimulationFrameRendererReady,
-	  }: {
-	    cameraSettings?: { mode: '2d' | '3d'; zoom: number; pitch: number }
-	    currentPosition?: { lat: number; lng: number }
-	    route?: { coordinates: { lat: number; lng: number }[] }
-	    routeOptions?: Array<{ id: string; label: string; route: { coordinates: { lat: number; lng: number }[] } }>
-	    simulationPosition?: { lat: number; lng: number }
-	    onCameraSettingsChange?: (settings: Partial<{ mode: '2d' | '3d'; zoom: number; pitch: number }>) => void
-	    onSelectRouteOption?: (id: string) => void
-	    onSimulationFrameRendererReady?: (renderFrame: ((position: { lat: number; lng: number }) => void) | undefined) => void
-	  }) => {
-	    useEffect(() => {
-	      onSimulationFrameRendererReady?.((position) => {
-	        window.__lastRenderedSimulationFrame = position
-	      })
-	      return () => onSimulationFrameRendererReady?.(undefined)
-	    }, [onSimulationFrameRendererReady])
-	    useEffect(() => {
-	      if (routeOptions?.length === 1) {
-	        onSelectRouteOption?.(routeOptions[0].id)
-	      }
-	    }, [onSelectRouteOption, routeOptions])
+    route,
+    routeOptions,
+    simulationPosition,
+    activeRouteOptionId,
+    onCameraSettingsChange,
+    onRouteOptionPreviewChange,
+    onSimulationFrameRendererReady,
+  }: {
+    cameraSettings?: { mode: '2d' | '3d'; zoom: number; pitch: number }
+    currentPosition?: { lat: number; lng: number }
+    route?: { coordinates: { lat: number; lng: number }[] }
+    routeOptions?: Array<{ id: string; label: string; route: { coordinates: { lat: number; lng: number }[] } }>
+    simulationPosition?: { lat: number; lng: number }
+    activeRouteOptionId?: string
+    onCameraSettingsChange?: (settings: Partial<{ mode: '2d' | '3d'; zoom: number; pitch: number }>) => void
+    onRouteOptionPreviewChange?: (id: string | undefined) => void
+    onSimulationFrameRendererReady?: (renderFrame: ((position: { lat: number; lng: number }) => void) | undefined) => void
+  }) => {
+    useEffect(() => {
+      onSimulationFrameRendererReady?.((position) => {
+        window.__lastRenderedSimulationFrame = position
+      })
+      return () => onSimulationFrameRendererReady?.(undefined)
+    }, [onSimulationFrameRendererReady])
 
     return (
       <div
         data-camera-pitch={cameraSettings?.pitch}
         data-camera-mode={cameraSettings?.mode}
-	        data-camera-zoom={cameraSettings?.zoom}
-	        data-route-points={route?.coordinates.length ?? 0}
-	        data-route-options={routeOptions?.length ?? 0}
-	        data-simulation-lat={simulationPosition?.lat}
-	        data-testid="tmap-panel"
-	      >
+        data-camera-zoom={cameraSettings?.zoom}
+        data-route-points={route?.coordinates.length ?? 0}
+        data-route-options={routeOptions?.length ?? 0}
+        data-active-route-option={activeRouteOptionId ?? ''}
+        data-simulation-lat={simulationPosition?.lat}
+        data-testid="tmap-panel"
+      >
         <button
           aria-label="테스트 지도 피치 변경"
           onClick={() => onCameraSettingsChange?.({ pitch: 24 })}
           type="button"
-	        />
-	        {routeOptions?.map((option) => (
-	          <button
-	            key={option.id}
-	            type="button"
-	            onClick={() => onSelectRouteOption?.(option.id)}
-	          >
-	            {`${option.label} 선택`}
-	          </button>
-	        ))}
-	        {simulationPosition
-	          ? `sim:${simulationPosition.lat.toFixed(4)},${simulationPosition.lng.toFixed(4)}`
+        />
+        {routeOptions?.map((option) => (
+          <button
+            key={option.id}
+            type="button"
+            onMouseEnter={() => onRouteOptionPreviewChange?.(option.id)}
+            onMouseLeave={() => onRouteOptionPreviewChange?.(undefined)}
+          >
+            {`지도에서 ${option.label} 경로 hover`}
+          </button>
+        ))}
+        {simulationPosition
+          ? `sim:${simulationPosition.lat.toFixed(4)},${simulationPosition.lng.toFixed(4)}`
           : currentPosition
             ? `current:${currentPosition.lat.toFixed(4)},${currentPosition.lng.toFixed(4)}`
             : 'idle'}
@@ -819,8 +818,19 @@ describe('NavigationShell', () => {
     expect(routeSelectionSummary).toHaveClass('-translate-x-1/2')
     expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-route-options', '2')
     expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-route-points', '0')
+    expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-active-route-option', 'route-recommended')
+    const routeOptionCards = within(routeSelectionSummary).getByTestId('route-option-cards')
+    expect(within(routeOptionCards).queryByText('선택')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '최적 경로 경로 선택' })).toHaveAttribute('aria-pressed', 'true')
+    const fastestRouteCard = screen.getByRole('button', { name: '최소시간 경로 선택' })
+    expect(fastestRouteCard).toHaveAttribute('aria-pressed', 'false')
+    fireEvent.pointerEnter(fastestRouteCard)
+    await waitFor(() => {
+      expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-active-route-option', 'route-fastest')
+    })
+    expect(fastestRouteCard).toHaveAttribute('aria-pressed', 'true')
 
-    fireEvent.click(screen.getByRole('button', { name: '최소시간 선택' }))
+    fireEvent.click(fastestRouteCard)
 
     await waitFor(() => {
       expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-route-options', '0')
@@ -890,7 +900,7 @@ describe('NavigationShell', () => {
       expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-camera-mode', '2d')
     })
     expect(await screen.findByText('2개 경로')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: '최소시간 선택' }))
+    fireEvent.click(screen.getByRole('button', { name: '최소시간 경로 선택' }))
 
     await waitFor(() => {
       expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-route-options', '0')
@@ -1099,7 +1109,7 @@ describe('NavigationShell', () => {
     await waitFor(() => {
       expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-route-options', '0')
     })
-    expect(screen.queryByRole('button', { name: '추천 선택' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '최적 경로 경로 선택' })).not.toBeInTheDocument()
   })
 
   it('cancels route selection when the destination editor is closed with an empty destination', async () => {
