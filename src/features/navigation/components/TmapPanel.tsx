@@ -192,7 +192,10 @@ export function TmapPanel({
   const routeOptionOverlayVisibleRef = useRef(false)
   const routeDirectionMarkerRefs = useRef<RouteDirectionMarker[]>([])
   const routeLineSignatureRef = useRef<string | undefined>(undefined)
+  const routeLineSourceSignatureRef = useRef<string | undefined>(undefined)
   const routeLineStructureSignatureRef = useRef<string | undefined>(undefined)
+  const routeLineActiveSegmentIndexRef = useRef<number | undefined>(undefined)
+  const routeLineActivePathSignatureRef = useRef<string | undefined>(undefined)
   const routeDirectionMarkerSignatureRef = useRef<string | undefined>(undefined)
   const currentMarkerRef = useRef<Window['Tmapv3Marker']>(undefined)
   const currentMarkerBearingRef = useRef<number | undefined>(undefined)
@@ -320,6 +323,10 @@ export function TmapPanel({
       congestion: 0 as const,
     }]
   }, [route?.coordinates, route?.trafficSegments])
+  const routeLineDrawableSourceSegments = useMemo(
+    () => routeLineSourceSegments.filter(isDrawableRouteSegment),
+    [routeLineSourceSegments],
+  )
   const routeLineSegments = useMemo(() => {
     if (!progressPosition) {
       return routeLineSourceSegments
@@ -478,46 +485,105 @@ export function TmapPanel({
     updateCurrentMarkerTransform(camera.markerBearing, camera.pitch)
   }, [resolveCameraCenter, syncCompassBearing, updateCurrentMarkerTransform, updateRouteDirectionMarkerBearings])
 
-  const updateVisibleRouteLineHead = useCallback((position: Coordinate) => {
-    if (!window.Tmapv3 || !mapRef.current || !routeLineSourceSegments.length) {
-      return
+  const clearRouteLines = useCallback(() => {
+    routeLineRefs.current.forEach((line) => line?.setMap?.(null))
+    routeLineRefs.current = []
+    routeLineSignatureRef.current = undefined
+    routeLineSourceSignatureRef.current = undefined
+    routeLineStructureSignatureRef.current = undefined
+    routeLineActiveSegmentIndexRef.current = undefined
+    routeLineActivePathSignatureRef.current = undefined
+  }, [])
+
+  const ensureStableRouteLines = useCallback((segments: RouteTrafficSegment[]) => {
+    if (!window.Tmapv3 || !mapRef.current || !segments.length) {
+      clearRouteLines()
+      return false
     }
 
-    const nextSegments = getRemainingRouteLineSegments(routeLineSourceSegments, position)
-      .filter(isDrawableRouteSegment)
-
-    if (!nextSegments.length) {
-      routeLineRefs.current.forEach((line) => line?.setMap?.(null))
-      routeLineRefs.current = []
-      routeLineSignatureRef.current = undefined
-      routeLineStructureSignatureRef.current = undefined
-      return
-    }
-
-    const nextStructureSignature = getRouteLineStructureSignature(nextSegments)
-    const nextSignature = getRouteLineSignature(nextSegments)
-    const canClipExistingRouteHead = (
-      routeLineStructureSignatureRef.current === nextStructureSignature &&
-      routeLineRefs.current.length === nextSegments.length * 2 &&
+    const sourceSignature = getRouteLineSignature(segments)
+    const structureSignature = getRouteLineStructureSignature(segments)
+    const hasStableRouteLines = (
+      routeLineSourceSignatureRef.current === sourceSignature &&
+      routeLineStructureSignatureRef.current === structureSignature &&
+      routeLineRefs.current.length === segments.length * 2 &&
       routeLineRefs.current.every((line) => typeof line?.setPath === 'function')
     )
 
-    if (canClipExistingRouteHead) {
-      const path = toTmapPath(nextSegments[0].coordinates)
-      routeLineRefs.current[0]?.setPath?.(path)
-      routeLineRefs.current[1]?.setPath?.(path)
-      routeLineSignatureRef.current = nextSignature
+    if (hasStableRouteLines) {
+      return true
+    }
+
+    const routeColor = getNavigationRouteColor()
+    const map = mapRef.current
+    routeLineRefs.current.forEach((line) => line?.setMap?.(null))
+    routeLineRefs.current = segments.flatMap((segment) => (
+      createRouteLinePolylines(segment, routeColor, map)
+    ))
+    routeLineSignatureRef.current = sourceSignature
+    routeLineSourceSignatureRef.current = sourceSignature
+    routeLineStructureSignatureRef.current = structureSignature
+    routeLineActiveSegmentIndexRef.current = undefined
+    routeLineActivePathSignatureRef.current = undefined
+    return true
+  }, [clearRouteLines])
+
+  const updateVisibleRouteLineHead = useCallback((position: Coordinate) => {
+    if (!window.Tmapv3 || !mapRef.current || !routeLineDrawableSourceSegments.length) {
       return
     }
 
-    const map = mapRef.current
-    routeLineRefs.current.forEach((line) => line?.setMap?.(null))
-    routeLineRefs.current = nextSegments.flatMap((segment) => (
-      createRouteLinePolylines(segment, getNavigationRouteColor(), map)
-    ))
-    routeLineSignatureRef.current = nextSignature
-    routeLineStructureSignatureRef.current = nextStructureSignature
-  }, [routeLineSourceSegments])
+    if (!ensureStableRouteLines(routeLineDrawableSourceSegments)) {
+      return
+    }
+
+    const activeSegmentIndex = getNearestRouteLineSegmentIndex(routeLineDrawableSourceSegments, position)
+
+    if (activeSegmentIndex === undefined) {
+      return
+    }
+
+    const previousActiveSegmentIndex = routeLineActiveSegmentIndexRef.current
+    if (previousActiveSegmentIndex !== activeSegmentIndex) {
+      const startIndex = previousActiveSegmentIndex === undefined
+        ? 0
+        : Math.min(previousActiveSegmentIndex, activeSegmentIndex)
+      const endIndex = previousActiveSegmentIndex === undefined
+        ? activeSegmentIndex
+        : Math.max(previousActiveSegmentIndex, activeSegmentIndex)
+
+      routeLineDrawableSourceSegments.slice(startIndex, endIndex + 1).forEach((segment, offset) => {
+        const index = startIndex + offset
+        const path = toTmapPath(segment.coordinates)
+        const visible = index >= activeSegmentIndex
+        setRouteLinePairPath(routeLineRefs.current, index, visible ? path : getHiddenRouteOptionPath(path))
+        setRouteLinePairVisible(routeLineRefs.current, index, visible)
+      })
+      routeLineActiveSegmentIndexRef.current = activeSegmentIndex
+      routeLineActivePathSignatureRef.current = undefined
+    }
+
+    const activeSegment = getRemainingRouteLineSegment(
+      routeLineDrawableSourceSegments[activeSegmentIndex],
+      position,
+    )
+    const activePathSignature = activeSegment
+      ? getRouteLineSignature([activeSegment])
+      : `hidden:${activeSegmentIndex}`
+
+    if (routeLineActivePathSignatureRef.current === activePathSignature) {
+      return
+    }
+
+    const sourcePath = toTmapPath(routeLineDrawableSourceSegments[activeSegmentIndex].coordinates)
+    const activePath = activeSegment
+      ? toTmapPath(activeSegment.coordinates)
+      : getHiddenRouteOptionPath(sourcePath)
+    setRouteLinePairPath(routeLineRefs.current, activeSegmentIndex, activePath)
+    setRouteLinePairVisible(routeLineRefs.current, activeSegmentIndex, Boolean(activeSegment))
+    routeLineActivePathSignatureRef.current = activePathSignature
+    routeLineSignatureRef.current = `progress:${activeSegmentIndex}:${activePathSignature}`
+  }, [ensureStableRouteLines, routeLineDrawableSourceSegments])
 
   const stopCameraAnimation = useCallback(() => {
     if (cameraFrameRef.current !== undefined) {
@@ -1205,49 +1271,56 @@ export function TmapPanel({
     }
 
     const drawableSegments = routeLineSegments.filter(isDrawableRouteSegment)
+    const routeLineManagedByFrameRenderer = Boolean(simulationPosition && onSimulationFrameRendererReady)
 
-    if (!drawableSegments.length) {
+    if (routeLineManagedByFrameRenderer) {
+      ensureStableRouteLines(routeLineDrawableSourceSegments)
+    }
+
+    if (!routeLineManagedByFrameRenderer && !drawableSegments.length) {
       if (!remainingRouteCoordinates.length) {
-        routeLineRefs.current.forEach((line) => line?.setMap?.(null))
-        routeLineRefs.current = []
+        clearRouteLines()
         routeDirectionMarkerRefs.current.forEach(({ marker }) => marker.setMap(null))
         routeDirectionMarkerRefs.current = []
-        routeLineSignatureRef.current = undefined
-        routeLineStructureSignatureRef.current = undefined
         routeDirectionMarkerSignatureRef.current = undefined
       }
       return
     }
 
-    const routeLineSignature = getRouteLineSignature(drawableSegments)
-    const routeLineChanged = routeLineSignatureRef.current !== routeLineSignature
+    if (!routeLineManagedByFrameRenderer) {
+      const routeLineSignature = getRouteLineSignature(drawableSegments)
+      const routeLineChanged = routeLineSignatureRef.current !== routeLineSignature
 
-    if (routeLineChanged) {
-      const routeColor = getNavigationRouteColor()
+      if (routeLineChanged) {
+        const routeColor = getNavigationRouteColor()
 
-      const routeLineStructureSignature = getRouteLineStructureSignature(drawableSegments)
-      const canUpdateExistingRouteLines = (
-        routeLineStructureSignatureRef.current === routeLineStructureSignature &&
-        routeLineRefs.current.length === drawableSegments.length * 2 &&
-        routeLineRefs.current.every((line) => typeof line?.setPath === 'function')
-      )
+        const routeLineStructureSignature = getRouteLineStructureSignature(drawableSegments)
+        const canUpdateExistingRouteLines = (
+          routeLineStructureSignatureRef.current === routeLineStructureSignature &&
+          routeLineRefs.current.length === drawableSegments.length * 2 &&
+          routeLineRefs.current.every((line) => typeof line?.setPath === 'function')
+        )
 
-      if (canUpdateExistingRouteLines) {
-        drawableSegments.forEach((segment, index) => {
-          const path = toTmapPath(segment.coordinates)
-          routeLineRefs.current[index * 2]?.setPath?.(path)
-          routeLineRefs.current[index * 2 + 1]?.setPath?.(path)
-        })
-      } else {
-        routeLineRefs.current.forEach((line) => line?.setMap?.(null))
-        const nextRouteLines = drawableSegments.flatMap((segment) => (
-          createRouteLinePolylines(segment, routeColor, mapRef.current)
-        ))
+        if (canUpdateExistingRouteLines) {
+          drawableSegments.forEach((segment, index) => {
+            const path = toTmapPath(segment.coordinates)
+            setRouteLinePairPath(routeLineRefs.current, index, path)
+            setRouteLinePairVisible(routeLineRefs.current, index, true)
+          })
+        } else {
+          routeLineRefs.current.forEach((line) => line?.setMap?.(null))
+          const nextRouteLines = drawableSegments.flatMap((segment) => (
+            createRouteLinePolylines(segment, routeColor, mapRef.current)
+          ))
 
-        routeLineRefs.current = nextRouteLines
-        routeLineStructureSignatureRef.current = routeLineStructureSignature
+          routeLineRefs.current = nextRouteLines
+          routeLineStructureSignatureRef.current = routeLineStructureSignature
+        }
+        routeLineSignatureRef.current = routeLineSignature
+        routeLineSourceSignatureRef.current = routeLineSignature
+        routeLineActiveSegmentIndexRef.current = undefined
+        routeLineActivePathSignatureRef.current = undefined
       }
-      routeLineSignatureRef.current = routeLineSignature
     }
     const routeDirectionMarkerSignature = getRouteDirectionMarkerSignature(routeDirectionCoordinates, routeDirectionZoom)
     if (routeDirectionMarkerSignatureRef.current !== routeDirectionMarkerSignature) {
@@ -1285,14 +1358,19 @@ export function TmapPanel({
       }
     }
   }, [
+    clearRouteLines,
     getCurrentMapBearing,
     currentPosition,
+    onSimulationFrameRendererReady,
     progressPosition,
     remainingRouteCoordinates,
     routeDirectionCoordinates,
     resolveCameraCenter,
     routeDirectionZoom,
+    routeLineDrawableSourceSegments,
     routeLineSegments,
+    ensureStableRouteLines,
+    simulationPosition,
     status,
     syncCompassBearing,
     updateRouteDirectionMarkerBearings,
@@ -2473,6 +2551,18 @@ function getRouteLineStructureSignature(segments: RouteTrafficSegment[]) {
   return segments.map((segment) => segment.congestion).join('|')
 }
 
+function setRouteLinePairPath(lines: TmapPolyline[], segmentIndex: number, path: unknown[]) {
+  lines[segmentIndex * 2]?.setPath?.(path)
+  lines[segmentIndex * 2 + 1]?.setPath?.(path)
+}
+
+function setRouteLinePairVisible(lines: TmapPolyline[], segmentIndex: number, visible: boolean) {
+  const strokeOpacity = visible ? 1 : 0
+
+  lines[segmentIndex * 2]?.setOptions?.({ strokeOpacity })
+  lines[segmentIndex * 2 + 1]?.setOptions?.({ strokeOpacity })
+}
+
 function getRouteDirectionMarkerSignature(coordinates: Coordinate[], zoom: number) {
   const density = getRouteDirectionArrowDensity(zoom)
 
@@ -2706,6 +2796,30 @@ function getRemainingRouteLineSegments(
       coordinates: remainingCoordinates,
     }]
   })
+}
+
+function getRemainingRouteLineSegment(
+  segment: RouteTrafficSegment | undefined,
+  progressPosition: Coordinate,
+): RouteTrafficSegment | undefined {
+  if (!segment) {
+    return undefined
+  }
+
+  const projection = projectCoordinateToRouteSegment(segment.coordinates, progressPosition)
+  const remainingCoordinates = compactRouteCoordinates([
+    projection.coordinate,
+    ...segment.coordinates.slice(projection.segmentIndex + 1),
+  ])
+
+  if (remainingCoordinates.length < 2) {
+    return undefined
+  }
+
+  return {
+    ...segment,
+    coordinates: remainingCoordinates,
+  }
 }
 
 function getNearestRouteLineSegmentIndex(
