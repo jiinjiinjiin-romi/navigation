@@ -37,6 +37,7 @@ import type { OrbAssistantState, OrbColorTheme } from 'navi-orb'
 import { type CSSProperties, type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getCurrentAddress, getRoadMatch, getRouteOptions, searchPlaces } from '../api/tmapApi'
 import { createRoundedRoutePath } from '../map/routeGeometry'
+import { markRoutePerformance, measureRoutePerformance } from '../performance/routePerformance'
 import { createRouteSimulationPlan, getSimulatedRoutePosition } from '../simulation/routeSimulation'
 import { getSimulationDurationMs } from '../simulation/simulationTiming'
 import type { Coordinate, NavigationRoute, NavigationRouteOption, Place, RoadMatchPoint, RouteManeuver, SafetyAlert } from '../types'
@@ -756,7 +757,13 @@ export function NavigationShell() {
       destination?.coordinate.lat,
       destination?.coordinate.lng,
     ],
-    queryFn: ({ signal }) => getRouteOptions(origin!.coordinate, destination!.coordinate, undefined, signal),
+    queryFn: async ({ signal }) => {
+      markRoutePerformance('route-options-query-start')
+      const options = await getRouteOptions(origin!.coordinate, destination!.coordinate, undefined, signal)
+      markRoutePerformance('route-options-query-end')
+      measureRoutePerformance('route-options-query-total', 'route-options-query-start', 'route-options-query-end')
+      return options
+    },
     enabled: Boolean(origin && destination && routeOptionsSearchReady) && !selectedRouteOptionId,
   })
 
@@ -850,7 +857,10 @@ export function NavigationShell() {
     }
 
     setRouteOptionsSearchReady(false)
+    markRoutePerformance('route-options-schedule')
     const timerId = window.setTimeout(() => {
+      markRoutePerformance('route-options-query-enabled')
+      measureRoutePerformance('route-options-schedule-delay', 'route-options-schedule', 'route-options-query-enabled')
       setRouteOptionsSearchReady(true)
     }, 0)
 

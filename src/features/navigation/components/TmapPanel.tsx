@@ -9,6 +9,7 @@ import {
   projectCoordinateToRouteSegment,
   projectCoordinateToRoute,
 } from '../map/navigationCamera'
+import { markRoutePerformance, measureRoutePerformance } from '../performance/routePerformance'
 
 interface TmapPanelProps {
   cameraSettings?: MapCameraSettings
@@ -991,6 +992,7 @@ export function TmapPanel({
     routeOptionOverlaySignatureRef.current = overlaySignature
 
     let cancelled = false
+    markRoutePerformance('route-option-overlay-start')
     const finishRouteOptionOverlayBuild = () => {
       routeOptionOverlayBuildFrameRef.current = undefined
       routeOptionHitTestCacheRef.current = createRouteOptionHitTestCache(
@@ -998,6 +1000,8 @@ export function TmapPanel({
         map,
       )
       updateRouteOptionOverlayPreview(activeOptionId, true)
+      markRoutePerformance('route-option-overlay-end')
+      measureRoutePerformance('route-option-overlay-total', 'route-option-overlay-start', 'route-option-overlay-end')
     }
 
     const buildActiveRouteOptionOverlay = (index: number) => {
