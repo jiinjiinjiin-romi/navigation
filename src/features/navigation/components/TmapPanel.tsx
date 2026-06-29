@@ -41,6 +41,7 @@ const ROUTE_SELECTION_MAX_ZOOM = 16
 const ROUTE_SELECTION_ZOOM_OUT_MARGIN = 0.9
 const ROUTE_OPTION_HOVER_DISTANCE_PX = 20
 const ROUTE_OPTION_HIT_TEST_MIN_DISTANCE_SQUARED = 0.00000004
+const ROUTE_OPTION_POLYLINE_CHUNK_SIZE = 8
 const CAMERA_FOLLOW_OFFSET_Y = 180
 const CAMERA_ANIMATION_MS = 220
 const MAP_MODE_TRANSITION_MS = 960
@@ -415,28 +416,72 @@ export function TmapPanel({
     routeOptionActiveIdRef.current = undefined
   }, [])
 
-  const updateRouteOptionOverlayPreview = useCallback((previewOptionId: string | undefined, force = false) => {
-    const overlays = routeOptionOverlayRefs.current
-    const activeOptionId = previewOptionId ?? getDefaultRouteOptionId(overlays.map((overlay) => overlay.option))
-    const activeOverlay = overlays.find((overlay) => overlay.id === activeOptionId)
-
-    if (!force && routeOptionActiveIdRef.current === activeOptionId) {
-      return
+  const buildRouteOptionActiveLines = useCallback((
+    activeOverlay: RouteOptionOverlay | undefined,
+    onComplete?: () => void,
+  ) => {
+    if (
+      routeOptionOverlayVisibleRef.current &&
+      routeOptionOverlayBuildFrameRef.current !== undefined
+    ) {
+      window.cancelAnimationFrame(routeOptionOverlayBuildFrameRef.current)
+      routeOptionOverlayBuildFrameRef.current = undefined
     }
 
     disposeRouteOptionRenderedLines(routeOptionActiveLineRefs.current)
     routeOptionActiveLineRefs.current = []
 
-    if (activeOverlay) {
-      routeOptionActiveLineRefs.current = createRouteOptionPolylines(
+    if (!activeOverlay) {
+      routeOptionActiveIdRef.current = undefined
+      onComplete?.()
+      return
+    }
+
+    const targetLines: RouteOptionRenderedLine[] = []
+    routeOptionActiveLineRefs.current = targetLines
+    const map = routeOptionOverlayVisibleRef.current ? mapRef.current : undefined
+
+    const buildChunk = (startIndex: number) => {
+      const nextIndex = appendRouteOptionPolylineChunk(
+        targetLines,
         activeOverlay.option,
         activeOverlay.segments,
         true,
-        routeOptionOverlayVisibleRef.current ? mapRef.current : undefined,
+        map,
+        startIndex,
       )
+
+      if (nextIndex >= activeOverlay.segments.length) {
+        routeOptionActiveIdRef.current = activeOverlay.id
+        routeOptionOverlayBuildFrameRef.current = undefined
+        onComplete?.()
+        return
+      }
+
+      routeOptionOverlayBuildFrameRef.current = window.requestAnimationFrame(() => {
+        buildChunk(nextIndex)
+      })
     }
-    routeOptionActiveIdRef.current = activeOptionId
+
+    buildChunk(0)
   }, [])
+
+  const updateRouteOptionOverlayPreview = useCallback((
+    previewOptionId: string | undefined,
+    force = false,
+    onComplete?: () => void,
+  ) => {
+    const overlays = routeOptionOverlayRefs.current
+    const activeOptionId = previewOptionId ?? getDefaultRouteOptionId(overlays.map((overlay) => overlay.option))
+    const activeOverlay = overlays.find((overlay) => overlay.id === activeOptionId)
+
+    if (!force && routeOptionActiveIdRef.current === activeOptionId) {
+      onComplete?.()
+      return
+    }
+
+    buildRouteOptionActiveLines(activeOverlay, onComplete)
+  }, [buildRouteOptionActiveLines])
 
   const renderNavigationCamera = useCallback((camera: RenderedCamera, applyMap = true) => {
     if (!window.Tmapv3 || !mapRef.current) {
@@ -1010,17 +1055,45 @@ export function TmapPanel({
     let cancelled = false
     markRoutePerformance('route-option-overlay-start')
     const finishRouteOptionOverlayBuild = () => {
-      routeOptionOverlayBuildFrameRef.current = undefined
-      routeOptionHitTestCacheRef.current = createRouteOptionHitTestCache(
-        routeOptionOverlayRefs.current,
-        map,
-      )
-      updateRouteOptionOverlayPreview(activeOptionId, true)
-      revealRouteOptionOverlays(routeOptionOverlayRefs.current, routeOptionActiveLineRefs.current, map)
-      routeOptionOverlayVisibleRef.current = true
-      onRouteOptionsOverlayReady?.(true)
-      markRoutePerformance('route-option-overlay-end')
-      measureRoutePerformance('route-option-overlay-total', 'route-option-overlay-start', 'route-option-overlay-end')
+      const revealOverlays = () => {
+        const renderedLines = getRouteOptionRenderedLines(
+          routeOptionOverlayRefs.current,
+          routeOptionActiveLineRefs.current,
+        )
+
+        const revealChunk = (startIndex: number) => {
+          if (cancelled || !mapRef.current || mapRef.current !== map) {
+            return
+          }
+
+          const nextIndex = revealRouteOptionOverlayChunk(renderedLines, map, startIndex)
+
+          if (nextIndex < renderedLines.length) {
+            routeOptionOverlayBuildFrameRef.current = window.requestAnimationFrame(() => {
+              revealChunk(nextIndex)
+            })
+            return
+          }
+
+          routeOptionOverlayVisibleRef.current = true
+          onRouteOptionsOverlayReady?.(true)
+          markRoutePerformance('route-option-overlay-end')
+          measureRoutePerformance('route-option-overlay-total', 'route-option-overlay-start', 'route-option-overlay-end')
+          routeOptionOverlayBuildFrameRef.current = window.requestAnimationFrame(() => {
+            if (!cancelled && mapRef.current === map) {
+              routeOptionHitTestCacheRef.current = createRouteOptionHitTestCache(
+                routeOptionOverlayRefs.current,
+                map,
+              )
+            }
+            routeOptionOverlayBuildFrameRef.current = undefined
+          })
+        }
+
+        revealChunk(0)
+      }
+
+      updateRouteOptionOverlayPreview(activeOptionId, true, revealOverlays)
     }
 
     const buildBaseRouteOptionOverlay = (index: number) => {
@@ -1881,41 +1954,70 @@ function createRouteOptionPolylines(
   map?: Window['Tmapv3Map'] | null,
   visible = true,
 ) {
-  const lineStyle = getRouteOptionOverlayLineStyle(active)
-
   return segments.flatMap((segment) => {
-    const path = toTmapPath(segment.coordinates)
-    const renderedPath = visible ? path : getHiddenRouteOptionPath(path)
-    const borderLine = new window.Tmapv3!.Polyline({
-      path: renderedPath,
-      strokeColor: getRouteOptionLineColor('border', option, segment.congestion, active),
-      strokeOpacity: lineStyle.borderOpacity,
-      strokeWeight: lineStyle.borderWeight,
-      zIndex: getRouteOptionOverlayLineZIndex('border', active),
-      map,
-    })
-    const routeLine = new window.Tmapv3!.Polyline({
-      path: renderedPath,
-      strokeColor: getRouteOptionLineColor('route', option, segment.congestion, active),
-      strokeOpacity: lineStyle.strokeOpacity,
-      strokeWeight: lineStyle.strokeWeight,
-      zIndex: getRouteOptionOverlayLineZIndex('route', active),
-      map,
-    })
-
-    return [
-      {
-        kind: 'border' as const,
-        line: borderLine,
-        path,
-      },
-      {
-        kind: 'route' as const,
-        line: routeLine,
-        path,
-      },
-    ]
+    return createRouteOptionPolylinePair(option, segment, active, map, visible)
   })
+}
+
+function appendRouteOptionPolylineChunk(
+  targetLines: RouteOptionRenderedLine[],
+  option: NavigationRouteOption,
+  segments: RouteTrafficSegment[],
+  active: boolean,
+  map: Window['Tmapv3Map'] | null | undefined,
+  startIndex: number,
+) {
+  const endIndex = Math.min(startIndex + ROUTE_OPTION_POLYLINE_CHUNK_SIZE, segments.length)
+
+  for (let index = startIndex; index < endIndex; index += 1) {
+    const segment = segments[index]
+    if (segment) {
+      targetLines.push(...createRouteOptionPolylinePair(option, segment, active, map))
+    }
+  }
+
+  return endIndex
+}
+
+function createRouteOptionPolylinePair(
+  option: NavigationRouteOption,
+  segment: RouteTrafficSegment,
+  active: boolean,
+  map?: Window['Tmapv3Map'] | null,
+  visible = true,
+): RouteOptionRenderedLine[] {
+  const lineStyle = getRouteOptionOverlayLineStyle(active)
+  const path = toTmapPath(segment.coordinates)
+  const renderedPath = visible ? path : getHiddenRouteOptionPath(path)
+  const borderLine = new window.Tmapv3!.Polyline({
+    path: renderedPath,
+    strokeColor: getRouteOptionLineColor('border', option, segment.congestion, active),
+    strokeOpacity: lineStyle.borderOpacity,
+    strokeWeight: lineStyle.borderWeight,
+    zIndex: getRouteOptionOverlayLineZIndex('border', active),
+    map,
+  })
+  const routeLine = new window.Tmapv3!.Polyline({
+    path: renderedPath,
+    strokeColor: getRouteOptionLineColor('route', option, segment.congestion, active),
+    strokeOpacity: lineStyle.strokeOpacity,
+    strokeWeight: lineStyle.strokeWeight,
+    zIndex: getRouteOptionOverlayLineZIndex('route', active),
+    map,
+  })
+
+  return [
+    {
+      kind: 'border',
+      line: borderLine,
+      path,
+    },
+    {
+      kind: 'route',
+      line: routeLine,
+      path,
+    },
+  ]
 }
 
 function disposeRouteOptionPolyline(renderedLine: RouteOptionRenderedLine) {
@@ -1930,19 +2032,28 @@ function disposeRouteOptionRenderedLines(lines: RouteOptionRenderedLine[]) {
   lines.forEach(disposeRouteOptionPolyline)
 }
 
-function revealRouteOptionOverlays(
+function getRouteOptionRenderedLines(
   overlays: RouteOptionOverlay[],
   activeLines: RouteOptionRenderedLine[],
-  map: Window['Tmapv3Map'],
 ) {
-  overlays.forEach((overlay) => {
-    overlay.baseLines.forEach((renderedLine) => {
-      renderedLine.line.setMap?.(map)
-    })
-  })
-  activeLines.forEach((renderedLine) => {
-    renderedLine.line.setMap?.(map)
-  })
+  return [
+    ...overlays.flatMap((overlay) => overlay.baseLines),
+    ...activeLines,
+  ]
+}
+
+function revealRouteOptionOverlayChunk(
+  renderedLines: RouteOptionRenderedLine[],
+  map: Window['Tmapv3Map'],
+  startIndex: number,
+) {
+  const endIndex = Math.min(startIndex + ROUTE_OPTION_POLYLINE_CHUNK_SIZE, renderedLines.length)
+
+  for (let index = startIndex; index < endIndex; index += 1) {
+    renderedLines[index]?.line.setMap?.(map)
+  }
+
+  return endIndex
 }
 
 function getHiddenRouteOptionPath(path: unknown[]) {
