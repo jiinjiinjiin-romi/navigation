@@ -955,6 +955,29 @@ describe('TmapPanel', () => {
     })
   })
 
+  it('keeps guidance start centered on the current route position before simulation starts', async () => {
+    render(
+      <TmapPanel
+        currentPosition={{ lat: 37, lng: 126.2 }}
+        route={{
+          coordinates: [
+            { lat: 37, lng: 126 },
+            { lat: 37, lng: 127 },
+          ],
+          summary: {
+            distanceMeters: 1000,
+            durationSeconds: 120,
+          },
+        }}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(setCenter).toHaveBeenCalled()
+    })
+    expect(setCenter).toHaveBeenLastCalledWith({ lat: 37, lng: 126.2 })
+  })
+
   it('rotates the map camera to the active route bearing', async () => {
     render(
       <TmapPanel
@@ -979,12 +1002,16 @@ describe('TmapPanel', () => {
   })
 
   it('updates vector map center and bearing atomically when the native camera is available', async () => {
+    const realToScreen = vi.fn(() => ({ getX: () => 720, getY: () => 470 }))
+    const screenToReal = vi.fn(() => ({ lat: 37.0016, lng: 126 }))
     window.Tmapv3!.Map = vi.fn(function () {
       return {
         setCenter,
         setZoom,
         setBearing,
         setPitch,
+        realToScreen,
+        screenToReal,
         vsmMap: () => ({
           getCamera: () => ({
             jumpTo: nativeCameraJumpTo,
@@ -1010,19 +1037,95 @@ describe('TmapPanel', () => {
     )
 
     await waitFor(() => {
+      expect(nativeCameraJumpTo).toHaveBeenCalledTimes(2)
+    })
+    expect(nativeCameraJumpTo).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        center: [126, 37],
+        bearing: expect.closeTo(89.8, 0),
+        zoom: 18.3,
+        pitch: 0,
+      }),
+      { animate: false },
+      { moveByProgram: true },
+    )
+    expect(nativeCameraJumpTo).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        center: [126, 37.0016],
+        bearing: expect.closeTo(89.8, 0),
+        zoom: 18.3,
+        pitch: 0,
+      }),
+      { animate: false },
+      { moveByProgram: true },
+    )
+    expect(realToScreen.mock.invocationCallOrder[realToScreen.mock.invocationCallOrder.length - 1]).toBeGreaterThan(
+      nativeCameraJumpTo.mock.invocationCallOrder[0],
+    )
+    expect(screenToReal).toHaveBeenCalledWith({ x: 720, y: 290 })
+    expect(setBearing).not.toHaveBeenCalled()
+    expect(setCenter).not.toHaveBeenCalled()
+  })
+
+  it('keeps native guidance camera offset after applying bearing and pitch', async () => {
+    const realToScreen = vi.fn(() => ({ getX: () => 720, getY: () => 470 }))
+    const screenToReal = vi.fn(() => ({ lat: 37.5016, lng: 126 }))
+    window.Tmapv3!.Map = vi.fn(function () {
+      return {
+        getCenter,
+        getBearing,
+        getPitch,
+        getZoom,
+        setCenter,
+        setZoom,
+        setBearing,
+        setPitch,
+        setInteractive,
+        realToScreen,
+        screenToReal,
+        vsmMap: () => ({
+          getCamera: () => ({
+            jumpTo: nativeCameraJumpTo,
+          }),
+        }),
+      }
+    }) as unknown as NonNullable<Window['Tmapv3']>['Map']
+
+    render(
+      <TmapPanel
+        cameraSettings={{ mode: '3d', zoom: 18.3, pitch: 45 }}
+        route={{
+          coordinates: [
+            { lat: 37, lng: 126 },
+            { lat: 38, lng: 126 },
+          ],
+          summary: {
+            distanceMeters: 1000,
+            durationSeconds: 120,
+          },
+        }}
+        simulationPosition={{ lat: 37.5, lng: 126 }}
+      />,
+    )
+
+    await waitFor(() => {
       expect(nativeCameraJumpTo).toHaveBeenCalledWith(
         expect.objectContaining({
-          center: [126, 37],
-          bearing: expect.closeTo(89.8, 0),
+          center: [126, 37.5016],
+          bearing: 0,
           zoom: 18.3,
-          pitch: 0,
+          pitch: 45,
         }),
         { animate: false },
         { moveByProgram: true },
       )
     })
-    expect(setBearing).not.toHaveBeenCalled()
-    expect(setCenter).not.toHaveBeenCalled()
+    expect(realToScreen.mock.invocationCallOrder[realToScreen.mock.invocationCallOrder.length - 1]).toBeGreaterThan(
+      nativeCameraJumpTo.mock.invocationCallOrder[0],
+    )
+    expect(screenToReal).toHaveBeenCalledWith({ x: 720, y: 290 })
   })
 
   it('shows the compass and current location controls in regular map mode', async () => {

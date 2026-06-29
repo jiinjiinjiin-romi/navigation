@@ -715,7 +715,9 @@ export function NavigationShell() {
   const animationFrameRef = useRef<number | undefined>(undefined)
   const simulationStartedAtRef = useRef<number | undefined>(undefined)
   const simulationLastUiUpdateAtRef = useRef<number | undefined>(undefined)
-  const simulationFrameRendererRef = useRef<((position: Coordinate) => void) | undefined>(undefined)
+  const simulationSkipInitialFrameWorkRef = useRef(false)
+  const simulationSkipInitialUiUpdateRef = useRef(false)
+  const simulationFrameRendererRef = useRef<((position: Coordinate, options?: { skipCamera?: boolean; skipRouteLineHead?: boolean }) => void) | undefined>(undefined)
   const guidanceDistanceDisplayRef = useRef<GuidanceDistanceDisplayStore>(new Map())
   const routeSelectionCameraSettingsRef = useRef<MapCameraSettings | undefined>(undefined)
   const routeSearchEditorTimerRef = useRef<number | undefined>(undefined)
@@ -1244,18 +1246,18 @@ export function NavigationShell() {
 
   const startSimulation = () => {
     const route = activeRoute
-    const firstCoordinate = route?.coordinates[0]
-    if (!firstCoordinate) {
+    if (!route?.coordinates.length) {
       return
     }
 
-    setSimulationPosition(firstCoordinate)
     setSimulationRemainingDistance(route.summary.distanceMeters)
     setSimulationRemainingDuration(route.summary.durationSeconds)
     setGuidanceDistanceUpdateKey(0)
     guidanceDistanceDisplayRef.current.clear()
     simulationStartedAtRef.current = undefined
     simulationLastUiUpdateAtRef.current = undefined
+    simulationSkipInitialFrameWorkRef.current = true
+    simulationSkipInitialUiUpdateRef.current = true
     setSimulationRunning(true)
   }
 
@@ -1267,6 +1269,8 @@ export function NavigationShell() {
 
     simulationStartedAtRef.current = undefined
     simulationLastUiUpdateAtRef.current = undefined
+    simulationSkipInitialFrameWorkRef.current = false
+    simulationSkipInitialUiUpdateRef.current = false
     setSimulationRunning(false)
   }, [])
 
@@ -1299,14 +1303,30 @@ export function NavigationShell() {
     )
 
     const tick = (timestamp: number) => {
+      const skipInitialUiUpdate = simulationSkipInitialUiUpdateRef.current
+      if (skipInitialUiUpdate) {
+        simulationFrameRendererRef.current?.(simulationPlan.coordinates[0] ?? route.coordinates[0], {
+          skipCamera: true,
+          skipRouteLineHead: true,
+        })
+        simulationSkipInitialUiUpdateRef.current = false
+        simulationSkipInitialFrameWorkRef.current = false
+        simulationLastUiUpdateAtRef.current = timestamp
+        animationFrameRef.current = window.requestAnimationFrame(tick)
+        return
+      }
+
       if (simulationStartedAtRef.current === undefined) {
         simulationStartedAtRef.current = timestamp
       }
-
       const elapsed = timestamp - simulationStartedAtRef.current
       const progress = getSimulatedRoutePosition(simulationPlan, elapsed / simulationDurationMs)
-      simulationFrameRendererRef.current?.(progress.coordinate)
-      const shouldUpdateUiState = (
+      const skipInitialFrameWork = simulationSkipInitialFrameWorkRef.current
+      simulationFrameRendererRef.current?.(progress.coordinate, {
+        skipCamera: skipInitialFrameWork,
+        skipRouteLineHead: skipInitialFrameWork,
+      })
+      const shouldUpdateUiState = !skipInitialUiUpdate && (
         progress.completed ||
         simulationLastUiUpdateAtRef.current === undefined ||
         timestamp - simulationLastUiUpdateAtRef.current >= SIMULATION_UI_UPDATE_INTERVAL_MS
@@ -1318,12 +1338,15 @@ export function NavigationShell() {
         setSimulationRemainingDuration(progress.remainingDurationSeconds)
         setGuidanceDistanceUpdateKey(Math.floor(elapsed / GUIDANCE_DISTANCE_UPDATE_INTERVAL_MS))
         simulationLastUiUpdateAtRef.current = timestamp
+        simulationSkipInitialFrameWorkRef.current = false
       }
 
       if (progress.completed) {
         setSimulationRunning(false)
         animationFrameRef.current = undefined
         simulationLastUiUpdateAtRef.current = undefined
+        simulationSkipInitialFrameWorkRef.current = false
+        simulationSkipInitialUiUpdateRef.current = false
         return
       }
 
@@ -3491,7 +3514,7 @@ function DrivingHud({
       ) : null}
 
       <motion.div
-        className="absolute bottom-17 right-5 flex items-center gap-3 max-sm:bottom-16 max-sm:right-3"
+        className="absolute bottom-17 right-28 flex items-center gap-3 max-sm:bottom-16 max-sm:right-20"
         initial={{ opacity: 0, y: 22 }}
         animate={{ opacity: 1, y: 0 }}
         transition={motionTiming}

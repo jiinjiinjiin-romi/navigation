@@ -23,8 +23,13 @@ interface TmapPanelProps {
   onCameraSettingsChange?: (settings: Partial<MapCameraSettings>) => void
   onRouteOptionsOverlayReady?: (ready: boolean) => void
   onRouteOptionPreviewChange?: (id: string | undefined) => void
-  onSimulationFrameRendererReady?: (renderFrame: ((position: Coordinate) => void) | undefined) => void
+  onSimulationFrameRendererReady?: (renderFrame: ((position: Coordinate, options?: SimulationFrameRenderOptions) => void) | undefined) => void
   onRequestLocation?: () => void
+}
+
+interface SimulationFrameRenderOptions {
+  skipCamera?: boolean
+  skipRouteLineHead?: boolean
 }
 
 export interface MapCameraSettings {
@@ -1263,7 +1268,7 @@ export function TmapPanel({
       const bearing = getRouteBearing(remainingRouteCoordinates)
       const firstCameraCenter = resolveCameraCenter(firstCoordinate)
 
-      if (!progressPosition) {
+      if (!progressPosition && !currentPosition) {
         const overviewCamera = {
           position: firstCoordinate,
           bearing,
@@ -1281,6 +1286,7 @@ export function TmapPanel({
     }
   }, [
     getCurrentMapBearing,
+    currentPosition,
     progressPosition,
     remainingRouteCoordinates,
     routeDirectionCoordinates,
@@ -1364,7 +1370,7 @@ export function TmapPanel({
       return
     }
 
-    onSimulationFrameRendererReady((position) => {
+    onSimulationFrameRendererReady((position, options = {}) => {
       const displayPosition = route?.coordinates.length
         ? projectCoordinateToRoute(route.coordinates, position)
         : position
@@ -1378,16 +1384,21 @@ export function TmapPanel({
         ? cameraBearing.markerBearing
         : getNavigationMarkerBearing(route?.coordinates, displayPosition, getCurrentMapBearing())
 
-      applyNavigationCamera(
-        displayPosition,
-        cameraBearing.mapBearing,
-        {
-          animated: false,
-          applyMap: shouldFollowCamera,
-          markerBearing,
-        },
-      )
-      updateVisibleRouteLineHead(displayPosition)
+      if (!options.skipCamera) {
+        applyNavigationCamera(
+          displayPosition,
+          cameraBearing.mapBearing,
+          {
+            animated: false,
+            applyMap: shouldFollowCamera,
+            markerBearing,
+          },
+        )
+      }
+
+      if (!options.skipRouteLineHead) {
+        updateVisibleRouteLineHead(displayPosition)
+      }
     })
 
     return () => onSimulationFrameRendererReady(undefined)
@@ -1690,25 +1701,40 @@ function applyMapCamera(
   const resolveCenter = () => (typeof center === 'function' ? center() : center)
 
   if (nativeCamera?.jumpTo) {
-    const centerArray = getLngLatArray(resolveCenter())
-    if (!centerArray) {
+    const targetCenterArray = getLngLatArray(camera.position)
+    if (!targetCenterArray) {
       return
     }
-    const cameraOptions = options.preserveZoom
+
+    const targetCameraOptions = options.preserveZoom
       ? {
-          center: centerArray,
+          center: targetCenterArray,
           bearing: camera.bearing,
           pitch: camera.pitch,
         }
       : {
           zoom,
-          center: centerArray,
+          center: targetCenterArray,
           bearing: camera.bearing,
           pitch: camera.pitch,
         }
 
     nativeCamera.jumpTo(
-      cameraOptions,
+      targetCameraOptions,
+      { animate: false },
+      { moveByProgram: true },
+    )
+
+    const resolvedCenterArray = getLngLatArray(resolveCenter())
+    if (!resolvedCenterArray) {
+      return
+    }
+
+    nativeCamera.jumpTo(
+      {
+        ...targetCameraOptions,
+        center: resolvedCenterArray,
+      },
       { animate: false },
       { moveByProgram: true },
     )
