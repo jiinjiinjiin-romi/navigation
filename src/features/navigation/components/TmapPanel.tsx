@@ -122,6 +122,7 @@ interface RouteDirectionMarker {
 
 interface RouteOptionOverlay {
   id: string
+  activeLines: RouteOptionRenderedLine[]
   baseLines: RouteOptionRenderedLine[]
   hitTestCoordinates: Coordinate[]
   option: NavigationRouteOption
@@ -405,83 +406,15 @@ export function TmapPanel({
     }
     onRouteOptionsOverlayReady?.(false)
     routeOptionOverlayRefs.current.forEach((overlay) => {
+      overlay.activeLines.forEach(disposeRouteOptionPolyline)
       overlay.baseLines.forEach(disposeRouteOptionPolyline)
     })
-    disposeRouteOptionRenderedLines(routeOptionActiveLineRefs.current)
     routeOptionActiveLineRefs.current = []
     routeOptionOverlayVisibleRef.current = false
     routeOptionOverlayRefs.current = []
     routeOptionHitTestCacheRef.current = undefined
     routeOptionOverlaySignatureRef.current = undefined
     routeOptionActiveIdRef.current = undefined
-  }, [])
-
-  const buildRouteOptionActiveLines = useCallback((
-    activeOverlay: RouteOptionOverlay | undefined,
-    onComplete?: () => void,
-  ) => {
-    if (
-      routeOptionOverlayVisibleRef.current &&
-      routeOptionOverlayBuildFrameRef.current !== undefined
-    ) {
-      window.cancelAnimationFrame(routeOptionOverlayBuildFrameRef.current)
-      routeOptionOverlayBuildFrameRef.current = undefined
-    }
-
-    const replaceAfterBuild = routeOptionOverlayVisibleRef.current
-    const previousLines = routeOptionActiveLineRefs.current
-    const targetLines: RouteOptionRenderedLine[] = []
-
-    if (!activeOverlay) {
-      disposeRouteOptionRenderedLines(previousLines)
-      routeOptionActiveLineRefs.current = []
-      routeOptionActiveIdRef.current = undefined
-      onComplete?.()
-      return
-    }
-
-    if (replaceAfterBuild) {
-      routeOptionActiveLineRefs.current = previousLines
-    } else {
-      disposeRouteOptionRenderedLines(previousLines)
-      routeOptionActiveLineRefs.current = targetLines
-    }
-    const map = routeOptionOverlayVisibleRef.current ? mapRef.current : undefined
-
-    const buildChunk = (startIndex: number) => {
-      const nextIndex = appendRouteOptionPolylineChunk(
-        targetLines,
-        activeOverlay.option,
-        activeOverlay.segments,
-        true,
-        map,
-        startIndex,
-      )
-
-      if (replaceAfterBuild) {
-        routeOptionActiveLineRefs.current = [
-          ...previousLines,
-          ...targetLines,
-        ]
-      }
-
-      if (nextIndex >= activeOverlay.segments.length) {
-        if (replaceAfterBuild) {
-          disposeRouteOptionRenderedLines(previousLines)
-          routeOptionActiveLineRefs.current = targetLines
-        }
-        routeOptionActiveIdRef.current = activeOverlay.id
-        routeOptionOverlayBuildFrameRef.current = undefined
-        onComplete?.()
-        return
-      }
-
-      routeOptionOverlayBuildFrameRef.current = window.requestAnimationFrame(() => {
-        buildChunk(nextIndex)
-      })
-    }
-
-    buildChunk(0)
   }, [])
 
   const updateRouteOptionOverlayPreview = useCallback((
@@ -498,8 +431,22 @@ export function TmapPanel({
       return
     }
 
-    buildRouteOptionActiveLines(activeOverlay, onComplete)
-  }, [buildRouteOptionActiveLines])
+    const previousActiveOverlay = overlays.find((overlay) => overlay.id === routeOptionActiveIdRef.current)
+    if (previousActiveOverlay && previousActiveOverlay.id !== activeOverlay?.id) {
+      setRouteOptionActiveLinesVisible(previousActiveOverlay, false)
+    }
+
+    if (activeOverlay) {
+      setRouteOptionActiveLinesVisible(activeOverlay, true)
+      routeOptionActiveLineRefs.current = activeOverlay.activeLines
+      routeOptionActiveIdRef.current = activeOverlay.id
+    } else {
+      routeOptionActiveLineRefs.current = []
+      routeOptionActiveIdRef.current = undefined
+    }
+
+    onComplete?.()
+  }, [])
 
   const renderNavigationCamera = useCallback((camera: RenderedCamera, applyMap = true) => {
     if (!window.Tmapv3 || !mapRef.current) {
@@ -1073,10 +1020,18 @@ export function TmapPanel({
     let cancelled = false
     markRoutePerformance('route-option-overlay-start')
     const finishRouteOptionOverlayBuild = () => {
+      const activeOverlay = routeOptionOverlayRefs.current.find((overlay) => overlay.id === activeOptionId)
+      routeOptionActiveIdRef.current = activeOverlay?.id
+      routeOptionActiveLineRefs.current = activeOverlay?.activeLines ?? []
+      routeOptionHitTestCacheRef.current = createRouteOptionHitTestCache(
+        routeOptionOverlayRefs.current,
+        map,
+      )
+
       const revealOverlays = () => {
         const renderedLines = getRouteOptionRenderedLines(
           routeOptionOverlayRefs.current,
-          routeOptionActiveLineRefs.current,
+          routeOptionActiveIdRef.current,
         )
 
         const revealChunk = (startIndex: number) => {
@@ -1097,21 +1052,51 @@ export function TmapPanel({
           onRouteOptionsOverlayReady?.(true)
           markRoutePerformance('route-option-overlay-end')
           measureRoutePerformance('route-option-overlay-total', 'route-option-overlay-start', 'route-option-overlay-end')
-          routeOptionOverlayBuildFrameRef.current = window.requestAnimationFrame(() => {
-            if (!cancelled && mapRef.current === map) {
-              routeOptionHitTestCacheRef.current = createRouteOptionHitTestCache(
-                routeOptionOverlayRefs.current,
-                map,
-              )
-            }
-            routeOptionOverlayBuildFrameRef.current = undefined
-          })
+          routeOptionOverlayBuildFrameRef.current = undefined
         }
 
         revealChunk(0)
       }
 
-      updateRouteOptionOverlayPreview(activeOptionId, true, revealOverlays)
+      revealOverlays()
+    }
+
+    const buildActiveRouteOptionOverlay = (overlayIndex: number, segmentIndex = 0) => {
+      if (cancelled || !mapRef.current || mapRef.current !== map) {
+        return
+      }
+
+      const overlay = routeOptionOverlayRefs.current[overlayIndex]
+      if (!overlay) {
+        finishRouteOptionOverlayBuild()
+        return
+      }
+
+      const nextSegmentIndex = appendRouteOptionPolylineChunk(
+        overlay.activeLines,
+        overlay.option,
+        overlay.segments,
+        true,
+        undefined,
+        segmentIndex,
+        overlay.id === activeOptionId,
+      )
+
+      if (nextSegmentIndex < overlay.segments.length) {
+        routeOptionOverlayBuildFrameRef.current = window.requestAnimationFrame(() => {
+          buildActiveRouteOptionOverlay(overlayIndex, nextSegmentIndex)
+        })
+        return
+      }
+
+      if (overlayIndex + 1 >= routeOptionOverlayRefs.current.length) {
+        finishRouteOptionOverlayBuild()
+        return
+      }
+
+      routeOptionOverlayBuildFrameRef.current = window.requestAnimationFrame(() => {
+        buildActiveRouteOptionOverlay(overlayIndex + 1)
+      })
     }
 
     const buildBaseRouteOptionOverlay = (index: number) => {
@@ -1121,7 +1106,7 @@ export function TmapPanel({
 
       const option = renderRouteOptions[index]
       if (!option) {
-        finishRouteOptionOverlayBuild()
+        buildActiveRouteOptionOverlay(0)
         return
       }
 
@@ -1132,7 +1117,7 @@ export function TmapPanel({
       ]
 
       if (index + 1 >= renderRouteOptions.length) {
-        finishRouteOptionOverlayBuild()
+        buildActiveRouteOptionOverlay(0)
         return
       }
 
@@ -1165,7 +1150,6 @@ export function TmapPanel({
     routeOptions,
     status,
     syncCompassBearing,
-    updateRouteOptionOverlayPreview,
   ])
 
   useEffect(() => {
@@ -1958,6 +1942,7 @@ function createRouteOptionOverlay(
 
   return {
     id: option.id,
+    activeLines: [],
     baseLines,
     hitTestCoordinates: getRouteOptionHitTestCoordinates(option.route.coordinates),
     option,
@@ -1984,13 +1969,14 @@ function appendRouteOptionPolylineChunk(
   active: boolean,
   map: Window['Tmapv3Map'] | null | undefined,
   startIndex: number,
+  visible = true,
 ) {
   const endIndex = Math.min(startIndex + ROUTE_OPTION_POLYLINE_CHUNK_SIZE, segments.length)
 
   for (let index = startIndex; index < endIndex; index += 1) {
     const segment = segments[index]
     if (segment) {
-      targetLines.push(...createRouteOptionPolylinePair(option, segment, active, map))
+      targetLines.push(...createRouteOptionPolylinePair(option, segment, active, map, visible))
     }
   }
 
@@ -2046,17 +2032,27 @@ function disposeRouteOptionPolyline(renderedLine: RouteOptionRenderedLine) {
   })
 }
 
-function disposeRouteOptionRenderedLines(lines: RouteOptionRenderedLine[]) {
-  lines.forEach(disposeRouteOptionPolyline)
+function setRouteOptionActiveLinesVisible(overlay: RouteOptionOverlay, visible: boolean) {
+  overlay.activeLines.forEach((renderedLine) => {
+    renderedLine.line.setPath?.(visible ? renderedLine.path : getHiddenRouteOptionPath(renderedLine.path))
+    renderedLine.line.setOptions?.({
+      zIndex: getRouteOptionOverlayLineZIndex(renderedLine.kind, true),
+    })
+  })
 }
 
 function getRouteOptionRenderedLines(
   overlays: RouteOptionOverlay[],
-  activeLines: RouteOptionRenderedLine[],
+  activeOptionId: string | undefined,
 ) {
+  const activeOverlay = overlays.find((overlay) => overlay.id === activeOptionId)
+
   return [
     ...overlays.flatMap((overlay) => overlay.baseLines),
-    ...activeLines,
+    ...overlays
+      .filter((overlay) => overlay.id !== activeOptionId)
+      .flatMap((overlay) => overlay.activeLines),
+    ...(activeOverlay?.activeLines ?? []),
   ]
 }
 
