@@ -1001,7 +1001,7 @@ describe('TmapPanel', () => {
     expect(setPitch).toHaveBeenCalledWith(0)
   })
 
-  it('updates vector map center and bearing atomically when the native camera is available', async () => {
+  it('updates vector map center and bearing with a single native camera jump', async () => {
     const realToScreen = vi.fn(() => ({ getX: () => 720, getY: () => 470 }))
     const screenToReal = vi.fn(() => ({ lat: 37.0016, lng: 126 }))
     window.Tmapv3!.Map = vi.fn(function () {
@@ -1037,21 +1037,9 @@ describe('TmapPanel', () => {
     )
 
     await waitFor(() => {
-      expect(nativeCameraJumpTo).toHaveBeenCalledTimes(2)
+      expect(nativeCameraJumpTo).toHaveBeenCalledTimes(1)
     })
-    expect(nativeCameraJumpTo).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({
-        center: [126, 37],
-        bearing: expect.closeTo(89.8, 0),
-        zoom: 18.3,
-        pitch: 0,
-      }),
-      { animate: false },
-      { moveByProgram: true },
-    )
-    expect(nativeCameraJumpTo).toHaveBeenNthCalledWith(
-      2,
+    expect(nativeCameraJumpTo).toHaveBeenCalledWith(
       expect.objectContaining({
         center: [126, 37.0016],
         bearing: expect.closeTo(89.8, 0),
@@ -1061,9 +1049,9 @@ describe('TmapPanel', () => {
       { animate: false },
       { moveByProgram: true },
     )
-    expect(realToScreen.mock.invocationCallOrder[realToScreen.mock.invocationCallOrder.length - 1]).toBeGreaterThan(
-      nativeCameraJumpTo.mock.invocationCallOrder[0],
-    )
+    expect(realToScreen.mock.invocationCallOrder.some((callOrder) => (
+      callOrder < nativeCameraJumpTo.mock.invocationCallOrder[0]
+    ))).toBe(true)
     expect(screenToReal).toHaveBeenCalledWith({ x: 720, y: 290 })
     expect(setBearing).not.toHaveBeenCalled()
     expect(setCenter).not.toHaveBeenCalled()
@@ -1122,9 +1110,16 @@ describe('TmapPanel', () => {
         { moveByProgram: true },
       )
     })
-    expect(realToScreen.mock.invocationCallOrder[realToScreen.mock.invocationCallOrder.length - 1]).toBeGreaterThan(
-      nativeCameraJumpTo.mock.invocationCallOrder[0],
-    )
+    const guidanceJumpIndex = nativeCameraJumpTo.mock.calls.findIndex((call) => (
+      (call[0] as { center?: number[] }).center?.[0] === 126 &&
+      (call[0] as { center?: number[] }).center?.[1] === 37.5016
+    ))
+    const guidanceJumpCallOrder = nativeCameraJumpTo.mock.invocationCallOrder[guidanceJumpIndex]
+
+    expect(guidanceJumpIndex).toBeGreaterThanOrEqual(0)
+    expect(realToScreen.mock.invocationCallOrder.some((callOrder) => (
+      callOrder < guidanceJumpCallOrder
+    ))).toBe(true)
     expect(screenToReal).toHaveBeenCalledWith({ x: 720, y: 290 })
   })
 

@@ -1828,40 +1828,27 @@ function applyMapCamera(
   const resolveCenter = () => (typeof center === 'function' ? center() : center)
 
   if (nativeCamera?.jumpTo) {
-    const targetCenterArray = getLngLatArray(camera.position)
-    if (!targetCenterArray) {
+    const resolvedCenterArray = getLngLatArray(resolveCenter())
+      ?? getLngLatArray(camera.position)
+    if (!resolvedCenterArray) {
       return
     }
 
     const targetCameraOptions = options.preserveZoom
       ? {
-          center: targetCenterArray,
+          center: resolvedCenterArray,
           bearing: camera.bearing,
           pitch: camera.pitch,
         }
       : {
           zoom,
-          center: targetCenterArray,
+          center: resolvedCenterArray,
           bearing: camera.bearing,
           pitch: camera.pitch,
         }
 
     nativeCamera.jumpTo(
       targetCameraOptions,
-      { animate: false },
-      { moveByProgram: true },
-    )
-
-    const resolvedCenterArray = getLngLatArray(resolveCenter())
-    if (!resolvedCenterArray) {
-      return
-    }
-
-    nativeCamera.jumpTo(
-      {
-        ...targetCameraOptions,
-        center: resolvedCenterArray,
-      },
       { animate: false },
       { moveByProgram: true },
     )
