@@ -42,12 +42,29 @@ const colorThemes: Record<OrbColorTheme, { primary: string; secondary: string; a
   },
 }
 
-const innerLights = [
-  { color: '#67e8f9', position: [-0.46, -0.1, 0.3], scale: [0.44, 0.36, 0.3] },
-  { color: '#8b5cf6', position: [0.08, 0.32, 0.28], scale: [0.58, 0.42, 0.34] },
-  { color: '#f0abfc', position: [0.38, 0.02, 0.26], scale: [0.4, 0.34, 0.3] },
-  { color: '#38bdf8', position: [0.24, -0.42, 0.24], scale: [0.46, 0.3, 0.3] },
-] as const
+const EYE_WIDTH = 0.13
+const EYE_HEIGHT = 0.38
+
+function createRoundedEyeShape() {
+  const radius = EYE_WIDTH / 2
+  const x = -EYE_WIDTH / 2
+  const y = -EYE_HEIGHT / 2
+  const shape = new THREE.Shape()
+
+  shape.moveTo(x + radius, y)
+  shape.lineTo(x + EYE_WIDTH - radius, y)
+  shape.quadraticCurveTo(x + EYE_WIDTH, y, x + EYE_WIDTH, y + radius)
+  shape.lineTo(x + EYE_WIDTH, y + EYE_HEIGHT - radius)
+  shape.quadraticCurveTo(x + EYE_WIDTH, y + EYE_HEIGHT, x + EYE_WIDTH - radius, y + EYE_HEIGHT)
+  shape.lineTo(x + radius, y + EYE_HEIGHT)
+  shape.quadraticCurveTo(x, y + EYE_HEIGHT, x, y + EYE_HEIGHT - radius)
+  shape.lineTo(x, y + radius)
+  shape.quadraticCurveTo(x, y, x + radius, y)
+
+  return shape
+}
+
+const eyeShape = createRoundedEyeShape()
 
 export function OrbCharacter({
   state,
@@ -56,8 +73,6 @@ export function OrbCharacter({
   reducedMotion = false,
 }: OrbCharacterProps) {
   const rootRef = useRef<THREE.Group>(null)
-  const innerRef = useRef<THREE.Group>(null)
-  const innerLightRefs = useRef<THREE.Mesh[]>([])
   const shellMaterialRef = useRef<THREE.MeshPhysicalMaterial>(null)
   const auraCyanRef = useRef<THREE.Mesh>(null)
   const auraVioletRef = useRef<THREE.Mesh>(null)
@@ -71,7 +86,6 @@ export function OrbCharacter({
   const faceRef = useRef<THREE.Group>(null)
   const eyeLeftRef = useRef<THREE.Mesh>(null)
   const eyeRightRef = useRef<THREE.Mesh>(null)
-  const shadowRef = useRef<THREE.Mesh>(null)
   const smoothedVolumeRef = useRef(0)
   const smoothedScaleRef = useRef(1)
   const visualRef = useRef(getOrbVisualState('idle', 0))
@@ -132,47 +146,18 @@ export function OrbCharacter({
       rootRef.current.scale.setScalar(smoothedScaleRef.current)
     }
 
-    if (innerRef.current) {
-      innerRef.current.rotation.y = elapsed * (state === 'thinking' ? 1.15 : 0.48) * motionScale
-      innerRef.current.rotation.x = Math.sin(elapsed * 0.64) * (state === 'thinking' ? 0.26 : 0.34) * motionScale
-      innerRef.current.rotation.z = Math.cos(elapsed * 0.5) * 0.16 * motionScale
-      const focusScale = 1 - visual.focus * 0.16 + Math.sin(elapsed * 3.4) * visual.focus * 0.035
-      innerRef.current.scale.setScalar(focusScale)
-    }
-
     if (shellMaterialRef.current) {
-      shellMaterialRef.current.opacity = 0.52 + visual.aurora * 0.16
+      shellMaterialRef.current.opacity = 0.62 + visual.aurora * 0.18
       shellMaterialRef.current.iridescence = 0.82 + visual.aurora * 0.18
       const stateColor = state === 'error' ? palette.error : state === 'success' ? palette.success : palette.primary
       shellMaterialRef.current.color.lerp(new THREE.Color(stateColor), 0.12)
     }
 
-    innerLightRefs.current.forEach((mesh, index) => {
-      const material = mesh.material as THREE.MeshStandardMaterial
-      const wave = Math.sin(elapsed * (0.9 + index * 0.16) + index) * 0.12
-      const nearFaceLight = index === 0 || index === 2
-      const faceClearance = nearFaceLight ? visual.faceLightClearance : 0
-      const faceShiftX = index === 0 ? -0.2 * faceClearance : index === 2 ? 0.16 * faceClearance : 0
-      const faceShiftY = nearFaceLight ? -0.18 * faceClearance : 0
-      const faceShiftZ = nearFaceLight ? -0.22 * faceClearance : 0
-      const faceLightDim = 1 - faceClearance * 0.34
-      material.opacity = 0.86 * faceLightDim
-      material.emissiveIntensity = (2.4 + visual.glow * 2.1 + smoothedVolumeRef.current * 1.2) * faceLightDim
-      mesh.position.x = innerLights[index].position[0] * (1 - visual.focus * 0.28) + wave * 0.08 * motionScale + faceShiftX
-      mesh.position.y = innerLights[index].position[1] * (1 - visual.focus * 0.22) + Math.cos(elapsed + index) * 0.04 * motionScale + faceShiftY
-      mesh.position.z = innerLights[index].position[2] + faceShiftZ
-      mesh.scale.set(
-        innerLights[index].scale[0] * (1 + visual.aurora * 0.12),
-        innerLights[index].scale[1] * (1 + visual.aurora * 0.12),
-        innerLights[index].scale[2],
-      )
-    })
-
     const auraScale = 1.12 + visual.aurora * 0.3 + Math.sin(elapsed * 2.1) * 0.025 * motionScale
 
     if (auraCyanRef.current) {
       const material = auraCyanRef.current.material as THREE.MeshBasicMaterial
-      material.opacity = 0.22 + visual.aurora * 0.18
+      material.opacity = 0.26 + visual.aurora * 0.18
       material.color.lerp(new THREE.Color(state === 'error' ? palette.error : palette.primary), 0.1)
       auraCyanRef.current.rotation.z = elapsed * 0.36 * motionScale
       auraCyanRef.current.scale.set(auraScale * 1.02, auraScale * 0.96, auraScale)
@@ -180,15 +165,17 @@ export function OrbCharacter({
 
     if (auraVioletRef.current) {
       const material = auraVioletRef.current.material as THREE.MeshBasicMaterial
-      material.opacity = 0.18 + visual.aurora * 0.18
-      material.color.lerp(new THREE.Color(palette.secondary), 0.08)
+      material.opacity = 0.08 + visual.aurora * 0.06
+      const violetAuraColor = new THREE.Color(palette.secondary)
+      violetAuraColor.lerp(new THREE.Color('#d8ccff'), 0.72)
+      material.color.lerp(violetAuraColor, 0.08)
       auraVioletRef.current.rotation.z = -elapsed * 0.28 * motionScale
       auraVioletRef.current.scale.set(auraScale * 0.94, auraScale * 1.08, auraScale)
     }
 
     if (auraRoseRef.current) {
       const material = auraRoseRef.current.material as THREE.MeshBasicMaterial
-      material.opacity = 0.12 + visual.aurora * 0.14
+      material.opacity = 0.16 + visual.aurora * 0.14
       material.color.lerp(new THREE.Color(state === 'success' ? palette.success : palette.accent), 0.08)
       auraRoseRef.current.rotation.x = Math.sin(elapsed * 0.54) * 0.22 * motionScale
       auraRoseRef.current.scale.set(auraScale * 0.9, auraScale * 1.02, auraScale)
@@ -196,8 +183,10 @@ export function OrbCharacter({
 
     if (auroraBandRef.current) {
       const material = auroraBandRef.current.material as THREE.MeshBasicMaterial
-      material.opacity = state === 'idle' ? 0.08 : 0.14 + visual.ringOpacity * 0.35
-      material.color.lerp(new THREE.Color(state === 'error' ? palette.error : palette.primary), 0.08)
+      material.opacity = state === 'idle' ? 0.035 : 0.06 + visual.ringOpacity * 0.14
+      const bandColor = new THREE.Color(state === 'error' ? palette.error : palette.primary)
+      bandColor.lerp(new THREE.Color('#d8f3ff'), 0.58)
+      material.color.lerp(bandColor, 0.08)
       auroraBandRef.current.rotation.z = elapsed * (state === 'thinking' ? 3.4 : 0.42) * motionScale
       auroraBandRef.current.rotation.y = Math.sin(elapsed * 0.7) * 0.26 * motionScale
     }
@@ -269,51 +258,21 @@ export function OrbCharacter({
       eyeRightRef.current.scale.y = visual.eyeScale * visual.eyeHeight
     }
 
-    if (shadowRef.current) {
-      const material = shadowRef.current.material as THREE.MeshBasicMaterial
-      material.opacity = 0.18 + visual.glow * 0.2
-      shadowRef.current.scale.set(1.05 + visual.glow * 0.34, 0.7 + visual.glow * 0.18, 1)
-    }
   })
 
   return (
     <group ref={rootRef}>
-      <group ref={innerRef}>
-        {innerLights.map((light) => (
-          <mesh
-            key={light.color}
-            ref={(mesh) => {
-              if (mesh) {
-                innerLightRefs.current[innerLights.indexOf(light)] = mesh
-              }
-            }}
-            position={light.position}
-            scale={light.scale}
-          >
-            <sphereGeometry args={[1, 40, 40]} />
-            <meshStandardMaterial
-              color={light.color}
-              emissive={light.color}
-              emissiveIntensity={3.8}
-              roughness={0.3}
-              transparent
-              opacity={0.86}
-            />
-          </mesh>
-        ))}
-      </group>
-
       <mesh>
         <sphereGeometry args={[1, 96, 96]} />
         <meshPhysicalMaterial
           ref={shellMaterialRef}
           color="#7dd3fc"
-          roughness={0.08}
+          roughness={0.04}
           metalness={0}
           transmission={0.64}
           thickness={1.15}
           transparent
-          opacity={0.66}
+          opacity={0.78}
           clearcoat={1}
           clearcoatRoughness={0.08}
           iridescence={1}
@@ -327,7 +286,7 @@ export function OrbCharacter({
           color="#38bdf8"
           side={THREE.BackSide}
           transparent
-          opacity={0.3}
+          opacity={0.34}
           blending={THREE.AdditiveBlending}
           depthWrite={false}
         />
@@ -336,10 +295,10 @@ export function OrbCharacter({
       <mesh ref={auraVioletRef} scale={1.28} rotation={[-0.25, 0.18, -0.2]}>
         <sphereGeometry args={[1, 64, 64]} />
         <meshBasicMaterial
-          color="#8b5cf6"
+          color="#d8ccff"
           side={THREE.BackSide}
           transparent
-          opacity={0.32}
+          opacity={0.12}
           blending={THREE.AdditiveBlending}
           depthWrite={false}
         />
@@ -351,7 +310,7 @@ export function OrbCharacter({
           color="#f0abfc"
           side={THREE.BackSide}
           transparent
-          opacity={0.2}
+          opacity={0.24}
           blending={THREE.AdditiveBlending}
           depthWrite={false}
         />
@@ -360,9 +319,9 @@ export function OrbCharacter({
       <mesh ref={auroraBandRef} scale={[1.22, 0.92, 1.04]} rotation={[0.2, 0.1, -0.4]}>
         <torusGeometry args={[0.82, 0.18, 24, 128]} />
         <meshBasicMaterial
-          color="#7dd3fc"
+          color="#d8f3ff"
           transparent
-          opacity={0.32}
+          opacity={0.16}
           blending={THREE.AdditiveBlending}
           depthWrite={false}
         />
@@ -425,7 +384,7 @@ export function OrbCharacter({
 
       <group ref={faceRef} position={[0, 0.12, 1.025]}>
         <mesh ref={eyeLeftRef} position={[-0.18, 0, 0]} rotation={[0, 0, 0.04]} renderOrder={10}>
-          <planeGeometry args={[0.09, 0.42]} />
+          <shapeGeometry args={[eyeShape]} />
           <meshBasicMaterial
             color="#ffffff"
             transparent
@@ -436,7 +395,7 @@ export function OrbCharacter({
           />
         </mesh>
         <mesh ref={eyeRightRef} position={[0.18, 0, 0]} rotation={[0, 0, -0.04]} renderOrder={10}>
-          <planeGeometry args={[0.09, 0.42]} />
+          <shapeGeometry args={[eyeShape]} />
           <meshBasicMaterial
             color="#ffffff"
             transparent
@@ -447,17 +406,6 @@ export function OrbCharacter({
           />
         </mesh>
       </group>
-
-      <mesh ref={shadowRef} position={[0, -1.22, -0.04]} rotation={[-Math.PI / 2, 0, 0]}>
-        <circleGeometry args={[0.82, 64]} />
-        <meshBasicMaterial
-          color="#8b5cf6"
-          transparent
-          opacity={0.28}
-          blending={THREE.AdditiveBlending}
-          depthWrite={false}
-        />
-      </mesh>
     </group>
   )
 }
