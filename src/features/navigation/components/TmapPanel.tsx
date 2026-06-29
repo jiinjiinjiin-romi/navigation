@@ -120,7 +120,6 @@ interface RouteDirectionMarker {
 
 interface RouteOptionOverlay {
   id: string
-  activeLines: RouteOptionRenderedLine[]
   baseLines: RouteOptionRenderedLine[]
   hitTestCoordinates: Coordinate[]
   option: NavigationRouteOption
@@ -176,6 +175,7 @@ export function TmapPanel({
   const mapRef = useRef<Window['Tmapv3Map']>(undefined)
   const routeLineRefs = useRef<TmapPolyline[]>([])
   const routeOptionOverlayRefs = useRef<RouteOptionOverlay[]>([])
+  const routeOptionActiveLineRefs = useRef<RouteOptionRenderedLine[]>([])
   const routeOptionHitTestCacheRef = useRef<RouteOptionHitTestCache | undefined>(undefined)
   const routeOptionOverlaySignatureRef = useRef<string | undefined>(undefined)
   const routeOptionActiveIdRef = useRef<string | undefined>(undefined)
@@ -401,8 +401,9 @@ export function TmapPanel({
     }
     routeOptionOverlayRefs.current.forEach((overlay) => {
       overlay.baseLines.forEach(disposeRouteOptionPolyline)
-      overlay.activeLines.forEach(disposeRouteOptionPolyline)
     })
+    disposeRouteOptionRenderedLines(routeOptionActiveLineRefs.current)
+    routeOptionActiveLineRefs.current = []
     routeOptionOverlayRefs.current = []
     routeOptionHitTestCacheRef.current = undefined
     routeOptionOverlaySignatureRef.current = undefined
@@ -418,12 +419,16 @@ export function TmapPanel({
       return
     }
 
-    const previousActiveOverlay = overlays.find((overlay) => overlay.id === routeOptionActiveIdRef.current)
-    if (previousActiveOverlay && previousActiveOverlay !== activeOverlay) {
-      setRouteOptionActiveLinesVisible(previousActiveOverlay, false)
-    }
+    disposeRouteOptionRenderedLines(routeOptionActiveLineRefs.current)
+    routeOptionActiveLineRefs.current = []
+
     if (activeOverlay) {
-      setRouteOptionActiveLinesVisible(activeOverlay, true)
+      routeOptionActiveLineRefs.current = createRouteOptionPolylines(
+        activeOverlay.option,
+        activeOverlay.segments,
+        true,
+        mapRef.current,
+      )
     }
     routeOptionActiveIdRef.current = activeOptionId
   }, [])
@@ -1004,36 +1009,6 @@ export function TmapPanel({
       measureRoutePerformance('route-option-overlay-total', 'route-option-overlay-start', 'route-option-overlay-end')
     }
 
-    const buildActiveRouteOptionOverlay = (index: number) => {
-      if (cancelled || !mapRef.current || mapRef.current !== map) {
-        return
-      }
-
-      const overlay = routeOptionOverlayRefs.current[index]
-      if (!overlay) {
-        finishRouteOptionOverlayBuild()
-        return
-      }
-
-      overlay.activeLines = createRouteOptionPolylines(
-        overlay.option,
-        overlay.segments,
-        true,
-        map,
-        overlay.id === activeOptionId,
-      )
-      updateRouteOptionOverlayPreview(activeOptionId, true)
-
-      if (index + 1 >= routeOptionOverlayRefs.current.length) {
-        finishRouteOptionOverlayBuild()
-        return
-      }
-
-      routeOptionOverlayBuildFrameRef.current = window.requestAnimationFrame(() => {
-        buildActiveRouteOptionOverlay(index + 1)
-      })
-    }
-
     const buildBaseRouteOptionOverlay = (index: number) => {
       if (cancelled || !mapRef.current || mapRef.current !== map) {
         return
@@ -1041,9 +1016,7 @@ export function TmapPanel({
 
       const option = routeOptions[index]
       if (!option) {
-        routeOptionOverlayBuildFrameRef.current = window.requestAnimationFrame(() => {
-          buildActiveRouteOptionOverlay(0)
-        })
+        finishRouteOptionOverlayBuild()
         return
       }
 
@@ -1054,9 +1027,7 @@ export function TmapPanel({
       ]
 
       if (index + 1 >= routeOptions.length) {
-        routeOptionOverlayBuildFrameRef.current = window.requestAnimationFrame(() => {
-          buildActiveRouteOptionOverlay(0)
-        })
+        finishRouteOptionOverlayBuild()
         return
       }
 
@@ -1871,7 +1842,6 @@ function createRouteOptionOverlay(
 
   return {
     id: option.id,
-    activeLines: [],
     baseLines,
     hitTestCoordinates: getRouteOptionHitTestCoordinates(option.route.coordinates),
     option,
@@ -1923,24 +1893,16 @@ function createRouteOptionPolylines(
   })
 }
 
-function setRouteOptionActiveLinesVisible(
-  overlay: RouteOptionOverlay,
-  visible: boolean,
-) {
-  overlay.activeLines.forEach((renderedLine) => {
-    renderedLine.line.setPath?.(visible ? renderedLine.path : getHiddenRouteOptionPath(renderedLine.path))
-    renderedLine.line.setOptions?.({
-      zIndex: getRouteOptionOverlayLineZIndex(renderedLine.kind, true),
-    })
-  })
-}
-
 function disposeRouteOptionPolyline(renderedLine: RouteOptionRenderedLine) {
   renderedLine.line.setPath?.(getHiddenRouteOptionPath(renderedLine.path))
   renderedLine.line.setOptions?.({
     strokeOpacity: 0,
     strokeWeight: 0,
   })
+}
+
+function disposeRouteOptionRenderedLines(lines: RouteOptionRenderedLine[]) {
+  lines.forEach(disposeRouteOptionPolyline)
 }
 
 function getHiddenRouteOptionPath(path: unknown[]) {
