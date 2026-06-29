@@ -3230,50 +3230,70 @@ function RouteSelectionSummary({
             const label = getRouteOptionDisplayLabel(option)
 
             return (
-              <button
-                key={option.id}
-                aria-label={`${label} 경로 선택`}
-                aria-pressed={active}
-                className={[
-                  'w-36 shrink-0 rounded-lg border px-3 py-2 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]',
-                  active
-                    ? 'border-[var(--nav-primary)] bg-[var(--nav-primary)] text-white'
-                    : 'border-white/80 bg-white/88 text-[var(--nav-ink)] hover:bg-white',
-                ].join(' ')}
-                data-testid={`route-option-card-${option.id}`}
-                onBlur={() => onPreviewRouteOption(undefined)}
-                onClick={() => onSelectRouteOption(option.id)}
-                onFocus={() => onPreviewRouteOption(option.id)}
-                onPointerEnter={() => onPreviewRouteOption(option.id)}
-                onPointerLeave={() => onPreviewRouteOption(undefined)}
-                type="button"
-              >
-                <div className="mb-1.5 flex min-w-0 items-center gap-1.5">
-                  <span
-                    aria-hidden="true"
-                    className="size-2 shrink-0 rounded-full"
-                    style={{ backgroundColor: active ? '#ffffff' : option.color }}
-                  />
-                  <span className="min-w-0 truncate text-xs font-extrabold">{label}</span>
-                  {option.isRecommended ? (
-                    <span className={[
-                      'ml-auto shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-black',
-                      active ? 'bg-white/20 text-white' : 'bg-[var(--nav-selection)] text-[var(--nav-primary)]',
-                    ].join(' ')}
-                    >
-                      추천
-                    </span>
-                  ) : null}
+              <div key={option.id} className="flex w-36 shrink-0 flex-col items-stretch">
+                <div className="mb-1 h-9">
+                  <AnimatePresence initial={false}>
+                    {active ? (
+                      <motion.button
+                        key="start-guidance"
+                        aria-label={`${label} 안내 시작`}
+                        className="flex h-8 w-full items-center justify-center gap-1.5 rounded-full bg-[var(--nav-ink)] px-3 text-xs font-black text-white shadow-[0_8px_18px_rgb(15_23_42/0.18)] transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)] active:scale-[0.98]"
+                        initial={{ opacity: 0, y: 6, scale: 0.98 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 4, scale: 0.98 }}
+                        transition={motionTiming.duration === 0 ? { duration: 0 } : { duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          onSelectRouteOption(option.id)
+                        }}
+                        type="button"
+                      >
+                        <Play className="size-3.5" weight="fill" />
+                        안내 시작
+                      </motion.button>
+                    ) : null}
+                  </AnimatePresence>
                 </div>
-                <div className={['text-base font-black leading-none', active ? 'text-white' : 'text-[var(--nav-ink)]'].join(' ')}>
-                  {formatRouteOptionDuration(option.route.summary.durationSeconds)}
-                </div>
-                <div className={['mt-1 truncate text-[11px] font-bold', active ? 'text-white/85' : 'text-[var(--nav-muted)]'].join(' ')}>
-                  {formatRouteOptionDistance(option.route.summary.distanceMeters)}
-                  <span className="mx-1">·</span>
-                  {formatArrivalTime(option.route.summary.durationSeconds)} 도착
-                </div>
-              </button>
+                <button
+                  aria-label={`${label} 경로 보기`}
+                  aria-pressed={active}
+                  className={[
+                    'w-full rounded-lg border px-3 py-2 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]',
+                    active
+                      ? 'border-[var(--nav-primary)] bg-[var(--nav-primary)] text-white'
+                      : 'border-white/80 bg-white/88 text-[var(--nav-ink)]',
+                  ].join(' ')}
+                  data-testid={`route-option-card-${option.id}`}
+                  onClick={() => onPreviewRouteOption(option.id)}
+                  type="button"
+                >
+                  <div className="mb-1.5 flex min-w-0 items-center gap-1.5">
+                    <span
+                      aria-hidden="true"
+                      className="size-2 shrink-0 rounded-full"
+                      style={{ backgroundColor: active ? '#ffffff' : option.color }}
+                    />
+                    <span className="min-w-0 truncate text-xs font-extrabold">{label}</span>
+                    {option.isRecommended ? (
+                      <span className={[
+                        'ml-auto shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-black',
+                        active ? 'bg-white/20 text-white' : 'bg-[var(--nav-selection)] text-[var(--nav-primary)]',
+                      ].join(' ')}
+                      >
+                        추천
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className={['text-base font-black leading-none', active ? 'text-white' : 'text-[var(--nav-ink)]'].join(' ')}>
+                    {formatRouteOptionDuration(option.route.summary.durationSeconds)}
+                  </div>
+                  <div className={['mt-1 truncate text-[11px] font-bold', active ? 'text-white/85' : 'text-[var(--nav-muted)]'].join(' ')}>
+                    {formatRouteOptionDistance(option.route.summary.distanceMeters)}
+                    <span className="mx-1">·</span>
+                    {formatArrivalTime(option.route.summary.durationSeconds)} 도착
+                  </div>
+                </button>
+              </div>
             )
           })}
         </div>

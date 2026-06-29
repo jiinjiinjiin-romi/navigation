@@ -418,19 +418,14 @@ describe('TmapPanel', () => {
     expect(routeLineCalls.some((options) => 'mouseover' in options || 'onMouseOver' in options)).toBe(false)
     expect(polylineSetOptions).toHaveBeenCalledWith(expect.objectContaining({ zIndex: 251 }))
     defaultRealToScreen.mockClear()
-    fireEvent.pointerMove(screen.getByTestId('tmap-canvas'), { clientX: 250, clientY: 100 })
+    fireEvent.click(screen.getByTestId('tmap-canvas'), { clientX: 250, clientY: 100 })
     await waitFor(() => {
       expect(previewRouteOption).toHaveBeenCalledWith('route-fastest')
     })
     expect(defaultRealToScreen).not.toHaveBeenCalled()
     const previewCallCount = previewRouteOption.mock.calls.length
     fireEvent.pointerMove(screen.getByTestId('tmap-canvas'), { clientX: 260, clientY: 100 })
-    await new Promise((resolve) => window.requestAnimationFrame(() => resolve(undefined)))
     expect(previewRouteOption).toHaveBeenCalledTimes(previewCallCount)
-    fireEvent.pointerLeave(screen.getByTestId('tmap-canvas'))
-    await waitFor(() => {
-      expect(previewRouteOption).toHaveBeenCalledWith(undefined)
-    })
 
     polylineSetOptions.mockClear()
     polylineSetMap.mockClear()

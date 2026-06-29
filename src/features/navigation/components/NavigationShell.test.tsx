@@ -90,10 +90,9 @@ vi.mock('./TmapPanel', () => ({
           <button
             key={option.id}
             type="button"
-            onMouseEnter={() => onRouteOptionPreviewChange?.(option.id)}
-            onMouseLeave={() => onRouteOptionPreviewChange?.(undefined)}
+            onClick={() => onRouteOptionPreviewChange?.(option.id)}
           >
-            {`지도에서 ${option.label} 경로 hover`}
+            {`지도에서 ${option.label} 경로 선택`}
           </button>
         ))}
         {simulationPosition
@@ -819,18 +818,18 @@ describe('NavigationShell', () => {
     expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-route-options', '2')
     expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-route-points', '0')
     expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-active-route-option', 'route-recommended')
-    const routeOptionCards = within(routeSelectionSummary).getByTestId('route-option-cards')
-    expect(within(routeOptionCards).queryByText('선택')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '최적 경로 경로 선택' })).toHaveAttribute('aria-pressed', 'true')
-    const fastestRouteCard = screen.getByRole('button', { name: '최소시간 경로 선택' })
+    expect(screen.getByRole('button', { name: '최적 경로 안내 시작' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '최적 경로 경로 보기' })).toHaveAttribute('aria-pressed', 'true')
+    const fastestRouteCard = screen.getByRole('button', { name: '최소시간 경로 보기' })
     expect(fastestRouteCard).toHaveAttribute('aria-pressed', 'false')
-    fireEvent.pointerEnter(fastestRouteCard)
+    fireEvent.click(fastestRouteCard)
     await waitFor(() => {
       expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-active-route-option', 'route-fastest')
     })
     expect(fastestRouteCard).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: '최소시간 안내 시작' })).toBeInTheDocument()
 
-    fireEvent.click(fastestRouteCard)
+    fireEvent.click(screen.getByRole('button', { name: '최소시간 안내 시작' }))
 
     await waitFor(() => {
       expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-route-options', '0')
@@ -900,7 +899,8 @@ describe('NavigationShell', () => {
       expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-camera-mode', '2d')
     })
     expect(await screen.findByText('2개 경로')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: '최소시간 경로 선택' }))
+    fireEvent.click(screen.getByRole('button', { name: '최소시간 경로 보기' }))
+    fireEvent.click(screen.getByRole('button', { name: '최소시간 안내 시작' }))
 
     await waitFor(() => {
       expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-route-options', '0')
@@ -1109,7 +1109,7 @@ describe('NavigationShell', () => {
     await waitFor(() => {
       expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-route-options', '0')
     })
-    expect(screen.queryByRole('button', { name: '최적 경로 경로 선택' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '최적 경로 경로 보기' })).not.toBeInTheDocument()
   })
 
   it('cancels route selection when the destination editor is closed with an empty destination', async () => {

@@ -1033,54 +1033,24 @@ export function TmapPanel({
       return
     }
 
-    let frameId: number | undefined
-    let lastPointerOptionId: string | undefined
+    const updatePreviewFromPointer = (event: MouseEvent) => {
+      const nextOptionId = getPointerRouteOptionId(
+        routeOptionOverlayRefs.current,
+        routeOptionHitTestCacheRef,
+        mapRef.current,
+        mapElement,
+        event,
+      )
 
-    const updatePreviewFromPointer = (event: PointerEvent) => {
-      if (frameId !== undefined) {
-        window.cancelAnimationFrame(frameId)
-      }
-
-      frameId = window.requestAnimationFrame(() => {
-        frameId = undefined
-        const nextOptionId = getPointerRouteOptionId(
-          routeOptionOverlayRefs.current,
-          routeOptionHitTestCacheRef,
-          mapRef.current,
-          mapElement,
-          event,
-        )
-
-        if (nextOptionId === lastPointerOptionId) {
-          return
-        }
-
-        lastPointerOptionId = nextOptionId
+      if (nextOptionId) {
         onRouteOptionPreviewChange(nextOptionId)
-      })
-    }
-    const resetPreview = () => {
-      if (frameId !== undefined) {
-        window.cancelAnimationFrame(frameId)
-        frameId = undefined
-      }
-      if (lastPointerOptionId !== undefined) {
-        lastPointerOptionId = undefined
-        onRouteOptionPreviewChange(undefined)
       }
     }
 
-    mapElement.addEventListener('pointermove', updatePreviewFromPointer)
-    mapElement.addEventListener('pointerleave', resetPreview)
-    mapElement.addEventListener('pointercancel', resetPreview)
+    mapElement.addEventListener('click', updatePreviewFromPointer)
 
     return () => {
-      if (frameId !== undefined) {
-        window.cancelAnimationFrame(frameId)
-      }
-      mapElement.removeEventListener('pointermove', updatePreviewFromPointer)
-      mapElement.removeEventListener('pointerleave', resetPreview)
-      mapElement.removeEventListener('pointercancel', resetPreview)
+      mapElement.removeEventListener('click', updatePreviewFromPointer)
     }
   }, [onRouteOptionPreviewChange, route?.coordinates.length, routeOptions, status])
 
@@ -1950,7 +1920,7 @@ function getPointerRouteOptionId(
   cacheRef: MutableRefObject<RouteOptionHitTestCache | undefined>,
   map: Window['Tmapv3Map'],
   mapElement: HTMLElement,
-  event: PointerEvent,
+  event: MouseEvent,
 ) {
   if (!map?.realToScreen || !window.Tmapv3) {
     return undefined
@@ -2049,7 +2019,7 @@ function getRouteOptionHitTestCoordinates(coordinates: Coordinate[]) {
   return sampledCoordinates
 }
 
-function getPointerPointInElement(event: PointerEvent, element: HTMLElement) {
+function getPointerPointInElement(event: MouseEvent, element: HTMLElement) {
   const rect = element.getBoundingClientRect()
 
   return {
