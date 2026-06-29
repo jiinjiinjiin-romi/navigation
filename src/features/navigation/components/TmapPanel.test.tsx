@@ -756,7 +756,11 @@ describe('TmapPanel', () => {
     await waitFor(() => {
       expect(setPitch).toHaveBeenCalledWith(0)
     })
+    await waitFor(() => {
+      expect(setCenter).toHaveBeenCalled()
+    })
     setPitch.mockClear()
+    setCenter.mockClear()
     markerSetOptions.mockClear()
     getPitch.mockReturnValue(0)
 
@@ -802,6 +806,141 @@ describe('TmapPanel', () => {
     )
   })
 
+  it('keeps the current location on the navigation offset while switching to 3d mode', async () => {
+    const animationFrames: FrameRequestCallback[] = []
+    const realToScreen = vi.fn(() => ({ getX: () => 720, getY: () => 470 }))
+    const screenToReal = vi.fn(() => ({ lat: 37.5681, lng: 126.978 }))
+    vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({ matches: false }))
+    vi.stubGlobal('requestAnimationFrame', vi.fn((callback: FrameRequestCallback) => {
+      animationFrames.push(callback)
+      return animationFrames.length
+    }))
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+    window.Tmapv3!.Map = vi.fn(function () {
+      return {
+        getCenter,
+        getBearing,
+        getPitch,
+        getZoom,
+        setCenter,
+        setZoom,
+        setBearing,
+        setPitch,
+        setInteractive,
+        realToScreen,
+        screenToReal,
+      }
+    }) as unknown as NonNullable<Window['Tmapv3']>['Map']
+
+    const { rerender } = render(
+      <TmapPanel
+        cameraSettings={{ mode: '2d', zoom: 18.3, pitch: 0 }}
+        currentPosition={{ lat: 37.5665, lng: 126.978 }}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(setCenter).toHaveBeenCalledWith({ lat: 37.5681, lng: 126.978 })
+    })
+    setCenter.mockClear()
+    screenToReal.mockClear()
+    getPitch.mockReturnValue(0)
+
+    rerender(
+      <TmapPanel
+        cameraSettings={{ mode: '3d', zoom: 18.3, pitch: 45 }}
+        currentPosition={{ lat: 37.5665, lng: 126.978 }}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(animationFrames.length).toBeGreaterThan(0)
+    })
+    ;[0, 240, 480, 720, 960].forEach((timestamp) => {
+      const frame = animationFrames.shift()
+      if (!frame) {
+        return
+      }
+      act(() => {
+        frame(timestamp)
+      })
+    })
+
+    expect(setCenter).toHaveBeenLastCalledWith({ lat: 37.5681, lng: 126.978 })
+    expect(setPitch).toHaveBeenLastCalledWith(45)
+    expect(screenToReal).toHaveBeenLastCalledWith({ x: 720, y: 290 })
+  })
+
+  it('keeps the current location on the navigation offset while switching back to 2d mode', async () => {
+    const animationFrames: FrameRequestCallback[] = []
+    const realToScreen = vi.fn(() => ({ getX: () => 720, getY: () => 470 }))
+    const screenToReal = vi.fn(() => ({ lat: 37.5681, lng: 126.978 }))
+    vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({ matches: false }))
+    vi.stubGlobal('requestAnimationFrame', vi.fn((callback: FrameRequestCallback) => {
+      animationFrames.push(callback)
+      return animationFrames.length
+    }))
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+    window.Tmapv3!.Map = vi.fn(function () {
+      return {
+        getCenter,
+        getBearing,
+        getPitch,
+        getZoom,
+        setCenter,
+        setZoom,
+        setBearing,
+        setPitch,
+        setInteractive,
+        realToScreen,
+        screenToReal,
+      }
+    }) as unknown as NonNullable<Window['Tmapv3']>['Map']
+
+    const { rerender } = render(
+      <TmapPanel
+        cameraSettings={{ mode: '3d', zoom: 18.3, pitch: 45 }}
+        currentPosition={{ lat: 37.5665, lng: 126.978 }}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(setCenter).toHaveBeenCalledWith({ lat: 37.5681, lng: 126.978 })
+    })
+    setCenter.mockClear()
+    setPitch.mockClear()
+    screenToReal.mockClear()
+    getPitch.mockReturnValue(45)
+
+    rerender(
+      <TmapPanel
+        cameraSettings={{ mode: '2d', zoom: 18.3, pitch: 0 }}
+        currentPosition={{ lat: 37.5665, lng: 126.978 }}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(animationFrames.length).toBeGreaterThan(0)
+    })
+    expect(setPitch).not.toHaveBeenCalledWith(0)
+
+    ;[0, 240, 480, 720, 960, 1200, 1440, 1680].forEach((timestamp) => {
+      const frame = animationFrames.shift()
+      if (!frame) {
+        return
+      }
+      act(() => {
+        frame(timestamp)
+      })
+    })
+
+    const pitchValues = setPitch.mock.calls.map((call) => call[0])
+    expect(pitchValues.some((pitch) => pitch > 0 && pitch < 45)).toBe(true)
+    expect(setCenter).toHaveBeenCalledWith({ lat: 37.5681, lng: 126.978 })
+    expect(setPitch).toHaveBeenLastCalledWith(0)
+    expect(screenToReal).toHaveBeenLastCalledWith({ x: 720, y: 290 })
+  })
+
   it('keeps the selected 3d pitch when navigation camera starts during a mode transition', async () => {
     const animationFrames: FrameRequestCallback[] = []
     vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({ matches: false }))
@@ -842,7 +981,7 @@ describe('TmapPanel', () => {
     )
 
     await waitFor(() => {
-      expect(animationFrames.length).toBeGreaterThanOrEqual(2)
+      expect(animationFrames.length).toBeGreaterThanOrEqual(1)
     })
 
     ;[0, 240, 480, 720, 960].forEach((timestamp) => {
@@ -976,6 +1115,232 @@ describe('TmapPanel', () => {
       expect(setCenter).toHaveBeenCalled()
     })
     expect(setCenter).toHaveBeenLastCalledWith({ lat: 37, lng: 126.2 })
+  })
+
+  it('does not let current-location camera recenter route selection while options are still loading', async () => {
+    render(
+      <TmapPanel
+        currentPosition={{ lat: 37.5665, lng: 126.978 }}
+        routeSelectionMode
+      />,
+    )
+
+    await waitFor(() => {
+      expect(window.Tmapv3!.Marker).toHaveBeenCalled()
+    })
+    expect(setCenter).not.toHaveBeenCalled()
+    expect(setBearing).not.toHaveBeenCalled()
+    expect(setPitch).not.toHaveBeenCalled()
+  })
+
+  it('snaps to the 2d guidance offset when route selection ends with a selected route', async () => {
+    let targetCameraApplied = false
+    const realToScreen = vi.fn(() => (
+      targetCameraApplied
+        ? { getX: () => 720, getY: () => 470 }
+        : { getX: () => 720, getY: () => 180 }
+    ))
+    const screenToReal = vi.fn((point: { y?: number }) => (
+      point.y === 290
+        ? { lat: 37.0016, lng: 126.2 }
+        : { lat: 36.9, lng: 126.2 }
+    ))
+    const nativeCameraJumpToForRouteStart = vi.fn(() => {
+      targetCameraApplied = true
+    })
+    window.Tmapv3!.Map = vi.fn(function () {
+      return {
+        getCenter,
+        getBearing,
+        getPitch,
+        getZoom,
+        setCenter,
+        setZoom,
+        setBearing,
+        setPitch,
+        setInteractive,
+        realToScreen,
+        screenToReal,
+        vsmMap: () => ({
+          getCamera: () => ({
+            jumpTo: nativeCameraJumpToForRouteStart,
+          }),
+        }),
+      }
+    }) as unknown as NonNullable<Window['Tmapv3']>['Map']
+    const route = {
+      coordinates: [
+        { lat: 37, lng: 126 },
+        { lat: 37, lng: 127 },
+      ],
+      summary: {
+        distanceMeters: 1000,
+        durationSeconds: 120,
+      },
+    }
+    const { rerender } = render(
+      <TmapPanel
+        cameraSettings={{ mode: '2d', zoom: 18.3, pitch: 0 }}
+        currentPosition={{ lat: 37, lng: 126.2 }}
+        routeSelectionMode
+      />,
+    )
+
+    await waitFor(() => {
+      expect(window.Tmapv3!.Marker).toHaveBeenCalled()
+    })
+    nativeCameraJumpToForRouteStart.mockClear()
+    targetCameraApplied = false
+    setCenter.mockClear()
+    setBearing.mockClear()
+    setPitch.mockClear()
+
+    rerender(
+      <TmapPanel
+        cameraSettings={{ mode: '2d', zoom: 18.3, pitch: 0 }}
+        currentPosition={{ lat: 37, lng: 126.2 }}
+        route={route}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(nativeCameraJumpToForRouteStart).toHaveBeenCalled()
+    })
+    expect(nativeCameraJumpToForRouteStart).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        center: [126.2, 37.0016],
+        bearing: expect.closeTo(89.8, 0),
+        pitch: 0,
+        zoom: 18.3,
+      }),
+      { animate: false },
+      { moveByProgram: true },
+    )
+    expect(screenToReal).toHaveBeenLastCalledWith({ x: 720, y: 290 })
+  })
+
+  it('recenters the guidance camera when restoring 3d mode after route selection ends', async () => {
+    const realToScreen = vi.fn(() => ({ getX: () => 720, getY: () => 470 }))
+    const screenToReal = vi.fn(() => ({ lat: 37.0016, lng: 126.2 }))
+    window.Tmapv3!.Map = vi.fn(function () {
+      return {
+        getCenter,
+        getBearing,
+        getPitch,
+        getZoom,
+        setCenter,
+        setZoom,
+        setBearing,
+        setPitch,
+        setInteractive,
+        realToScreen,
+        screenToReal,
+      }
+    }) as unknown as NonNullable<Window['Tmapv3']>['Map']
+
+    render(
+      <TmapPanel
+        cameraSettings={{ mode: '3d', zoom: 18.3, pitch: 45 }}
+        currentPosition={{ lat: 37, lng: 126.2 }}
+        route={{
+          coordinates: [
+            { lat: 37, lng: 126 },
+            { lat: 37, lng: 127 },
+          ],
+          summary: {
+            distanceMeters: 1000,
+            durationSeconds: 120,
+          },
+        }}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(setCenter).toHaveBeenCalled()
+    })
+    expect(setCenter).toHaveBeenLastCalledWith({ lat: 37.0016, lng: 126.2 })
+    expect(setBearing).toHaveBeenLastCalledWith(expect.closeTo(89.8, 0))
+    expect(setPitch).toHaveBeenLastCalledWith(45)
+    expect(screenToReal).toHaveBeenCalledWith({ x: 720, y: 290 })
+  })
+
+  it('animates pitch and center together when route selection ends into 3d guidance', async () => {
+    const animationFrames: FrameRequestCallback[] = []
+    const realToScreen = vi.fn(() => ({ getX: () => 720, getY: () => 470 }))
+    const screenToReal = vi.fn(() => ({ lat: 37.0016, lng: 126.2 }))
+    vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({ matches: false }))
+    vi.stubGlobal('requestAnimationFrame', vi.fn((callback: FrameRequestCallback) => {
+      animationFrames.push(callback)
+      return animationFrames.length
+    }))
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+    window.Tmapv3!.Map = vi.fn(function () {
+      return {
+        getCenter,
+        getBearing,
+        getPitch,
+        getZoom,
+        setCenter,
+        setZoom,
+        setBearing,
+        setPitch,
+        setInteractive,
+        realToScreen,
+        screenToReal,
+      }
+    }) as unknown as NonNullable<Window['Tmapv3']>['Map']
+    const route = {
+      coordinates: [
+        { lat: 37, lng: 126 },
+        { lat: 37, lng: 127 },
+      ],
+      summary: {
+        distanceMeters: 1000,
+        durationSeconds: 120,
+      },
+    }
+    const { rerender } = render(
+      <TmapPanel
+        cameraSettings={{ mode: '2d', zoom: 18.3, pitch: 0 }}
+        currentPosition={{ lat: 37, lng: 126.2 }}
+        routeSelectionMode
+      />,
+    )
+
+    await waitFor(() => {
+      expect(window.Tmapv3!.Marker).toHaveBeenCalled()
+    })
+    setCenter.mockClear()
+    setPitch.mockClear()
+    getPitch.mockReturnValue(0)
+
+    rerender(
+      <TmapPanel
+        cameraSettings={{ mode: '3d', zoom: 18.3, pitch: 45 }}
+        currentPosition={{ lat: 37, lng: 126.2 }}
+        route={route}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(animationFrames.length).toBeGreaterThan(0)
+    })
+    expect(setPitch).not.toHaveBeenCalledWith(45)
+
+    ;[0, 240, 480, 720, 960, 1200, 1440, 1680].forEach((timestamp) => {
+      const frame = animationFrames.shift()
+      if (!frame) {
+        return
+      }
+      act(() => {
+        frame(timestamp)
+      })
+    })
+    const pitchValues = setPitch.mock.calls.map((call) => call[0])
+    expect(pitchValues).toContain(0)
+    expect(pitchValues.some((pitch) => pitch > 0 && pitch < 45)).toBe(true)
+    expect(setCenter).toHaveBeenCalled()
+    expect(setPitch).toHaveBeenLastCalledWith(45)
   })
 
   it('rotates the map camera to the active route bearing', async () => {

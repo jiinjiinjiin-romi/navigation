@@ -1383,6 +1383,7 @@ export function NavigationShell() {
               currentPosition={currentPosition}
               route={activeRoute}
               routeOptions={routeOptions}
+              routeSelectionMode={routeSelectionMode}
               origin={origin}
               destination={destination}
               simulationPosition={simulationPosition}

@@ -16,6 +16,7 @@ interface TmapPanelProps {
   currentPosition?: Coordinate
   route?: NavigationRoute
   routeOptions?: NavigationRouteOption[]
+  routeSelectionMode?: boolean
   origin?: Place
   destination?: Place
   simulationPosition?: Coordinate
@@ -171,6 +172,7 @@ export function TmapPanel({
   currentPosition,
   route,
   routeOptions,
+  routeSelectionMode,
   origin,
   destination,
   simulationPosition,
@@ -220,7 +222,8 @@ export function TmapPanel({
   const [routeDirectionZoom, setRouteDirectionZoom] = useState(MAP_NAVIGATION_ZOOM)
   const hasGuidanceRoute = Boolean(route?.coordinates.length)
   const hasRouteSelectionOptions = Boolean(!route?.coordinates.length && routeOptions?.length)
-  const previousRouteSelectionOptionsRef = useRef(hasRouteSelectionOptions)
+  const routeSelectionCameraActive = Boolean(routeSelectionMode || hasRouteSelectionOptions)
+  const previousRouteSelectionCameraActiveRef = useRef(routeSelectionCameraActive)
   const progressPosition = useMemo(() => {
     if (!simulationPosition || !route?.coordinates.length) {
       return simulationPosition
@@ -470,7 +473,11 @@ export function TmapPanel({
     onComplete?.()
   }, [])
 
-  const renderNavigationCamera = useCallback((camera: RenderedCamera, applyMap = true) => {
+  const renderNavigationCamera = useCallback((
+    camera: RenderedCamera,
+    applyMap = true,
+    options: { resolveCenterAfterCamera?: boolean } = {},
+  ) => {
     if (!window.Tmapv3 || !mapRef.current) {
       return
     }
@@ -483,6 +490,7 @@ export function TmapPanel({
         camera,
         () => resolveCameraCenter(camera.position),
         navigationZoomRef.current,
+        { resolveCenterAfterCamera: options.resolveCenterAfterCamera },
       )
       renderedBearingRef.current = camera.bearing
       renderedPitchRef.current = camera.pitch
@@ -747,12 +755,14 @@ export function TmapPanel({
     bearing?: number,
     options: {
       animated?: boolean
+      fromCamera?: RenderedCamera
       markerBearing?: number
       pitch?: number
       durationMs?: number
       animatePosition?: boolean
       applyMap?: boolean
       mode?: 'compass'
+      resolveCenterAfterCamera?: boolean
     } = {},
   ) => {
     if (!window.Tmapv3 || !mapRef.current) {
@@ -778,25 +788,39 @@ export function TmapPanel({
       return
     }
 
+    if (cameraAnimationRef.current && options.animated && !shouldReduceMotion) {
+      cameraAnimationRef.current.to = nextCamera
+      cameraAnimationRef.current.applyMap = shouldApplyMap
+      cameraAnimationRef.current.animatePosition = options.animatePosition ?? cameraAnimationRef.current.animatePosition
+      if (options.mode) {
+        cameraAnimationRef.current.mode = options.mode
+      }
+      return
+    }
+
     if (!shouldApplyMap) {
       stopCameraAnimation()
       renderNavigationCamera(nextCamera, false)
       return
     }
 
-    if (!options.animated || shouldReduceMotion || !renderedCameraRef.current) {
+    const fromCamera = options.fromCamera ?? renderedCameraRef.current
+
+    if (!options.animated || shouldReduceMotion || !fromCamera) {
       stopCameraAnimation()
-      renderNavigationCamera(nextCamera)
+      renderNavigationCamera(nextCamera, true, {
+        resolveCenterAfterCamera: options.resolveCenterAfterCamera,
+      })
       return
     }
 
-    if (isSameCamera(renderedCameraRef.current, nextCamera)) {
+    if (isSameCamera(fromCamera, nextCamera)) {
       stopCameraAnimation()
       return
     }
 
     cameraAnimationRef.current = {
-      from: renderedCameraRef.current,
+      from: fromCamera,
       to: nextCamera,
       durationMs: options.durationMs ?? CAMERA_ANIMATION_MS,
       animatePosition: options.animatePosition ?? true,
@@ -1002,7 +1026,37 @@ export function TmapPanel({
     setRouteDirectionZoom(nextZoom)
 
     if (modeChanged) {
-      animateMapModePitch(nextPitch)
+      const shouldRestoreNavigationCamera = Boolean(
+        !previousRouteSelectionCameraActiveRef.current &&
+        !routeSelectionCameraActive &&
+        currentPosition &&
+        cameraFollowingRef.current,
+      )
+
+      if (shouldRestoreNavigationCamera && currentPosition) {
+        stopMapModePitchAnimation()
+        const displayPosition = route?.coordinates.length
+          ? projectCoordinateToRoute(route.coordinates, currentPosition)
+          : currentPosition
+        const cameraBearing = getNavigationCameraBearing(
+          route?.coordinates,
+          displayPosition,
+          northUpLocked,
+        )
+
+        applyNavigationCamera(
+          displayPosition,
+          cameraBearing.mapBearing,
+          {
+            animated: true,
+            durationMs: MAP_MODE_TRANSITION_MS,
+            markerBearing: cameraBearing.markerBearing,
+            pitch: nextPitch,
+          },
+        )
+      } else {
+        animateMapModePitch(nextPitch)
+      }
       return
     }
 
@@ -1015,9 +1069,14 @@ export function TmapPanel({
     syncRenderedPitch(nextPitch)
   }, [
     animateMapModePitch,
+    applyNavigationCamera,
     cameraSettings,
+    currentPosition,
     getCurrentMapPitch,
     getSettingsMapPitch,
+    northUpLocked,
+    route?.coordinates,
+    routeSelectionCameraActive,
     status,
     stopMapModePitchAnimation,
     syncRenderedPitch,
@@ -1059,13 +1118,17 @@ export function TmapPanel({
       displayPosition,
       cameraBearing.mapBearing,
       {
-        animated: Boolean(route?.coordinates.length || mapModePitchFrameRef.current !== undefined),
-        applyMap: !hasRouteSelectionOptions && (!route?.coordinates.length || shouldFollowCamera),
+          animated: Boolean(
+            route?.coordinates.length ||
+            mapModePitchFrameRef.current !== undefined ||
+            cameraAnimationRef.current,
+          ),
+        applyMap: !routeSelectionCameraActive && (!route?.coordinates.length || shouldFollowCamera),
         animatePosition: mapModePitchFrameRef.current === undefined,
         markerBearing,
       },
     )
-  }, [applyNavigationCamera, currentPosition, getCurrentMapBearing, getDisplayMapPitch, getSettingsMapPitch, hasRouteSelectionOptions, northUpLocked, route?.coordinates, status])
+  }, [applyNavigationCamera, currentPosition, getCurrentMapBearing, getDisplayMapPitch, getSettingsMapPitch, northUpLocked, route?.coordinates, routeSelectionCameraActive, status])
 
   useEffect(() => {
     if (!window.Tmapv3 || !mapRef.current || status !== 'ready') {
@@ -1661,18 +1724,59 @@ export function TmapPanel({
   ])
 
   useEffect(() => {
-    const hadRouteSelectionOptions = previousRouteSelectionOptionsRef.current
-    previousRouteSelectionOptionsRef.current = hasRouteSelectionOptions
+    const hadRouteSelectionCameraActive = previousRouteSelectionCameraActiveRef.current
+    previousRouteSelectionCameraActiveRef.current = routeSelectionCameraActive
 
     if (
-      hadRouteSelectionOptions &&
-      !hasRouteSelectionOptions &&
-      !route?.coordinates.length &&
+      hadRouteSelectionCameraActive &&
+      !routeSelectionCameraActive &&
       !simulationPosition
     ) {
+      if (route?.coordinates.length && currentPosition) {
+        const displayPosition = projectCoordinateToRoute(route.coordinates, currentPosition)
+        const cameraBearing = getNavigationCameraBearing(
+          route.coordinates,
+          displayPosition,
+          northUpLocked,
+        )
+        const targetPitch = getSettingsMapPitch()
+        const mapBearing = cameraBearing.mapBearing ?? renderedBearingRef.current
+        const fromCamera = {
+          position: displayPosition,
+          bearing: mapBearing,
+          markerBearing: cameraBearing.markerBearing,
+          pitch: MAP_TOP_DOWN_PITCH,
+        }
+
+        applyNavigationCamera(
+          displayPosition,
+          mapBearing,
+          {
+            animated: cameraSettings?.mode === '3d',
+            durationMs: MAP_MODE_TRANSITION_MS,
+            fromCamera: cameraSettings?.mode === '3d' ? fromCamera : undefined,
+            markerBearing: cameraBearing.markerBearing,
+            pitch: targetPitch,
+            resolveCenterAfterCamera: cameraSettings?.mode !== '3d',
+          },
+        )
+        return
+      }
+
       centerCurrentLocationInRegularMode(true)
     }
-  }, [centerCurrentLocationInRegularMode, hasRouteSelectionOptions, route?.coordinates.length, simulationPosition])
+  }, [
+    applyNavigationCamera,
+    centerCurrentLocationInRegularMode,
+    cameraSettings?.mode,
+    currentPosition,
+    getSettingsMapPitch,
+    northUpLocked,
+    route?.coordinates,
+    routeSelectionCameraActive,
+    simulationPosition,
+    stopCameraAnimation,
+  ])
 
   const handleRequestLocation = () => {
     onRequestLocation?.()
@@ -1822,14 +1926,17 @@ function applyMapCamera(
   camera: RenderedCamera,
   center: unknown | (() => unknown),
   zoom: number,
-  options: { preserveZoom?: boolean } = {},
+  options: { preserveZoom?: boolean; resolveCenterAfterCamera?: boolean } = {},
 ) {
   const nativeCamera = getNativeMapCamera(map)
   const resolveCenter = () => (typeof center === 'function' ? center() : center)
 
   if (nativeCamera?.jumpTo) {
-    const resolvedCenterArray = getLngLatArray(resolveCenter())
-      ?? getLngLatArray(camera.position)
+    const targetCenterArray = getLngLatArray(camera.position)
+    const resolvedCenterArray = options.resolveCenterAfterCamera
+      ? targetCenterArray
+      : getLngLatArray(resolveCenter()) ?? targetCenterArray
+
     if (!resolvedCenterArray) {
       return
     }
@@ -1852,6 +1959,18 @@ function applyMapCamera(
       { animate: false },
       { moveByProgram: true },
     )
+
+    if (options.resolveCenterAfterCamera) {
+      const finalCenterArray = getLngLatArray(resolveCenter()) ?? resolvedCenterArray
+      nativeCamera.jumpTo(
+        {
+          ...targetCameraOptions,
+          center: finalCenterArray,
+        },
+        { animate: false },
+        { moveByProgram: true },
+      )
+    }
     return
   }
 

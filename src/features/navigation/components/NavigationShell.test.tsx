@@ -50,6 +50,7 @@ vi.mock('./TmapPanel', () => ({
     cameraSettings,
     route,
     routeOptions,
+    routeSelectionMode,
     simulationPosition,
     activeRouteOptionId,
     onCameraSettingsChange,
@@ -61,6 +62,7 @@ vi.mock('./TmapPanel', () => ({
     currentPosition?: { lat: number; lng: number }
     route?: { coordinates: { lat: number; lng: number }[] }
     routeOptions?: Array<{ id: string; label: string; route: { coordinates: { lat: number; lng: number }[] } }>
+    routeSelectionMode?: boolean
     simulationPosition?: { lat: number; lng: number }
     activeRouteOptionId?: string
     onCameraSettingsChange?: (settings: Partial<{ mode: '2d' | '3d'; zoom: number; pitch: number }>) => void
@@ -93,6 +95,7 @@ vi.mock('./TmapPanel', () => ({
         data-camera-zoom={cameraSettings?.zoom}
         data-route-points={route?.coordinates.length ?? 0}
         data-route-options={routeOptions?.length ?? 0}
+        data-route-selection-mode={String(Boolean(routeSelectionMode))}
         data-active-route-option={activeRouteOptionId ?? ''}
         data-simulation-lat={simulationPosition?.lat}
         data-testid="tmap-panel"
@@ -1032,6 +1035,7 @@ describe('NavigationShell', () => {
     fireEvent.click(await screen.findByRole('button', { name: '도착지를 회사로 설정' }))
 
     expect(await screen.findByTestId('route-search-loading-modal')).toBeInTheDocument()
+    expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-route-selection-mode', 'true')
     expect(mockedGetRouteOptions).not.toHaveBeenCalled()
 
     await act(async () => {
