@@ -13,8 +13,10 @@ export function OrbScene({ state, volume, colorTheme = 'aurora', reducedMotion =
       aria-label="Interactive 3D orb assistant character"
     >
       <Suspense fallback={null}>
-        <ambientLight intensity={0.72} />
-        <hemisphereLight args={['#f8fbff', '#efe7ff', 1.2]} />
+        <ambientLight intensity={0.34} />
+        <pointLight position={[-2.5, 1.5, 3]} intensity={7.2} color="#67e8f9" />
+        <pointLight position={[2.4, 1.1, 2.6]} intensity={6.4} color="#c084fc" />
+        <pointLight position={[0.2, -1.8, 1.8]} intensity={3.2} color="#fb7185" />
         <Float
           speed={reducedMotion ? 0.35 : 1.1}
           rotationIntensity={reducedMotion ? 0.05 : 0.22}
