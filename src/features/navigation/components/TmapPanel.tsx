@@ -192,6 +192,7 @@ export function TmapPanel({
   const routeOptionHitTestCacheRef = useRef<RouteOptionHitTestCache | undefined>(undefined)
   const routeOptionOverlaySignatureRef = useRef<string | undefined>(undefined)
   const routeOptionActiveIdRef = useRef<string | undefined>(undefined)
+  const activeRouteOptionIdRef = useRef<string | undefined>(activeRouteOptionId)
   const routeOptionOverlayBuildFrameRef = useRef<number | undefined>(undefined)
   const routeOptionOverlayVisibleRef = useRef(false)
   const routeDirectionMarkerRefs = useRef<RouteDirectionMarker[]>([])
@@ -225,6 +226,7 @@ export function TmapPanel({
   const hasRouteSelectionOptions = Boolean(!route?.coordinates.length && routeOptions?.length)
   const routeSelectionCameraActive = Boolean(routeSelectionMode || hasRouteSelectionOptions)
   const previousRouteSelectionCameraActiveRef = useRef(routeSelectionCameraActive)
+  activeRouteOptionIdRef.current = activeRouteOptionId
   const progressPosition = useMemo(() => {
     if (!simulationPosition || !route?.coordinates.length) {
       return simulationPosition
@@ -1162,7 +1164,8 @@ export function TmapPanel({
 
     clearRouteOptionOverlays()
     onRouteOptionsOverlayReady?.(false)
-    const activeOptionId = getActiveRouteOptionId(routeOptions, activeRouteOptionId)
+    const getLatestActiveOptionId = () => getActiveRouteOptionId(routeOptions, activeRouteOptionIdRef.current)
+    const activeOptionId = getLatestActiveOptionId()
     const renderRouteOptions = [
       ...routeOptions.filter((option) => option.id === activeOptionId),
       ...routeOptions.filter((option) => option.id !== activeOptionId),
@@ -1203,7 +1206,8 @@ export function TmapPanel({
     let cancelled = false
     markRoutePerformance('route-option-overlay-start')
     const finishRouteOptionOverlayBuild = () => {
-      const activeOverlay = routeOptionOverlayRefs.current.find((overlay) => overlay.id === activeOptionId)
+      const latestActiveOptionId = getLatestActiveOptionId()
+      const activeOverlay = routeOptionOverlayRefs.current.find((overlay) => overlay.id === latestActiveOptionId)
       routeOptionActiveIdRef.current = activeOverlay?.id
       routeOptionActiveLineRefs.current = activeOverlay?.activeLines ?? []
       routeOptionHitTestCacheRef.current = createRouteOptionHitTestCache(
@@ -1232,6 +1236,7 @@ export function TmapPanel({
           }
 
           routeOptionOverlayVisibleRef.current = true
+          updateRouteOptionOverlayPreview(getLatestActiveOptionId(), true)
           onRouteOptionsOverlayReady?.(true)
           markRoutePerformance('route-option-overlay-end')
           measureRoutePerformance('route-option-overlay-total', 'route-option-overlay-start', 'route-option-overlay-end')
@@ -1262,7 +1267,7 @@ export function TmapPanel({
         true,
         undefined,
         segmentIndex,
-        overlay.id === activeOptionId,
+        overlay.id === getLatestActiveOptionId(),
       )
 
       if (nextSegmentIndex < overlay.segments.length) {
@@ -1324,7 +1329,6 @@ export function TmapPanel({
     }
   }, [
     clearRouteOptionOverlays,
-    activeRouteOptionId,
     destination?.coordinate,
     onRouteOptionPreviewChange,
     onRouteOptionsOverlayReady,
@@ -1333,6 +1337,7 @@ export function TmapPanel({
     routeOptions,
     status,
     syncCompassBearing,
+    updateRouteOptionOverlayPreview,
   ])
 
   useEffect(() => {
