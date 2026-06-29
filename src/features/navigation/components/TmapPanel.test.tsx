@@ -405,12 +405,12 @@ describe('TmapPanel', () => {
     )
 
     await waitFor(() => {
-      expect(window.Tmapv3!.Polyline).toHaveBeenCalledTimes(12)
+      expect(window.Tmapv3!.Polyline).toHaveBeenCalledTimes(8)
     })
     const routeLineCalls = vi.mocked(window.Tmapv3!.Polyline).mock.calls.map(([options]) => options)
     expect(routeLineCalls.filter((options) => options.strokeColor === '#16C47F')).toHaveLength(1)
     expect(routeLineCalls.filter((options) => options.strokeColor === '#F04438')).toHaveLength(1)
-    expect(routeLineCalls.filter((options) => options.strokeColor === '#9AA6B2')).toHaveLength(4)
+    expect(routeLineCalls.filter((options) => options.strokeColor === '#9AA6B2')).toHaveLength(2)
     expect(routeLineCalls.slice(-4).every((options) => options.zIndex === 250 || options.zIndex === 251)).toBe(true)
     expect(routeLineCalls.some((options) => 'mouseover' in options || 'onMouseOver' in options)).toBe(false)
     defaultRealToScreen.mockClear()
@@ -581,7 +581,7 @@ describe('TmapPanel', () => {
     )
 
     await waitFor(() => {
-      expect(window.Tmapv3!.Polyline).toHaveBeenCalledTimes(12)
+      expect(window.Tmapv3!.Polyline).toHaveBeenCalledTimes(8)
     })
 
     const activeRouteLineCalls = vi.mocked(window.Tmapv3!.Polyline).mock.calls

@@ -1855,7 +1855,15 @@ function createRouteOptionOverlay(
   map?: Window['Tmapv3Map'] | null,
 ): RouteOptionOverlay {
   const segments = getRouteOptionLineSegments(option.route)
-  const baseLines = createRouteOptionPolylines(option, segments, false, map)
+  const baseLines = createRouteOptionPolylines(
+    option,
+    [{
+      congestion: 0,
+      coordinates: option.route.coordinates,
+    }],
+    false,
+    map,
+  )
 
   return {
     id: option.id,
