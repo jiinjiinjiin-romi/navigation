@@ -278,6 +278,7 @@ function normalizeRoute(data: TmapRouteResponse): NavigationRoute {
   const distanceMeters = Number(summaryProperties?.totalDistance)
   const durationSeconds = Number(summaryProperties?.totalTime)
   const trafficSegments = mergeTrafficSegments(normalizeTrafficSegments(features))
+  const routeLineSegments = mergeTrafficSegments(normalizeRouteLineSegments(features))
 
   if (
     coordinates.length < 2 ||
@@ -298,6 +299,7 @@ function normalizeRoute(data: TmapRouteResponse): NavigationRoute {
     maneuvers: normalizeManeuvers(features, coordinates),
     safetyAlerts: normalizeSafetyAlerts(features, coordinates),
     ...(trafficSegments.length ? { trafficSegments } : {}),
+    ...(routeLineSegments.length ? { routeLineSegments } : {}),
   }
 }
 
@@ -364,6 +366,35 @@ function normalizeTrafficSegments(features: TmapFeature[]): RouteTrafficSegment[
     }
 
     return getGeometryTrafficSegments(coordinates, feature.geometry?.traffic)
+  })
+}
+
+function normalizeRouteLineSegments(features: TmapFeature[]): RouteTrafficSegment[] {
+  return features.flatMap((feature) => {
+    const coordinates = extractLineCoordinates(feature.geometry)
+
+    if (coordinates.length < 2) {
+      return []
+    }
+
+    const congestion = getTrafficCongestion(feature)
+
+    if (congestion !== undefined) {
+      return [{
+        coordinates,
+        congestion,
+      }]
+    }
+
+    const geometrySegments = getGeometryTrafficSegments(coordinates, feature.geometry?.traffic)
+    if (geometrySegments.length) {
+      return geometrySegments
+    }
+
+    return [{
+      coordinates,
+      congestion: 0,
+    }]
   })
 }
 

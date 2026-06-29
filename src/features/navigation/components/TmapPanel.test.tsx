@@ -568,13 +568,27 @@ describe('TmapPanel', () => {
                 distanceMeters: 9700,
                 durationSeconds: 2160,
               },
-              trafficSegments: [
+              routeLineSegments: [
+                {
+                  coordinates: [
+                    { lat: 37, lng: 126 },
+                    { lat: 37, lng: 126.004 },
+                  ],
+                  congestion: 0,
+                },
                 {
                   coordinates: [
                     { lat: 37, lng: 126.004 },
                     { lat: 37, lng: 126.008 },
                   ],
                   congestion: 4,
+                },
+                {
+                  coordinates: [
+                    { lat: 37, lng: 126.008 },
+                    { lat: 37, lng: 126.012 },
+                  ],
+                  congestion: 0,
                 },
               ],
             },

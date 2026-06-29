@@ -78,6 +78,7 @@ export interface NavigationRoute {
   maneuvers?: RouteManeuver[]
   safetyAlerts?: SafetyAlert[]
   trafficSegments?: RouteTrafficSegment[]
+  routeLineSegments?: RouteTrafficSegment[]
 }
 
 export interface NavigationRouteOption {

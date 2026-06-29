@@ -1948,12 +1948,18 @@ function getHiddenRouteOptionPath(path: unknown[]) {
 }
 
 function getRouteOptionLineSegments(route: NavigationRoute): RouteTrafficSegment[] {
-  return route.trafficSegments?.length
-    ? getRouteAlignedTrafficSegments(route.coordinates, route.trafficSegments)
-    : [{
-        congestion: 0,
-        coordinates: route.coordinates,
-      }]
+  if (route.routeLineSegments?.length) {
+    return route.routeLineSegments
+  }
+
+  if (route.trafficSegments?.length) {
+    return route.trafficSegments
+  }
+
+  return [{
+    congestion: 0,
+    coordinates: route.coordinates,
+  }]
 }
 
 function getRouteOptionLineColor(

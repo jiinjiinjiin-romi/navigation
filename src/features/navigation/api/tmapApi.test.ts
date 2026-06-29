@@ -122,7 +122,7 @@ describe('getRoute', () => {
       searchOption: '0',
     })
     expect(JSON.stringify(post.mock.calls)).not.toContain('appKey')
-    expect(route).toEqual({
+    expect(route).toMatchObject({
       coordinates: [
         { lat: 37.5665, lng: 126.978 },
         { lat: 37.4979, lng: 127.0276 },
@@ -158,6 +158,57 @@ describe('getRoute', () => {
         }),
       ],
     })
+  })
+
+  it('normalizes render-ready route line segments from TMAP traffic geometry', async () => {
+    const post = vi.fn().mockResolvedValue({
+      data: {
+        features: [
+          {
+            geometry: { type: 'Point', coordinates: [126.978, 37.5665] },
+            properties: { totalDistance: '1000', totalTime: '600' },
+          },
+          {
+            geometry: {
+              type: 'LineString',
+              coordinates: [
+                [126.978, 37.5665],
+                [126.979, 37.566],
+                [126.98, 37.5655],
+              ],
+              traffic: [
+                [0, 1, 1],
+                [1, 2, 3],
+              ],
+            },
+            properties: {},
+          },
+        ],
+      },
+    })
+
+    const route = await getRoute(
+      { lat: 37.5665, lng: 126.978 },
+      { lat: 37.5655, lng: 126.98 },
+      { post },
+    )
+
+    expect(route.routeLineSegments).toEqual([
+      {
+        congestion: 1,
+        coordinates: [
+          { lat: 37.5665, lng: 126.978 },
+          { lat: 37.566, lng: 126.979 },
+        ],
+      },
+      {
+        congestion: 3,
+        coordinates: [
+          { lat: 37.566, lng: 126.979 },
+          { lat: 37.5655, lng: 126.98 },
+        ],
+      },
+    ])
   })
 
   it('normalizes MultiLineString route geometry from TMAP', async () => {
