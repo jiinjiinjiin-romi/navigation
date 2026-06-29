@@ -215,21 +215,16 @@ describe('TmapPanel', () => {
     expect(routeLineCalls.filter((options) => options.strokeColor === '#ffffff')).toHaveLength(4)
     expect(routeLineCalls.filter((options) => options.strokeColor === '#0EA5E9')).toHaveLength(1)
     expect(routeLineCalls.filter((options) => options.strokeColor === '#F97316')).toHaveLength(1)
-    expect(routeLineCalls.filter((options) => options.strokeOpacity === 0.98)).toHaveLength(3)
-    expect(routeLineCalls.filter((options) => options.strokeOpacity === 0)).toHaveLength(2)
-    expect(routeLineCalls.filter((options) => options.strokeWeight === 0 && options.zIndex === 251)).toHaveLength(1)
+    expect(routeLineCalls.filter((options) => options.strokeOpacity === 0.98)).toHaveLength(4)
+    expect(routeLineCalls.filter((options) => options.strokeOpacity === 0)).toHaveLength(0)
+    expect(routeLineCalls.filter((options) => options.strokeWeight === 9 && options.zIndex === 251)).toHaveLength(2)
     expect(routeLineCalls.filter((options) => options.strokeWeight === 9 && options.zIndex === 191)).toHaveLength(2)
     expect(routeLineCalls.filter((options) => options.strokeColor === '#9AA6B2')).toHaveLength(2)
     expect(routeLineCalls.filter((options) => options.zIndex === 251)).toHaveLength(2)
     expect(routeLineCalls.filter((options) => options.zIndex === 191)).toHaveLength(2)
     expect(routeLineCalls.slice(-4).every((options) => options.zIndex === 250 || options.zIndex === 251)).toBe(true)
     expect(routeLineCalls.every((options) => options.map)).toBe(true)
-    expect(polylineSetOptions).toHaveBeenCalledWith(
-      expect.objectContaining({
-        strokeOpacity: 0.98,
-        strokeWeight: 9,
-      }),
-    )
+    expect(polylineSetOptions).toHaveBeenCalledWith(expect.objectContaining({ zIndex: 251 }))
     expect(polylineSetMap).not.toHaveBeenCalled()
     const markerCalls = vi.mocked(window.Tmapv3!.Marker).mock.calls.map(([options]) => String(options?.iconHTML ?? ''))
     expect(markerCalls.some((iconHTML) => iconHTML.includes('data-route-option-id'))).toBe(false)
@@ -253,12 +248,7 @@ describe('TmapPanel', () => {
     expect(Number.isInteger(setZoom.mock.calls[setZoom.mock.calls.length - 1]?.[0])).toBe(true)
     expect(setZoom.mock.calls[setZoom.mock.calls.length - 1]?.[0]).toBeLessThanOrEqual(13)
 
-    expect(polylineSetOptions).toHaveBeenCalledWith(
-      expect.objectContaining({
-        strokeOpacity: 0.98,
-        strokeWeight: 9,
-      }),
-    )
+    expect(polylineSetOptions).toHaveBeenCalledWith(expect.objectContaining({ zIndex: 251 }))
 
     polylineSetOptions.mockClear()
     throwOnPolylineSetMapNull = true
@@ -426,11 +416,7 @@ describe('TmapPanel', () => {
     expect(routeLineCalls.filter((options) => options.strokeColor === '#9AA6B2')).toHaveLength(4)
     expect(routeLineCalls.slice(-4).every((options) => options.zIndex === 250 || options.zIndex === 251)).toBe(true)
     expect(routeLineCalls.some((options) => 'mouseover' in options || 'onMouseOver' in options)).toBe(false)
-    expect(polylineSetOptions).toHaveBeenCalledWith(
-      expect.objectContaining({
-        strokeOpacity: 0.98,
-      }),
-    )
+    expect(polylineSetOptions).toHaveBeenCalledWith(expect.objectContaining({ zIndex: 251 }))
     defaultRealToScreen.mockClear()
     fireEvent.pointerMove(screen.getByTestId('tmap-canvas'), { clientX: 250, clientY: 100 })
     await waitFor(() => {
@@ -536,17 +522,28 @@ describe('TmapPanel', () => {
     expect(activeTopLayerCalls.every((options) => options.zIndex === 250 || options.zIndex === 251)).toBe(true)
     expect(polylineSetOptions).toHaveBeenCalledWith(
       expect.objectContaining({
-        strokeOpacity: 0.98,
-        strokeWeight: 9,
+        zIndex: 251,
       }),
     )
-    expect(polylineSetOptions).toHaveBeenCalledWith(
+    expect(polylineSetPath).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          lat: 37.1,
+          lng: 126,
+        }),
+      ]),
+    )
+    expect(polylineSetPath).toHaveBeenCalledWith([
       expect.objectContaining({
-        strokeOpacity: 0,
-        strokeWeight: 0,
+        lat: 37,
+        lng: 126,
       }),
-    )
-    expect(polylineSetPath).not.toHaveBeenCalled()
+      expect.objectContaining({
+        lat: 37,
+        lng: 126,
+      }),
+    ])
+    expect(polylineSetPath).not.toHaveBeenCalledWith([])
     expect(polylineSetMap).not.toHaveBeenCalled()
     expect(polylineSetMap).not.toHaveBeenCalledWith(null)
     await waitFor(() => {

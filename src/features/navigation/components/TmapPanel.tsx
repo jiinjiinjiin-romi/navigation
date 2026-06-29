@@ -1840,26 +1840,23 @@ function createRouteOptionPolylines(
   visible = true,
 ) {
   const lineStyle = getRouteOptionOverlayLineStyle(active)
-  const borderOpacity = visible ? lineStyle.borderOpacity : 0
-  const borderWeight = visible ? lineStyle.borderWeight : 0
-  const strokeOpacity = visible ? lineStyle.strokeOpacity : 0
-  const strokeWeight = visible ? lineStyle.strokeWeight : 0
 
   return segments.flatMap((segment) => {
     const path = toTmapPath(segment.coordinates)
+    const renderedPath = visible ? path : getHiddenRouteOptionPath(path)
     const borderLine = new window.Tmapv3!.Polyline({
-      path,
+      path: renderedPath,
       strokeColor: getRouteOptionLineColor('border', option, segment.congestion, active),
-      strokeOpacity: borderOpacity,
-      strokeWeight: borderWeight,
+      strokeOpacity: lineStyle.borderOpacity,
+      strokeWeight: lineStyle.borderWeight,
       zIndex: getRouteOptionOverlayLineZIndex('border', active),
       map,
     })
     const routeLine = new window.Tmapv3!.Polyline({
-      path,
+      path: renderedPath,
       strokeColor: getRouteOptionLineColor('route', option, segment.congestion, active),
-      strokeOpacity,
-      strokeWeight,
+      strokeOpacity: lineStyle.strokeOpacity,
+      strokeWeight: lineStyle.strokeWeight,
       zIndex: getRouteOptionOverlayLineZIndex('route', active),
       map,
     })
@@ -1883,36 +1880,24 @@ function setRouteOptionActiveLinesVisible(
   overlay: RouteOptionOverlay,
   visible: boolean,
 ) {
-  const lineStyle = getRouteOptionOverlayLineStyle(true)
-
   overlay.activeLines.forEach((renderedLine) => {
-    const lineStyleForKind = renderedLine.kind === 'border'
-      ? {
-          strokeOpacity: lineStyle.borderOpacity,
-          strokeWeight: lineStyle.borderWeight,
-        }
-      : {
-          strokeOpacity: lineStyle.strokeOpacity,
-          strokeWeight: lineStyle.strokeWeight,
-        }
-
+    renderedLine.line.setPath?.(visible ? renderedLine.path : getHiddenRouteOptionPath(renderedLine.path))
     renderedLine.line.setOptions?.({
       zIndex: getRouteOptionOverlayLineZIndex(renderedLine.kind, true),
-      strokeOpacity: visible
-        ? lineStyleForKind.strokeOpacity
-        : 0,
-      strokeWeight: visible
-        ? lineStyleForKind.strokeWeight
-        : 0,
     })
   })
 }
 
 function disposeRouteOptionPolyline(renderedLine: RouteOptionRenderedLine) {
+  renderedLine.line.setPath?.(getHiddenRouteOptionPath(renderedLine.path))
   renderedLine.line.setOptions?.({
     strokeOpacity: 0,
     strokeWeight: 0,
   })
+}
+
+function getHiddenRouteOptionPath(path: unknown[]) {
+  return path.length > 0 ? [path[0], path[0]] : path
 }
 
 function getRouteOptionLineSegments(route: NavigationRoute): RouteTrafficSegment[] {
