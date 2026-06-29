@@ -178,6 +178,7 @@ export function TmapPanel({
   const routeOptionHitTestCacheRef = useRef<RouteOptionHitTestCache | undefined>(undefined)
   const routeOptionOverlaySignatureRef = useRef<string | undefined>(undefined)
   const routeOptionActiveIdRef = useRef<string | undefined>(undefined)
+  const routeOptionOverlayBuildFrameRef = useRef<number | undefined>(undefined)
   const routeDirectionMarkerRefs = useRef<RouteDirectionMarker[]>([])
   const routeLineSignatureRef = useRef<string | undefined>(undefined)
   const routeLineStructureSignatureRef = useRef<string | undefined>(undefined)
@@ -393,6 +394,10 @@ export function TmapPanel({
   }, [])
 
   const clearRouteOptionOverlays = useCallback(() => {
+    if (routeOptionOverlayBuildFrameRef.current !== undefined) {
+      window.cancelAnimationFrame(routeOptionOverlayBuildFrameRef.current)
+      routeOptionOverlayBuildFrameRef.current = undefined
+    }
     routeOptionOverlayRefs.current.forEach((overlay) => {
       overlay.baseLines.forEach(disposeRouteOptionPolyline)
       overlay.activeLines.forEach(disposeRouteOptionPolyline)
@@ -952,20 +957,7 @@ export function TmapPanel({
 
     clearRouteOptionOverlays()
     const activeOptionId = getActiveRouteOptionId(routeOptions, activeRouteOptionId)
-    routeOptionOverlayRefs.current = routeOptions.map((option) => (
-      createRouteOptionOverlay(option, mapRef.current)
-    ))
-    routeOptionOverlayRefs.current.forEach((overlay) => {
-      overlay.activeLines = createRouteOptionPolylines(
-        overlay.option,
-        overlay.segments,
-        true,
-        mapRef.current,
-        overlay.id === activeOptionId,
-      )
-    })
-    routeOptionOverlaySignatureRef.current = overlaySignature
-    updateRouteOptionOverlayPreview(activeOptionId, true)
+    const map = mapRef.current
 
     const routeOptionBoundsCoordinates = getRouteOptionBoundsCoordinates(routeOptions, [
       origin?.coordinate,
@@ -985,7 +977,7 @@ export function TmapPanel({
       }
 
       applyMapCamera(
-        mapRef.current,
+        map,
         overviewCamera,
         centerLatLng,
         routeSelectionCamera.zoom,
@@ -994,10 +986,91 @@ export function TmapPanel({
       renderedPitchRef.current = MAP_TOP_DOWN_PITCH
       renderedCameraRef.current = overviewCamera
       syncCompassBearing(0)
+    }
+
+    routeOptionOverlaySignatureRef.current = overlaySignature
+
+    let cancelled = false
+    const finishRouteOptionOverlayBuild = () => {
+      routeOptionOverlayBuildFrameRef.current = undefined
       routeOptionHitTestCacheRef.current = createRouteOptionHitTestCache(
         routeOptionOverlayRefs.current,
-        mapRef.current,
+        map,
       )
+      updateRouteOptionOverlayPreview(activeOptionId, true)
+    }
+
+    const buildActiveRouteOptionOverlay = (index: number) => {
+      if (cancelled || !mapRef.current || mapRef.current !== map) {
+        return
+      }
+
+      const overlay = routeOptionOverlayRefs.current[index]
+      if (!overlay) {
+        finishRouteOptionOverlayBuild()
+        return
+      }
+
+      overlay.activeLines = createRouteOptionPolylines(
+        overlay.option,
+        overlay.segments,
+        true,
+        map,
+        overlay.id === activeOptionId,
+      )
+      updateRouteOptionOverlayPreview(activeOptionId, true)
+
+      if (index + 1 >= routeOptionOverlayRefs.current.length) {
+        finishRouteOptionOverlayBuild()
+        return
+      }
+
+      routeOptionOverlayBuildFrameRef.current = window.requestAnimationFrame(() => {
+        buildActiveRouteOptionOverlay(index + 1)
+      })
+    }
+
+    const buildBaseRouteOptionOverlay = (index: number) => {
+      if (cancelled || !mapRef.current || mapRef.current !== map) {
+        return
+      }
+
+      const option = routeOptions[index]
+      if (!option) {
+        routeOptionOverlayBuildFrameRef.current = window.requestAnimationFrame(() => {
+          buildActiveRouteOptionOverlay(0)
+        })
+        return
+      }
+
+      const overlay = createRouteOptionOverlay(option, map)
+      routeOptionOverlayRefs.current = [
+        ...routeOptionOverlayRefs.current,
+        overlay,
+      ]
+
+      if (index + 1 >= routeOptions.length) {
+        routeOptionOverlayBuildFrameRef.current = window.requestAnimationFrame(() => {
+          buildActiveRouteOptionOverlay(0)
+        })
+        return
+      }
+
+      routeOptionOverlayBuildFrameRef.current = window.requestAnimationFrame(() => {
+        buildBaseRouteOptionOverlay(index + 1)
+      })
+    }
+
+    routeOptionOverlayBuildFrameRef.current = window.requestAnimationFrame(() => {
+      buildBaseRouteOptionOverlay(0)
+    })
+
+    return () => {
+      cancelled = true
+      if (routeOptionOverlayBuildFrameRef.current !== undefined) {
+        window.cancelAnimationFrame(routeOptionOverlayBuildFrameRef.current)
+        routeOptionOverlayBuildFrameRef.current = undefined
+      }
     }
   }, [
     clearRouteOptionOverlays,
@@ -2248,13 +2321,23 @@ function getRouteDirectionMarkerSignature(coordinates: Coordinate[], zoom: numbe
 function getRouteOptionOverlaySignature(options: NavigationRouteOption[]) {
   return options.map((option) => (
     `${option.id}:${option.color}:${option.route.summary.durationSeconds}:${option.route.summary.distanceMeters}:` +
-    option.route.coordinates.map((coordinate) => `${coordinate.lat.toFixed(5)},${coordinate.lng.toFixed(5)}`).join('|') +
+    getCoordinateListLightSignature(option.route.coordinates) +
     ':' +
     (option.route.trafficSegments ?? []).map((segment) => (
-      `${segment.congestion}:` +
-      segment.coordinates.map((coordinate) => `${coordinate.lat.toFixed(5)},${coordinate.lng.toFixed(5)}`).join('|')
+      `${segment.congestion}:${getCoordinateListLightSignature(segment.coordinates)}`
     )).join(',')
   )).join(';')
+}
+
+function getCoordinateListLightSignature(coordinates: Coordinate[]) {
+  const first = coordinates[0]
+  const last = coordinates[coordinates.length - 1]
+
+  return [
+    coordinates.length,
+    first ? `${first.lat.toFixed(5)},${first.lng.toFixed(5)}` : '',
+    last ? `${last.lat.toFixed(5)},${last.lng.toFixed(5)}` : '',
+  ].join('|')
 }
 
 function getDefaultRouteOptionId(options: NavigationRouteOption[]) {

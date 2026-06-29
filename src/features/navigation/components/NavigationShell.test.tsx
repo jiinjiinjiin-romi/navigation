@@ -839,6 +839,121 @@ describe('NavigationShell', () => {
     expect(screen.getByText('12.8 km')).toBeInTheDocument()
   })
 
+  it('shows a Navi thinking modal while route candidates are loading', async () => {
+    let resolveRouteOptions!: (options: Awaited<ReturnType<typeof getRouteOptions>>) => void
+    mockedGetRouteOptions.mockReturnValue(new Promise((resolve) => {
+      resolveRouteOptions = resolve
+    }))
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell />
+      </QueryClientProvider>,
+    )
+
+    await openDestinationEditor()
+    fireEvent.click(await screen.findByRole('button', { name: '도착지를 회사로 설정' }))
+
+    const loadingModal = await screen.findByTestId('route-search-loading-modal')
+    expect(within(loadingModal).getByText('경로를 계산하고 있어요')).toBeInTheDocument()
+    expect(within(loadingModal).getByText('교통 흐름과 후보 경로를 비교하는 중')).toBeInTheDocument()
+    expect(within(loadingModal).getByTestId('voice-orb')).toHaveAttribute('data-state', 'thinking')
+    expect(within(loadingModal).getByTestId('voice-orb')).toHaveAttribute('data-color-theme', 'ocean')
+
+    act(() => {
+      resolveRouteOptions([
+        {
+          id: 'route-recommended',
+          label: '추천',
+          searchOption: '0',
+          color: '#0EA5E9',
+          isRecommended: true,
+          route: {
+            coordinates: [
+              { lat: 37.5665, lng: 126.978 },
+              { lat: 37.4979, lng: 127.0276 },
+            ],
+            summary: {
+              distanceMeters: 12340,
+              durationSeconds: 1320,
+            },
+          },
+        },
+        {
+          id: 'route-fastest',
+          label: '최소시간',
+          searchOption: '2',
+          color: '#F97316',
+          isRecommended: false,
+          route: {
+            coordinates: [
+              { lat: 37.5665, lng: 126.978 },
+              { lat: 37.51, lng: 127.01 },
+              { lat: 37.4979, lng: 127.0276 },
+            ],
+            summary: {
+              distanceMeters: 12800,
+              durationSeconds: 1260,
+            },
+          },
+        },
+      ])
+    })
+
+    expect(await screen.findByText('2개 경로')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.queryByTestId('route-search-loading-modal')).not.toBeInTheDocument()
+    })
+  })
+
+  it('paints the route loading modal before starting route candidate requests', async () => {
+    mockedGetRouteOptions.mockResolvedValue([
+      {
+        id: 'route-recommended',
+        label: '추천',
+        searchOption: '0',
+        color: '#0EA5E9',
+        isRecommended: true,
+        route: {
+          coordinates: [
+            { lat: 37.5665, lng: 126.978 },
+            { lat: 37.4979, lng: 127.0276 },
+          ],
+          summary: {
+            distanceMeters: 12340,
+            durationSeconds: 1320,
+          },
+        },
+      },
+    ])
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell />
+      </QueryClientProvider>,
+    )
+
+    await openDestinationEditor()
+    fireEvent.click(await screen.findByRole('button', { name: '도착지를 회사로 설정' }))
+
+    expect(await screen.findByTestId('route-search-loading-modal')).toBeInTheDocument()
+    expect(mockedGetRouteOptions).not.toHaveBeenCalled()
+
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 0))
+    })
+
+    await waitFor(() => {
+      expect(mockedGetRouteOptions).toHaveBeenCalledTimes(1)
+    })
+  })
+
   it('restores 3D map mode after selecting a route option from route selection', async () => {
     mockedGetRouteOptions.mockResolvedValue([
       {

@@ -685,6 +685,7 @@ export function NavigationShell() {
   const [activeField, setActiveField] = useState<SearchFieldId | null>(null)
   const [highlightedIndex, setHighlightedIndex] = useState(0)
   const [routeSearchOpen, setRouteSearchOpen] = useState(false)
+  const [routeOptionsSearchReady, setRouteOptionsSearchReady] = useState(false)
   const [selectedRouteOptionId, setSelectedRouteOptionId] = useState<string>()
   const [activeSidePanel, setActiveSidePanel] = useState<SidePanelId | null>(null)
   const [musicModalOpen, setMusicModalOpen] = useState(false)
@@ -756,7 +757,7 @@ export function NavigationShell() {
       destination?.coordinate.lng,
     ],
     queryFn: ({ signal }) => getRouteOptions(origin!.coordinate, destination!.coordinate, undefined, signal),
-    enabled: Boolean(origin && destination) && !selectedRouteOptionId,
+    enabled: Boolean(origin && destination && routeOptionsSearchReady) && !selectedRouteOptionId,
   })
 
   const weatherQuery = useQuery({
@@ -802,6 +803,10 @@ export function NavigationShell() {
   const routeOptions = routeSelectionMode && !hasRouteSearchDraftMismatch
     ? routeOptionsQuery.data ?? []
     : undefined
+  const routeOptionsLoading = routeSelectionMode &&
+    !hasRouteSearchDraftMismatch &&
+    !routeOptions?.length &&
+    (!routeOptionsSearchReady || routeOptionsQuery.isFetching)
   const [previewRouteOptionId, setPreviewRouteOptionId] = useState<string | undefined>(undefined)
   const activeRouteOptionId = useMemo(() => (
     routeOptions?.some((option) => option.id === previewRouteOptionId)
@@ -838,6 +843,30 @@ export function NavigationShell() {
   useEffect(() => {
     routeSelectionModeRef.current = routeSelectionMode
   }, [routeSelectionMode])
+  useEffect(() => {
+    if (!routeSelectionMode || hasRouteSearchDraftMismatch) {
+      setRouteOptionsSearchReady(false)
+      return
+    }
+
+    setRouteOptionsSearchReady(false)
+    const timerId = window.setTimeout(() => {
+      setRouteOptionsSearchReady(true)
+    }, 0)
+
+    return () => {
+      window.clearTimeout(timerId)
+    }
+  }, [
+    destination?.coordinate.lat,
+    destination?.coordinate.lng,
+    destination?.id,
+    hasRouteSearchDraftMismatch,
+    origin?.coordinate.lat,
+    origin?.coordinate.lng,
+    origin?.id,
+    routeSelectionMode,
+  ])
   const remainingDurationSeconds = simulationRunning
     ? simulationRemainingDuration
     : activeRoute?.summary.durationSeconds ?? 0
@@ -1348,7 +1377,7 @@ export function NavigationShell() {
                   <RouteSelectionSummary
                     destinationLabel={destination?.name || destinationKeyword || '목적지'}
                     error={routeOptionsQuery.isError}
-                    loading={routeOptionsQuery.isFetching && !routeOptions?.length}
+                    loading={routeOptionsLoading}
                     motionTiming={motionTiming}
                     optionCount={routeOptions?.length ?? 0}
                     originLabel={origin?.name || originKeyword || currentOriginLabel}
@@ -1361,6 +1390,14 @@ export function NavigationShell() {
                     onSelectRouteOption={selectRouteOption}
                   />
                 )}
+                <AnimatePresence initial={false}>
+                  {routeSelectionMode && routeOptionsLoading ? (
+                    <RouteSearchLoadingModal
+                      motionTiming={motionTiming}
+                      reducedMotion={Boolean(shouldReduceMotion)}
+                    />
+                  ) : null}
+                </AnimatePresence>
                 <AnimatePresence initial={false}>
                   {routeSearchOpen ? (
                     <RouteSearchSheet
@@ -3325,6 +3362,52 @@ function RouteSelectionSummary({
           변경
         </button>
       </div>
+    </motion.div>
+  )
+}
+
+function RouteSearchLoadingModal({
+  motionTiming,
+  reducedMotion,
+}: {
+  motionTiming: MotionTiming
+  reducedMotion: boolean
+}) {
+  return (
+    <motion.div
+      aria-label="경로 탐색 중"
+      aria-live="polite"
+      className="pointer-events-auto absolute inset-0 z-50 grid place-items-center bg-[rgb(15_23_42/0.18)] px-5 text-[var(--nav-ink)] backdrop-blur-[2px]"
+      data-testid="route-search-loading-modal"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={motionTiming}
+    >
+      <motion.div
+        className="navi-assistant-aura relative flex w-[min(19rem,calc(100vw-3rem))] flex-col items-center overflow-hidden rounded-3xl px-6 pb-6 pt-5 text-center shadow-[0_22px_56px_rgb(15_23_42/0.20)]"
+        initial={{ opacity: 0, y: 10, scale: 0.985 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 8, scale: 0.985 }}
+        transition={motionTiming.duration === 0 ? { duration: 0 } : { duration: 0.2, ease: PRODUCT_EASE }}
+        role="status"
+      >
+        <div className="relative z-[1] grid place-items-center">
+          {/* Project-local navi-orb contract: docs/assistant/orb.md */}
+          <VoiceOrb
+            className="pointer-events-none [&_canvas]:mx-auto [&_canvas]:block"
+            colorTheme="ocean"
+            energy={0.72}
+            reducedMotion={reducedMotion}
+            size={148}
+            state="thinking"
+          />
+        </div>
+        <div className="relative z-[1] -mt-2 text-base font-black">경로를 계산하고 있어요</div>
+        <div className="relative z-[1] mt-1 text-xs font-semibold text-[var(--nav-muted)]">
+          교통 흐름과 후보 경로를 비교하는 중
+        </div>
+      </motion.div>
     </motion.div>
   )
 }
