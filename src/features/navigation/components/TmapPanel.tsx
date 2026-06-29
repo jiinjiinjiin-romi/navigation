@@ -428,17 +428,24 @@ export function TmapPanel({
       routeOptionOverlayBuildFrameRef.current = undefined
     }
 
-    disposeRouteOptionRenderedLines(routeOptionActiveLineRefs.current)
-    routeOptionActiveLineRefs.current = []
+    const replaceAfterBuild = routeOptionOverlayVisibleRef.current
+    const previousLines = routeOptionActiveLineRefs.current
+    const targetLines: RouteOptionRenderedLine[] = []
 
     if (!activeOverlay) {
+      disposeRouteOptionRenderedLines(previousLines)
+      routeOptionActiveLineRefs.current = []
       routeOptionActiveIdRef.current = undefined
       onComplete?.()
       return
     }
 
-    const targetLines: RouteOptionRenderedLine[] = []
-    routeOptionActiveLineRefs.current = targetLines
+    if (replaceAfterBuild) {
+      routeOptionActiveLineRefs.current = previousLines
+    } else {
+      disposeRouteOptionRenderedLines(previousLines)
+      routeOptionActiveLineRefs.current = targetLines
+    }
     const map = routeOptionOverlayVisibleRef.current ? mapRef.current : undefined
 
     const buildChunk = (startIndex: number) => {
@@ -451,7 +458,18 @@ export function TmapPanel({
         startIndex,
       )
 
+      if (replaceAfterBuild) {
+        routeOptionActiveLineRefs.current = [
+          ...previousLines,
+          ...targetLines,
+        ]
+      }
+
       if (nextIndex >= activeOverlay.segments.length) {
+        if (replaceAfterBuild) {
+          disposeRouteOptionRenderedLines(previousLines)
+          routeOptionActiveLineRefs.current = targetLines
+        }
         routeOptionActiveIdRef.current = activeOverlay.id
         routeOptionOverlayBuildFrameRef.current = undefined
         onComplete?.()
