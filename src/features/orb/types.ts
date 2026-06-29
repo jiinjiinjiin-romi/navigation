@@ -1,5 +1,9 @@
 import type { CSSProperties } from 'react'
 
+/**
+ * Visual assistant states supported by the Navi orb.
+ * Keep detailed behavior notes in docs/assistant/orb.md.
+ */
 export type OrbAssistantState =
   | 'idle'
   | 'listening'
@@ -8,6 +12,9 @@ export type OrbAssistantState =
   | 'success'
   | 'error'
 
+/**
+ * Color palettes tuned for assistant surfaces in the Navi app.
+ */
 export type OrbColorTheme = 'aurora' | 'ocean' | 'violet' | 'daylight'
 
 export interface OrbVisualState {
@@ -41,7 +48,9 @@ export interface OrbSceneProps {
 }
 
 export interface VoiceOrbProps extends Omit<OrbSceneProps, 'volume'> {
+  /** Normalized voice energy from 0 to 1. Takes priority over volume. */
   volume?: number
+  /** Preferred alias for voice energy when wiring assistant state. */
   energy?: number
   className?: string
   style?: CSSProperties

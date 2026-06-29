@@ -2610,6 +2610,68 @@ describe('TmapPanel', () => {
     ])
   })
 
+  it('does not update the route line path on every regular simulation frame', async () => {
+    let renderSimulationFrame: ((position: { lat: number; lng: number }) => void) | undefined
+
+    render(
+      <TmapPanel
+        route={{
+          coordinates: [
+            { lat: 37, lng: 126 },
+            { lat: 37, lng: 126.5 },
+            { lat: 37, lng: 127 },
+          ],
+          trafficSegments: [
+            {
+              coordinates: [
+                { lat: 37, lng: 126 },
+                { lat: 37, lng: 126.5 },
+              ],
+              congestion: 1 as const,
+            },
+            {
+              coordinates: [
+                { lat: 37, lng: 126.5 },
+                { lat: 37, lng: 127 },
+              ],
+              congestion: 4 as const,
+            },
+          ],
+          summary: {
+            distanceMeters: 1000,
+            durationSeconds: 120,
+          },
+        }}
+        simulationPosition={{ lat: 37, lng: 126 }}
+        onSimulationFrameRendererReady={(renderFrame) => {
+          renderSimulationFrame = renderFrame
+        }}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(renderSimulationFrame).toBeDefined()
+      expect(window.Tmapv3!.Polyline).toHaveBeenCalledTimes(4)
+    })
+
+    act(() => {
+      renderSimulationFrame?.({ lat: 37, lng: 126.2 })
+    })
+
+    polylineSetMap.mockClear()
+    polylineSetPath.mockClear()
+    polylineSetOptions.mockClear()
+
+    act(() => {
+      renderSimulationFrame?.({ lat: 37, lng: 126.25 })
+    })
+
+    expect(window.Tmapv3!.Polyline).toHaveBeenCalledTimes(4)
+    expect(polylineSetMap).not.toHaveBeenCalled()
+    expect(polylineSetOptions).not.toHaveBeenCalled()
+    expect(polylineSetPath).not.toHaveBeenCalled()
+  })
+
   it('applies bearing before resolving the offset camera center to avoid lateral shake while turning', async () => {
     const realToScreen = vi.fn(() => ({ getX: () => 720, getY: () => 470 }))
     const screenToReal = vi.fn(() => ({ lat: 37.5016, lng: 126 }))

@@ -32,8 +32,8 @@ import {
   X,
 } from '@phosphor-icons/react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
-import { VoiceOrb } from 'navi-orb'
-import type { OrbAssistantState, OrbColorTheme } from 'navi-orb'
+import { VoiceOrb } from '@/features/orb'
+import type { OrbAssistantState, OrbColorTheme } from '@/features/orb'
 import { type CSSProperties, type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getCurrentAddress, getRoadMatch, getRouteOptions, searchPlaces } from '../api/tmapApi'
 import { createRoundedRoutePath } from '../map/routeGeometry'
@@ -1739,7 +1739,7 @@ function NaviOrbControl({
             duration: motionTiming.duration === 0 ? 0 : 0.34,
           }}
         >
-          {/* Project-local navi-orb contract: docs/assistant/orb.md */}
+          {/* Project-local orb contract: docs/assistant/orb.md */}
           <VoiceOrb
             className="pointer-events-none [&_canvas]:mx-auto [&_canvas]:block"
             colorTheme={NAVI_ORB_THEME}
@@ -3436,7 +3436,7 @@ function RouteSearchLoadingModal({
         role="status"
       >
         <div className="relative z-[1] grid place-items-center">
-          {/* Project-local navi-orb contract: docs/assistant/orb.md */}
+          {/* Project-local orb contract: docs/assistant/orb.md */}
           <VoiceOrb
             className="pointer-events-none [&_canvas]:mx-auto [&_canvas]:block"
             colorTheme="ocean"

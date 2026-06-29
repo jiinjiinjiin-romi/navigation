@@ -16,7 +16,7 @@ vi.mock('../api/tmapApi', () => ({
   getCurrentAddress: vi.fn(),
 }))
 
-vi.mock('navi-orb', () => ({
+vi.mock('@/features/orb', () => ({
   VoiceOrb: ({
     state,
     energy,
@@ -254,7 +254,7 @@ describe('NavigationShell', () => {
     expect(viewport).toHaveClass('w-[min(100vw,calc(100vh*1.6))]')
   })
 
-  it('renders the Navi assistant orb with the navi-orb VoiceOrb contract', () => {
+  it('renders the Navi assistant orb with the internal VoiceOrb contract', () => {
     const queryClient = new QueryClient()
 
     render(

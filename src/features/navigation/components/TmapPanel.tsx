@@ -59,6 +59,7 @@ const ROUTE_DIRECTION_ARROW_END_OFFSET_METERS = 70
 const ROUTE_DIRECTION_ARROW_MIN_EDGE_GAP_METERS = 40
 const MAX_TRAFFIC_SEGMENT_MATCH_DISTANCE_SQUARED = 0.000001
 const ROUTE_LINE_SIGNATURE_COORDINATE_PRECISION = 5
+const ROUTE_LINE_HEAD_UPDATE_INTERVAL_MS = 120
 const CURRENT_LOCATION_PLACE_ID = 'current-location'
 const NAVIGATION_MARKER_BEARING_PRECISION = 0.05
 const NAVIGATION_MARKER_PITCH_PRECISION = 0.5
@@ -196,6 +197,7 @@ export function TmapPanel({
   const routeLineStructureSignatureRef = useRef<string | undefined>(undefined)
   const routeLineActiveSegmentIndexRef = useRef<number | undefined>(undefined)
   const routeLineActivePathSignatureRef = useRef<string | undefined>(undefined)
+  const routeLineHeadUpdatedAtRef = useRef<number | undefined>(undefined)
   const routeDirectionMarkerSignatureRef = useRef<string | undefined>(undefined)
   const currentMarkerRef = useRef<Window['Tmapv3Marker']>(undefined)
   const currentMarkerBearingRef = useRef<number | undefined>(undefined)
@@ -326,6 +328,14 @@ export function TmapPanel({
   const routeLineDrawableSourceSegments = useMemo(
     () => routeLineSourceSegments.filter(isDrawableRouteSegment),
     [routeLineSourceSegments],
+  )
+  const routeLineDrawableSourceSignature = useMemo(
+    () => getRouteLineSignature(routeLineDrawableSourceSegments),
+    [routeLineDrawableSourceSegments],
+  )
+  const routeLineDrawableStructureSignature = useMemo(
+    () => getRouteLineStructureSignature(routeLineDrawableSourceSegments),
+    [routeLineDrawableSourceSegments],
   )
   const routeLineSegments = useMemo(() => {
     if (!progressPosition) {
@@ -493,16 +503,19 @@ export function TmapPanel({
     routeLineStructureSignatureRef.current = undefined
     routeLineActiveSegmentIndexRef.current = undefined
     routeLineActivePathSignatureRef.current = undefined
+    routeLineHeadUpdatedAtRef.current = undefined
   }, [])
 
-  const ensureStableRouteLines = useCallback((segments: RouteTrafficSegment[]) => {
+  const ensureStableRouteLines = useCallback((
+    segments: RouteTrafficSegment[],
+    sourceSignature: string,
+    structureSignature: string,
+  ) => {
     if (!window.Tmapv3 || !mapRef.current || !segments.length) {
       clearRouteLines()
       return false
     }
 
-    const sourceSignature = getRouteLineSignature(segments)
-    const structureSignature = getRouteLineStructureSignature(segments)
     const hasStableRouteLines = (
       routeLineSourceSignatureRef.current === sourceSignature &&
       routeLineStructureSignatureRef.current === structureSignature &&
@@ -525,6 +538,7 @@ export function TmapPanel({
     routeLineStructureSignatureRef.current = structureSignature
     routeLineActiveSegmentIndexRef.current = undefined
     routeLineActivePathSignatureRef.current = undefined
+    routeLineHeadUpdatedAtRef.current = undefined
     return true
   }, [clearRouteLines])
 
@@ -533,7 +547,11 @@ export function TmapPanel({
       return
     }
 
-    if (!ensureStableRouteLines(routeLineDrawableSourceSegments)) {
+    if (
+      routeLineSourceSignatureRef.current !== routeLineDrawableSourceSignature ||
+      routeLineStructureSignatureRef.current !== routeLineDrawableStructureSignature ||
+      routeLineRefs.current.length !== routeLineDrawableSourceSegments.length * 2
+    ) {
       return
     }
 
@@ -544,7 +562,8 @@ export function TmapPanel({
     }
 
     const previousActiveSegmentIndex = routeLineActiveSegmentIndexRef.current
-    if (previousActiveSegmentIndex !== activeSegmentIndex) {
+    const activeSegmentChanged = previousActiveSegmentIndex !== activeSegmentIndex
+    if (activeSegmentChanged) {
       const startIndex = previousActiveSegmentIndex === undefined
         ? 0
         : Math.min(previousActiveSegmentIndex, activeSegmentIndex)
@@ -568,10 +587,19 @@ export function TmapPanel({
       position,
     )
     const activePathSignature = activeSegment
-      ? getRouteLineSignature([activeSegment])
+      ? getRouteLineHeadSignature(activeSegmentIndex, activeSegment)
       : `hidden:${activeSegmentIndex}`
 
     if (routeLineActivePathSignatureRef.current === activePathSignature) {
+      return
+    }
+
+    const now = performance.now()
+    if (
+      !activeSegmentChanged &&
+      routeLineHeadUpdatedAtRef.current !== undefined &&
+      now - routeLineHeadUpdatedAtRef.current < ROUTE_LINE_HEAD_UPDATE_INTERVAL_MS
+    ) {
       return
     }
 
@@ -580,10 +608,17 @@ export function TmapPanel({
       ? toTmapPath(activeSegment.coordinates)
       : getHiddenRouteOptionPath(sourcePath)
     setRouteLinePairPath(routeLineRefs.current, activeSegmentIndex, activePath)
-    setRouteLinePairVisible(routeLineRefs.current, activeSegmentIndex, Boolean(activeSegment))
+    if (!activeSegment) {
+      setRouteLinePairVisible(routeLineRefs.current, activeSegmentIndex, false)
+    }
     routeLineActivePathSignatureRef.current = activePathSignature
+    routeLineHeadUpdatedAtRef.current = now
     routeLineSignatureRef.current = `progress:${activeSegmentIndex}:${activePathSignature}`
-  }, [ensureStableRouteLines, routeLineDrawableSourceSegments])
+  }, [
+    routeLineDrawableSourceSegments,
+    routeLineDrawableSourceSignature,
+    routeLineDrawableStructureSignature,
+  ])
 
   const stopCameraAnimation = useCallback(() => {
     if (cameraFrameRef.current !== undefined) {
@@ -1273,8 +1308,19 @@ export function TmapPanel({
     const drawableSegments = routeLineSegments.filter(isDrawableRouteSegment)
     const routeLineManagedByFrameRenderer = Boolean(simulationPosition && onSimulationFrameRendererReady)
 
-    if (routeLineManagedByFrameRenderer) {
-      ensureStableRouteLines(routeLineDrawableSourceSegments)
+    if (
+      routeLineManagedByFrameRenderer &&
+      (
+        routeLineSourceSignatureRef.current !== routeLineDrawableSourceSignature ||
+        routeLineStructureSignatureRef.current !== routeLineDrawableStructureSignature ||
+        routeLineRefs.current.length !== routeLineDrawableSourceSegments.length * 2
+      )
+    ) {
+      ensureStableRouteLines(
+        routeLineDrawableSourceSegments,
+        routeLineDrawableSourceSignature,
+        routeLineDrawableStructureSignature,
+      )
     }
 
     if (!routeLineManagedByFrameRenderer && !drawableSegments.length) {
@@ -1320,6 +1366,7 @@ export function TmapPanel({
         routeLineSourceSignatureRef.current = routeLineSignature
         routeLineActiveSegmentIndexRef.current = undefined
         routeLineActivePathSignatureRef.current = undefined
+        routeLineHeadUpdatedAtRef.current = undefined
       }
     }
     const routeDirectionMarkerSignature = getRouteDirectionMarkerSignature(routeDirectionCoordinates, routeDirectionZoom)
@@ -1368,6 +1415,8 @@ export function TmapPanel({
     resolveCameraCenter,
     routeDirectionZoom,
     routeLineDrawableSourceSegments,
+    routeLineDrawableSourceSignature,
+    routeLineDrawableStructureSignature,
     routeLineSegments,
     ensureStableRouteLines,
     simulationPosition,
@@ -2549,6 +2598,18 @@ function getRouteLineSignature(segments: RouteTrafficSegment[]) {
 
 function getRouteLineStructureSignature(segments: RouteTrafficSegment[]) {
   return segments.map((segment) => segment.congestion).join('|')
+}
+
+function getRouteLineHeadSignature(segmentIndex: number, segment: RouteTrafficSegment) {
+  const coordinate = segment.coordinates[0]
+
+  return [
+    segmentIndex,
+    segment.coordinates.length,
+    segment.congestion,
+    coordinate ? formatRouteLineSignatureCoordinate(coordinate.lat) : '',
+    coordinate ? formatRouteLineSignatureCoordinate(coordinate.lng) : '',
+  ].join(':')
 }
 
 function setRouteLinePairPath(lines: TmapPolyline[], segmentIndex: number, path: unknown[]) {
