@@ -61,6 +61,7 @@ const ROUTE_DIRECTION_ARROW_MIN_EDGE_GAP_METERS = 40
 const MAX_TRAFFIC_SEGMENT_MATCH_DISTANCE_SQUARED = 0.000001
 const ROUTE_LINE_SIGNATURE_COORDINATE_PRECISION = 5
 const ROUTE_LINE_HEAD_UPDATE_INTERVAL_MS = 120
+const SIMULATION_BEARING_SMOOTHING_RATIO = 0.24
 const CURRENT_LOCATION_PLACE_ID = 'current-location'
 const NAVIGATION_MARKER_BEARING_PRECISION = 0.05
 const NAVIGATION_MARKER_PITCH_PRECISION = 0.5
@@ -234,6 +235,17 @@ export function TmapPanel({
 
     return projectCoordinateToRoute(route.coordinates, simulationPosition)
   }, [route?.coordinates, simulationPosition])
+  const getSmoothedSimulationMapBearing = useCallback((targetBearing: number | undefined) => {
+    if (typeof targetBearing !== 'number' || northUpLocked) {
+      return targetBearing
+    }
+
+    return interpolateBearingContinuously(
+      renderedBearingRef.current,
+      targetBearing,
+      SIMULATION_BEARING_SMOOTHING_RATIO,
+    )
+  }, [northUpLocked])
   const syncCompassBearing = useCallback((bearing: number) => {
     setMapBearing((currentBearing) => {
       const nextBearing = getContinuousBearing(currentBearing, bearing)
@@ -1562,17 +1574,19 @@ export function TmapPanel({
       })
     }
 
-    applyNavigationCamera(
-      displayPosition,
-      cameraBearing.mapBearing,
-      {
-        animated: false,
-        applyMap: shouldFollowCamera,
-        markerBearing,
-        resolveCenterAfterCamera: cameraSettings?.mode === '3d',
-      },
-    )
-  }, [applyNavigationCamera, cameraSettings?.mode, getCurrentMapBearing, getDisplayMapPitch, getSettingsMapPitch, northUpLocked, progressPosition, route?.coordinates, simulationPosition, status])
+    if (!onSimulationFrameRendererReady) {
+      applyNavigationCamera(
+        displayPosition,
+        cameraBearing.mapBearing,
+        {
+          animated: false,
+          applyMap: shouldFollowCamera,
+          markerBearing,
+          resolveCenterAfterCamera: cameraSettings?.mode === '3d',
+        },
+      )
+    }
+  }, [applyNavigationCamera, cameraSettings?.mode, getCurrentMapBearing, getDisplayMapPitch, getSettingsMapPitch, northUpLocked, onSimulationFrameRendererReady, progressPosition, route?.coordinates, simulationPosition, status])
 
   useEffect(() => {
     if (!onSimulationFrameRendererReady || !window.Tmapv3 || !mapRef.current || status !== 'ready') {
@@ -1590,14 +1604,17 @@ export function TmapPanel({
         northUpLocked,
       )
       const shouldFollowCamera = cameraFollowingRef.current
+      const mapBearing = shouldFollowCamera
+        ? getSmoothedSimulationMapBearing(cameraBearing.mapBearing)
+        : cameraBearing.mapBearing
       const markerBearing = shouldFollowCamera
-        ? cameraBearing.markerBearing
+        ? getNavigationMarkerBearing(route?.coordinates, displayPosition, mapBearing ?? getCurrentMapBearing())
         : getNavigationMarkerBearing(route?.coordinates, displayPosition, getCurrentMapBearing())
 
       if (!options.skipCamera) {
         applyNavigationCamera(
           displayPosition,
-          cameraBearing.mapBearing,
+          mapBearing,
           {
             animated: false,
             applyMap: shouldFollowCamera,
@@ -1616,6 +1633,7 @@ export function TmapPanel({
   }, [
     applyNavigationCamera,
     cameraSettings?.mode,
+    getSmoothedSimulationMapBearing,
     getCurrentMapBearing,
     northUpLocked,
     onSimulationFrameRendererReady,

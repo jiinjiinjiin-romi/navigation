@@ -3056,6 +3056,103 @@ describe('TmapPanel', () => {
     expect(setBearing).toHaveBeenLastCalledWith(expect.closeTo(89.7, 0))
   })
 
+  it('lets the simulation frame renderer own the camera while simulation state updates lag behind', async () => {
+    let renderSimulationFrame: ((position: { lat: number; lng: number }) => void) | undefined
+    const route = {
+      coordinates: [
+        { lat: 37, lng: 126 },
+        { lat: 37, lng: 127 },
+        { lat: 38, lng: 127 },
+      ],
+      summary: {
+        distanceMeters: 1000,
+        durationSeconds: 120,
+      },
+    }
+
+    const { rerender } = render(
+      <TmapPanel
+        route={route}
+        simulationPosition={{ lat: 37, lng: 126 }}
+        onSimulationFrameRendererReady={(renderFrame) => {
+          renderSimulationFrame = renderFrame
+        }}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(renderSimulationFrame).toBeDefined()
+    })
+
+    setBearing.mockClear()
+
+    act(() => {
+      renderSimulationFrame?.({ lat: 37, lng: 126.5 })
+    })
+
+    expect(setBearing).toHaveBeenLastCalledWith(expect.closeTo(21.5, 0))
+    setBearing.mockClear()
+
+    rerender(
+      <TmapPanel
+        route={route}
+        simulationPosition={{ lat: 37.5, lng: 127 }}
+        onSimulationFrameRendererReady={(renderFrame) => {
+          renderSimulationFrame = renderFrame
+        }}
+      />,
+    )
+
+    await act(async () => {})
+
+    expect(setBearing).not.toHaveBeenCalled()
+  })
+
+  it('smooths simulation frame bearing changes while keeping position updates immediate', async () => {
+    let renderSimulationFrame: ((position: { lat: number; lng: number }) => void) | undefined
+
+    render(
+      <TmapPanel
+        route={{
+          coordinates: [
+            { lat: 37, lng: 126 },
+            { lat: 37, lng: 127 },
+            { lat: 38, lng: 127 },
+          ],
+          summary: {
+            distanceMeters: 1000,
+            durationSeconds: 120,
+          },
+        }}
+        simulationPosition={{ lat: 37, lng: 126 }}
+        onSimulationFrameRendererReady={(renderFrame) => {
+          renderSimulationFrame = renderFrame
+        }}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(renderSimulationFrame).toBeDefined()
+    })
+
+    setBearing.mockClear()
+    setCenter.mockClear()
+
+    act(() => {
+      renderSimulationFrame?.({ lat: 37, lng: 126.5 })
+    })
+
+    expect(setCenter).toHaveBeenLastCalledWith({ lat: 37, lng: 126.5 })
+    expect(setBearing).toHaveBeenLastCalledWith(expect.closeTo(21.5, 0))
+
+    act(() => {
+      renderSimulationFrame?.({ lat: 37, lng: 127 })
+    })
+
+    expect(setCenter).toHaveBeenLastCalledWith({ lat: 37, lng: 127 })
+    expect(setBearing).toHaveBeenLastCalledWith(expect.closeTo(27.2, 0))
+  })
+
   it('snaps the navigation arrow and camera to the route line instead of the raw GPS point', async () => {
     render(
       <TmapPanel
