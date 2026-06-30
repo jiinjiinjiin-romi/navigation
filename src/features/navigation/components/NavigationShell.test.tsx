@@ -3,7 +3,13 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { useEffect } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { NavigationShell } from './NavigationShell'
+import {
+  getAssistantSpeechCharacterDelaySeconds,
+  getAssistantVisibleOrbState,
+  isAssistantPlaybackReady,
+  isAssistantVoiceWaveVisible,
+  NavigationShell,
+} from './NavigationShell'
 import { getCurrentAddress, getRoadMatch, getRouteOptions, searchPlaces } from '../api/tmapApi'
 
 let routeOptionsOverlayReadyByDefault = true
@@ -40,6 +46,28 @@ vi.mock('@/features/orb', () => ({
       data-size={size}
       data-state={state}
       data-testid="voice-orb"
+    />
+  ),
+}))
+
+vi.mock('@/features/voice-wave', () => ({
+  VoiceWave: ({
+    active,
+    energy,
+    colorTheme,
+    reducedMotion,
+  }: {
+    active: boolean
+    energy?: number
+    colorTheme?: string
+    reducedMotion?: boolean
+  }) => (
+    <div
+      data-active={String(active)}
+      data-color-theme={colorTheme}
+      data-energy={energy}
+      data-reduced-motion={String(reducedMotion)}
+      data-testid="voice-wave"
     />
   ),
 }))
@@ -179,6 +207,8 @@ describe('NavigationShell', () => {
     ])
     mockedGetRoadMatch.mockReset()
     mockedGetCurrentAddress.mockReset()
+    HTMLMediaElement.prototype.play = vi.fn(() => Promise.reject(new Error('test audio fallback')))
+    HTMLMediaElement.prototype.pause = vi.fn()
     mockedGetRoadMatch.mockResolvedValue([
       {
         sourceIndex: 0,
@@ -283,9 +313,11 @@ describe('NavigationShell', () => {
     )
 
     expect(screen.getByTestId('navi-assistant-debug-bar')).toBeInTheDocument()
-    expect(screen.getByText('대기')).toBeInTheDocument()
-    expect(screen.getByText('1 / 5')).toBeInTheDocument()
+    expect(screen.getByText('정상 주행')).toBeInTheDocument()
+    expect(screen.getByText('1 / 8')).toBeInTheDocument()
     expect(screen.queryByTestId('navi-assistant-panel')).not.toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: '졸음 감지' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: '나비야 호출' })).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '다음 AI 시나리오 단계' }))
 
@@ -296,37 +328,56 @@ describe('NavigationShell', () => {
     expect(screen.getByTestId('navi-assistant-orb-slot')).toHaveClass('absolute')
     expect(screen.getByTestId('navi-assistant-content')).toHaveClass('pt-[12rem]')
     expect(screen.getByRole('button', { name: 'Navi AI 에이전트 닫기' })).toBeInTheDocument()
-    expect(screen.getByText('오늘 피곤한 하루였나봐요. 잠 깰 수 있게 도와드릴까요?')).toBeInTheDocument()
-    expect(screen.getByTestId('navi-assistant-speech-text')).toHaveAttribute(
+    expect(await screen.findByTestId('navi-assistant-speech-text')).toHaveAttribute(
       'aria-label',
-      '오늘 피곤한 하루였나봐요. 잠 깰 수 있게 도와드릴까요?',
+      '잠시 쉬어가면 좋겠습니다. 가까운 쉼터를 찾아드릴까요?',
     )
     expect(screen.getByTestId('voice-orb')).toHaveAttribute('data-state', 'speaking')
+    expect(screen.getByTestId('voice-wave')).toHaveAttribute('data-active', 'true')
+    expect(screen.getByTestId('voice-wave')).toHaveAttribute('data-energy', '0.6')
+    expect(screen.getByTestId('voice-wave')).toHaveAttribute('data-color-theme', 'daylight')
 
     fireEvent.click(screen.getByRole('button', { name: '다음 AI 시나리오 단계' }))
     expect(screen.getByText('듣는 중...')).toBeInTheDocument()
-    expect(screen.queryByTestId('navi-assistant-user-text')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('voice-wave')).not.toBeInTheDocument()
     expect(await screen.findByTestId('navi-assistant-user-text')).toHaveAttribute(
       'aria-label',
-      '가까운 졸음쉼터랑 기분 전환할 음악 추천해줘',
+      '가까운 졸음쉼터로 안내해줘',
     )
-
-    fireEvent.click(screen.getByRole('button', { name: '다음 AI 시나리오 단계' }))
-    expect(screen.getByText('생각 중...')).toBeInTheDocument()
-    expect(screen.getByTestId('navi-assistant-user-text')).toHaveAttribute(
-      'aria-label',
-      '가까운 졸음쉼터랑 기분 전환할 음악 추천해줘',
-    )
-    expect(screen.getByTestId('navi-assistant-user-text').querySelector('.navi-assistant-user-word')).toBeNull()
 
     fireEvent.click(screen.getByRole('button', { name: '다음 AI 시나리오 단계' }))
     expect(screen.getByTestId('navi-assistant-recommendations')).toBeInTheDocument()
-    expect(screen.getByText('서울만남 졸음쉼터')).toBeInTheDocument()
-    expect(screen.getByText('Drive Boost')).toBeInTheDocument()
+    expect(await screen.findByTestId('voice-wave')).toHaveAttribute('data-active', 'true')
+    expect(screen.getByText('장소 추천 열기')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'AI 시나리오 초기화' }))
     expect(screen.queryByTestId('navi-assistant-panel')).not.toBeInTheDocument()
-    expect(screen.getByText('1 / 5')).toBeInTheDocument()
+    expect(screen.getByText('1 / 8')).toBeInTheDocument()
+  })
+
+  it('keeps assistant speech reveal synced to the current playback key', () => {
+    expect(getAssistantSpeechCharacterDelaySeconds(0)).toBe(0)
+    expect(getAssistantSpeechCharacterDelaySeconds(3)).toBeCloseTo(0.054)
+    expect(isAssistantPlaybackReady('scenario-2-agent:text', 'scenario-2-agent:text')).toBe(true)
+    expect(isAssistantPlaybackReady('scenario-1-agent:text', 'scenario-2-agent:text')).toBe(false)
+    expect(isAssistantPlaybackReady('', 'scenario-2-agent:text')).toBe(false)
+  })
+
+  it('keeps assistant speaking orb and voice wave synced to playback start', () => {
+    const agentStep = {
+      energy: 0.6,
+      id: 'agent-step',
+      label: '에이전트 음성 안내',
+      mode: 'assistant-speaking' as const,
+      orbState: 'speaking' as const,
+      speechRole: 'agent' as const,
+      text: '어디로 안내할까요?',
+    }
+
+    expect(getAssistantVisibleOrbState(agentStep, '')).toBe('thinking')
+    expect(isAssistantVoiceWaveVisible(agentStep, '')).toBe(false)
+    expect(getAssistantVisibleOrbState(agentStep, 'route-search-voice-1-agent:어디로 안내할까요?')).toBe('speaking')
+    expect(isAssistantVoiceWaveVisible(agentStep, 'route-search-voice-1-agent:어디로 안내할까요?')).toBe(true)
   })
 
   it('closes the expanded Navi assistant panel back to the floating orb', () => {

@@ -34,6 +34,16 @@ import {
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { VoiceOrb } from '@/features/orb'
 import type { OrbAssistantState, OrbColorTheme } from '@/features/orb'
+import {
+  createNaviAssistantScenarios,
+  getScenarioSpeech,
+  startScenarioSpeech,
+  type AiaiScenarioId,
+  type NaviAssistantRecommendation,
+  type NaviAssistantScenario,
+  type NaviAssistantStep,
+} from '@/features/assistant-scenarios'
+import { VoiceWave } from '@/features/voice-wave'
 import { type CSSProperties, type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getCurrentAddress, getRoadMatch, getRouteOptions, searchPlaces } from '../api/tmapApi'
 import { createRoundedRoutePath } from '../map/routeGeometry'
@@ -91,13 +101,11 @@ const MAP_SETTINGS_PITCH_MAX = 60
 const MAP_SETTINGS_PITCH_STEP = 1
 const SIMULATION_UI_UPDATE_INTERVAL_MS = 200
 const GUIDANCE_DISTANCE_UPDATE_INTERVAL_MS = 500
-const NAVI_ORB_STANDBY_STATE: OrbAssistantState = 'idle'
 const NAVI_ORB_THEME: OrbColorTheme = 'daylight'
 const NAVI_ORB_CONTROL_SIZE = 132
 const NAVI_ASSISTANT_PANEL_ORB_SIZE = 132
-const NAVI_ASSISTANT_TEXT_REVEAL_DELAY_SECONDS = 0.52
+const NAVI_ASSISTANT_CONTENT_REVEAL_DELAY_SECONDS = 0.52
 const NAVI_ASSISTANT_TEXT_STAGGER_SECONDS = 0.018
-const NAVI_ASSISTANT_USER_TEXT_DELAY_SECONDS = 0.72
 const NAVI_ASSISTANT_USER_WORD_STAGGER_SECONDS = 0.08
 const DRIVING_ASSIST_DEBUG_QUERY_PARAM = 'debugSigns'
 const DRIVING_ASSIST_DEBUG_SEQUENCE_INTERVAL_MS = 1400
@@ -141,425 +149,35 @@ const MUSIC_LIBRARY = [
     mood: '야간 드라이브',
   },
 ] as const
-type NaviAssistantScenarioId =
-  | 'drowsy-assist'
-  | 'wake-call'
-  | 'drowsiness-rest-area'
-  | 'fatigue-music'
-  | 'phone-message'
-  | 'fatigue-window'
-  | 'fatigue-conversation'
-  | 'long-drive-rest-area'
-  | 'distraction-voice-guide'
-  | 'route-search-voice'
-  | 'safety-report'
-  | 'settings-check'
-type NaviAssistantRecommendation =
-  | {
-    type: 'place'
-    title: string
-    meta: string
-    detail: string
-    action: string
-  }
-  | {
-    type: 'music'
-    title: string
-    meta: string
-    detail: string
-    action: string
-  }
-  | {
-    type: 'action'
-    title: string
-    meta: string
-    detail: string
-    action: string
-  }
-type NaviAssistantStep = {
-  id: string
-  label: string
-  mode: 'idle' | 'assistant-speaking' | 'user-listening' | 'thinking' | 'recommendation'
-  orbState: OrbAssistantState
-  energy: number
-  statusLabel?: string
-  text?: string
-  userText?: string
-  recommendations?: NaviAssistantRecommendation[]
-}
-type NaviAssistantScenario = {
-  id: NaviAssistantScenarioId
-  title: string
-  steps: NaviAssistantStep[]
-}
-type AiaiDebugScenarioStep = {
-  title: string
-  description: string
-  detectionEvent?: string
-  agentSpeech?: string
-  userSpeech?: string
-  actionLabel?: string
-}
-type AiaiDebugScenarioDefinition = {
-  id: Exclude<NaviAssistantScenarioId, 'drowsy-assist' | 'wake-call'>
-  title: string
-  steps: AiaiDebugScenarioStep[]
-}
-const AIAI_DEBUG_SCENARIOS: AiaiDebugScenarioDefinition[] = [
-  {
-    id: 'drowsiness-rest-area',
-    title: '졸음 감지 → 졸음쉼터 안내',
-    steps: [
-      { title: '정상 주행', description: '기본 네비게이션 주행 화면입니다.' },
-      { title: '졸음 감지 발생', description: '운전자 졸음 이벤트를 더미로 발생시킵니다.', detectionEvent: '졸음 감지' },
-      { title: '에이전트 음성 안내', description: 'AI 에이전트가 휴식을 권장합니다.', agentSpeech: '잠시 쉬어가면 좋겠습니다. 가까운 쉼터를 찾아드릴까요?' },
-      { title: '사용자 음성 응답', description: '운전자가 음성으로 졸음쉼터 안내를 요청합니다.', userSpeech: '가까운 졸음쉼터로 안내해줘' },
-      { title: '장소 추천 표시', description: '가까운 휴식 장소 추천 결과를 보여줍니다.', actionLabel: '장소 추천 열기', agentSpeech: '가장 가까운 졸음쉼터를 찾았습니다. 현재 경로에서 2.4km 거리이고 4분 뒤 도착할 수 있습니다.' },
-      { title: '사용자 음성 선택', description: '운전자가 추천 장소 안내를 승인합니다.', userSpeech: '응, 그곳으로 안내해줘' },
-      { title: '경로 변경', description: '가장 가까운 졸음쉼터로 안내합니다.', actionLabel: '경로 변경', agentSpeech: '가장 가까운 졸음쉼터로 안내를 시작합니다.' },
-      { title: '안내 완료', description: '안전 운전을 위한 안내를 마칩니다.', actionLabel: '완료', agentSpeech: '경로를 변경했습니다. 안전하게 이동해 주세요.' },
-      { title: '대기 상태', description: '필요한 상황이 생기면 다시 안내합니다.', agentSpeech: '필요하면 다시 불러 주세요.' },
-    ],
-  },
-  {
-    id: 'fatigue-music',
-    title: '졸음 감지 → 음악 추천',
-    steps: [
-      { title: '정상 주행', description: '기본 네비게이션 주행 화면입니다.' },
-      { title: '졸음 감지 발생', description: '운전자 졸음 이벤트를 더미로 발생시킵니다.', detectionEvent: '졸음 감지' },
-      { title: '에이전트 음성 안내', description: 'AI 에이전트가 기분 전환을 제안합니다.', agentSpeech: '잠깐 리듬을 바꿔볼까요? 밝은 음악을 준비해드릴게요.' },
-      { title: '사용자 음성 응답', description: '운전자가 음악 재생을 요청합니다.', userSpeech: '밝은 음악 틀어줘' },
-      { title: '음악 추천 표시', description: '추천 음악 결과를 보여줍니다.', actionLabel: '음악 추천 열기', agentSpeech: '밝은 팝 플레이리스트를 준비했습니다. 가볍게 들으며 이어가 보세요.' },
-      { title: '사용자 음성 선택', description: '운전자가 추천 음악 재생을 승인합니다.', userSpeech: '좋아, 그 음악 틀어줘' },
-      { title: '음악 재생', description: '추천 음악을 재생합니다.', actionLabel: '음악 재생', agentSpeech: '음악을 재생합니다.' },
-      { title: '재생 상태', description: '재생 중인 음악을 유지합니다.', agentSpeech: '재생 중인 음악은 아래에서 확인할 수 있습니다.' },
-      { title: '대기 상태', description: '음악은 계속 재생됩니다.', agentSpeech: '음악은 계속 재생해 둘게요.' },
-    ],
-  },
-  {
-    id: 'phone-message',
-    title: '휴대폰 사용 감지 → 문자 대행',
-    steps: [
-      { title: '정상 주행', description: '기본 네비게이션 주행 화면입니다.' },
-      { title: '휴대폰 사용 감지 발생', description: '휴대폰 사용 이벤트를 더미로 발생시킵니다.', detectionEvent: '휴대폰 사용 감지' },
-      { title: '에이전트 음성 안내', description: 'AI 에이전트가 연락 대행을 제안합니다.', agentSpeech: '운전 중에는 제가 대신 도와드릴게요. 메시지를 보낼까요?' },
-      { title: '사용자 음성 응답', description: '운전자가 문자 대행을 요청합니다.', userSpeech: '엄마한테 10분 늦는다고 문자 보내줘' },
-      { title: '문자 확인 표시', description: '문자 전송 전 확인 모달을 표시합니다.', actionLabel: '확인 모달 열기', agentSpeech: '엄마에게 보낼 문자를 확인해 주세요. 내용은 도착이 10분 정도 늦을 것 같아요입니다.' },
-      { title: '전송 확인 음성 안내', description: '에이전트가 전송 내용을 확인합니다.', agentSpeech: '아래 내용으로 문자를 보낼까요?' },
-      { title: '사용자 음성 응답', description: '운전자가 전송을 승인합니다.', userSpeech: '보내줘' },
-      { title: '문자 전송 완료', description: '문자 전송을 완료합니다.', actionLabel: '문자 전송 완료', agentSpeech: '문자 전송이 완료됐습니다.' },
-      { title: '대기 상태', description: '필요한 상황이 생기면 다시 안내합니다.', agentSpeech: '필요하면 다시 도와드릴게요.' },
-    ],
-  },
-  {
-    id: 'fatigue-window',
-    title: '졸음 감지 → 창문 열기',
-    steps: [
-      { title: '정상 주행', description: '기본 네비게이션 주행 화면입니다.' },
-      { title: '졸음 감지 발생', description: '운전자 졸음 이벤트를 더미로 발생시킵니다.', detectionEvent: '졸음 감지' },
-      { title: '에이전트 음성 안내', description: '환기를 제안합니다.', agentSpeech: '실내 공기를 조금 바꿔볼까요? 창문을 살짝 열 수 있어요.' },
-      { title: '사용자 음성 응답', description: '운전자가 창문 제어를 요청합니다.', userSpeech: '창문 살짝 열어줘' },
-      { title: '차량 제어 추천 표시', description: '차량 제어 추천 결과를 보여줍니다.', actionLabel: '제어 추천 열기', agentSpeech: '운전석 창문을 20퍼센트 정도 열어 환기할 수 있습니다.' },
-      { title: '사용자 음성 선택', description: '운전자가 창문 제어 실행을 승인합니다.', userSpeech: '응, 그렇게 해줘' },
-      { title: '창문 제어', description: '창문을 살짝 열어 환기합니다.', actionLabel: '차량 제어 완료', agentSpeech: '창문을 살짝 열어 환기하겠습니다.' },
-      { title: '완료', description: '환기 상태를 유지합니다.', agentSpeech: '환기를 시작했습니다.' },
-      { title: '대기 상태', description: '필요한 상황이 생기면 다시 안내합니다.', agentSpeech: '필요하면 다시 도와드릴게요.' },
-    ],
-  },
-  {
-    id: 'fatigue-conversation',
-    title: '졸음 감지 → 짧은 이야기',
-    steps: [
-      { title: '정상 주행', description: '기본 네비게이션 주행 화면입니다.' },
-      { title: '졸음 감지 발생', description: '운전자 졸음 이벤트를 더미로 발생시킵니다.', detectionEvent: '졸음 감지' },
-      { title: '에이전트 음성 안내', description: '짧은 이야기를 제안합니다.', agentSpeech: '잠깐 기분 전환해 볼까요? 짧은 이야기를 들려드릴 수 있어요.' },
-      { title: '사용자 음성 응답', description: '운전자가 짧은 이야기를 요청합니다.', userSpeech: '짧은 이야기 해줘' },
-      { title: '대화 추천 표시', description: '짧은 대화 추천 결과를 표시합니다.', actionLabel: '대화 추천 열기', agentSpeech: '짧은 퀴즈를 추천합니다. 1분 정도 가볍게 집중을 환기할 수 있습니다.' },
-      { title: '사용자 음성 선택', description: '운전자가 짧은 대화를 승인합니다.', userSpeech: '좋아, 퀴즈 시작해줘' },
-      { title: '퀴즈 시작', description: '짧은 퀴즈를 시작합니다.', agentSpeech: '짧은 퀴즈 하나 드릴게요. 서울에서 가장 긴 다리는 무엇일까요?' },
-      { title: '대화 유지', description: '대화 상태를 유지합니다.', agentSpeech: '생각나시면 답을 말씀해 주세요.' },
-    ],
-  },
-  {
-    id: 'long-drive-rest-area',
-    title: '장시간 운전 → 휴게소 추천',
-    steps: [
-      { title: '정상 주행', description: '기본 네비게이션 주행 화면입니다.' },
-      { title: '장시간 운전 감지 발생', description: '장시간 운전 이벤트를 더미로 발생시킵니다.', detectionEvent: '장시간 운전' },
-      { title: '에이전트 음성 안내', description: '휴식을 권장합니다.', agentSpeech: '잠시 쉬어가면 좋겠습니다. 경로 근처 휴게소를 찾아드릴까요?' },
-      { title: '사용자 음성 응답', description: '운전자가 휴게소 검색을 요청합니다.', userSpeech: '가까운 휴게소 찾아줘' },
-      { title: '장소 추천 표시', description: '경로 인근 장소 추천을 보여줍니다.', actionLabel: '장소 추천 열기', agentSpeech: '경로에서 가까운 휴게소를 찾았습니다. 잠시 쉬어가기 좋은 위치입니다.' },
-      { title: '사용자 음성 선택', description: '운전자가 휴게소 안내를 승인합니다.', userSpeech: '응, 그 휴게소로 안내해줘' },
-      { title: '경로 변경', description: '가까운 휴게소로 안내합니다.', actionLabel: '경로 변경', agentSpeech: '경로에서 가까운 휴게소로 안내를 시작합니다.' },
-      { title: '안내 완료', description: '휴식 장소 안내를 마칩니다.', actionLabel: '완료', agentSpeech: '경로를 변경했습니다. 안전하게 이동해 주세요.' },
-      { title: '대기 상태', description: '필요한 상황이 생기면 다시 안내합니다.', agentSpeech: '필요하면 다시 불러 주세요.' },
-    ],
-  },
-  {
-    id: 'distraction-voice-guide',
-    title: '주의 분산 감지 → 음성 안내 강화',
-    steps: [
-      { title: '정상 주행', description: '기본 네비게이션 주행 화면입니다.' },
-      { title: '주의 분산 감지 발생', description: '주의 분산 이벤트를 더미로 발생시킵니다.', detectionEvent: '주의 분산' },
-      { title: '에이전트 음성 안내', description: '전방 주시를 요청합니다.', agentSpeech: '전방을 확인해 주세요. 안내는 음성으로 더 자세히 도와드릴게요.' },
-      { title: '사용자 음성 응답', description: '운전자가 음성 안내 강화를 요청합니다.', userSpeech: '알겠어. 음성 안내 켜줘' },
-      { title: '음성 안내 강화', description: '안내 음성을 더 자주 제공합니다.', actionLabel: '음성 안내 강화', agentSpeech: '음성 안내를 강화하겠습니다.' },
-      { title: '완료', description: '강화된 음성 안내를 유지합니다.', actionLabel: '완료', agentSpeech: '음성 안내가 강화되었습니다.' },
-      { title: '대기 상태', description: '필요한 상황이 생기면 다시 안내합니다.', agentSpeech: '필요하면 다시 도와드릴게요.' },
-    ],
-  },
-  {
-    id: 'route-search-voice',
-    title: '목적지 검색 → 음성 목적지 입력',
-    steps: [
-      { title: 'RouteSearchPage 진입', description: '목적지 검색 화면으로 이동합니다.', actionLabel: '목적지 화면', agentSpeech: '목적지 검색을 시작합니다.' },
-      { title: '에이전트 음성 안내', description: '목적지를 묻습니다.', agentSpeech: '어디로 안내할까요?' },
-      { title: '사용자 음성 응답', description: '운전자가 목적지를 음성으로 말합니다.', userSpeech: '세종대학교로 안내해줘' },
-      { title: '목적지 후보 표시', description: 'selectedDestination을 세종대학교로 설정합니다.', actionLabel: '후보 표시', agentSpeech: '세종대학교를 찾았습니다.' },
-      { title: '시작 확인 음성 안내', description: '에이전트가 안내 시작 여부를 묻습니다.', agentSpeech: '세종대학교로 안내를 시작할까요?' },
-      { title: '사용자 음성 응답', description: '운전자가 시작을 승인합니다.', userSpeech: '응, 시작해' },
-      { title: 'NavigationPage 복귀', description: '주행 화면으로 돌아갑니다.', actionLabel: '주행 화면', agentSpeech: '주행 화면으로 돌아갑니다.' },
-      { title: '경로 안내 시작 상태 표시', description: 'routeStarted 상태를 켭니다.', actionLabel: '경로 시작', agentSpeech: '세종대학교로 안내를 시작합니다.' },
-    ],
-  },
-  {
-    id: 'safety-report',
-    title: '운전 종료 → 안전 리포트 확인',
-    steps: [
-      { title: '운전 종료 이벤트 발생', description: '운전 종료 이벤트를 발생시킵니다.', actionLabel: '운전 종료', agentSpeech: '주행이 종료되었습니다.' },
-      { title: '에이전트 음성 안내', description: '리포트 확인을 제안합니다.', agentSpeech: '오늘의 운전 리포트를 확인해 보시겠어요?' },
-      { title: '사용자 음성 응답', description: '운전자가 리포트 확인을 요청합니다.', userSpeech: '보여줘' },
-      { title: 'SafetyReportPage 이동', description: '안전 리포트 화면으로 이동합니다.', actionLabel: '리포트 화면', agentSpeech: '안전 운전 리포트를 보여드릴게요.' },
-      { title: '리포트 표시', description: '안전 점수, 감지 이력, 개선 제안을 표시합니다.', agentSpeech: '오늘의 안전 점수는 82점입니다. 야간 구간에서 졸음 징후가 있었습니다.' },
-    ],
-  },
-  {
-    id: 'settings-check',
-    title: '설정 페이지 확인',
-    steps: [
-      { title: 'SettingsPage 진입', description: '설정 화면으로 이동합니다.', actionLabel: '설정 화면', agentSpeech: '설정 화면을 보여드릴게요.' },
-      { title: '에이전트 개입 강도 설정 표시', description: '개입 강도 설정을 확인합니다.', agentSpeech: '에이전트 개입 강도는 낮음, 보통, 높음 중에서 조정할 수 있습니다.' },
-      { title: '감지 항목 설정 표시', description: '감지 항목 토글을 확인합니다.', agentSpeech: '졸음, 주의 분산, 휴대폰 사용, 장시간 운전 감지를 각각 켜고 끌 수 있습니다.' },
-      { title: '알림 설정 표시', description: '알림 설정 토글을 확인합니다.', agentSpeech: '음성 안내, 화면 경고, 경고음, 진동 알림을 조정할 수 있습니다.' },
-      { title: '권한 설정 표시', description: '권한 설정 토글을 표시합니다.', agentSpeech: '위치, 연락처, 메시지, 메일, 음악 앱 권한 상태를 확인할 수 있습니다.' },
-      { title: '외부 연동 설정 표시', description: '음악 서비스와 차량 제어 연결 토글을 표시합니다.', agentSpeech: '음악 서비스와 차량 제어 연결 상태도 이 화면에서 확인할 수 있습니다.' },
-    ],
-  },
-]
+type NaviAssistantScenarioId = AiaiScenarioId
+const NAVI_ASSISTANT_SCENARIOS: NaviAssistantScenario[] = createNaviAssistantScenarios()
 
-function createNaviAssistantStep(step: AiaiDebugScenarioStep, index: number): NaviAssistantStep {
-  const successKeywords = ['완료', '재생', '전송 완료', '경로 시작', '차량 제어', '음성 안내 강화']
-  const successText = `${step.title} ${step.actionLabel ?? ''}`
-  const isSuccessStep = successKeywords.some((keyword) => successText.includes(keyword))
-
-  if (index === 0 && !step.agentSpeech && !step.userSpeech && !step.actionLabel && !step.detectionEvent) {
-    return {
-      id: `step-${index}`,
-      label: step.title,
-      mode: 'idle',
-      orbState: NAVI_ORB_STANDBY_STATE,
-      energy: 0,
-    }
-  }
-
-  if (step.userSpeech) {
-    return {
-      id: `step-${index}`,
-      label: step.title,
-      mode: 'user-listening',
-      orbState: 'listening',
-      energy: 0.72,
-      statusLabel: '듣는 중...',
-      userText: step.userSpeech,
-    }
-  }
-
-  if (step.actionLabel) {
-    return {
-      id: `step-${index}`,
-      label: step.title,
-      mode: 'recommendation',
-      orbState: isSuccessStep ? 'success' : 'speaking',
-      energy: isSuccessStep ? 0.7 : 0.58,
-      text: step.agentSpeech,
-      recommendations: [
-        {
-          type: step.actionLabel.includes('음악') ? 'music' : step.actionLabel.includes('장소') || step.actionLabel.includes('경로') ? 'place' : 'action',
-          title: step.actionLabel,
-          meta: step.detectionEvent ?? step.title,
-          detail: step.description,
-          action: step.actionLabel.includes('완료') ? '확인' : '실행',
-        },
-      ],
-    }
-  }
-
-  if (step.detectionEvent && !step.agentSpeech) {
-    return {
-      id: `step-${index}`,
-      label: step.title,
-      mode: 'assistant-speaking',
-      orbState: 'speaking',
-      energy: 0.48,
-      text: step.detectionEvent,
-    }
-  }
-
-  return {
-    id: `step-${index}`,
-    label: step.title,
-    mode: 'assistant-speaking',
-    orbState: isSuccessStep ? 'success' : 'speaking',
-    energy: isSuccessStep ? 0.7 : 0.6,
-    text: step.agentSpeech ?? step.description,
-  }
+export function isAssistantPlaybackReady(playbackKey: string, expectedPlaybackKey: string) {
+  return Boolean(playbackKey) && playbackKey === expectedPlaybackKey
 }
 
-function createNaviAssistantScenario(scenario: AiaiDebugScenarioDefinition): NaviAssistantScenario {
-  return {
-    id: scenario.id,
-    title: scenario.title,
-    steps: scenario.steps.map(createNaviAssistantStep),
-  }
+export function getAssistantSpeechCharacterDelaySeconds(index: number) {
+  return index * NAVI_ASSISTANT_TEXT_STAGGER_SECONDS
 }
 
-const NAVI_ASSISTANT_SCENARIOS: NaviAssistantScenario[] = [
-  {
-    id: 'drowsy-assist',
-    title: '졸음 감지',
-    steps: [
-      {
-        id: 'idle',
-        label: '대기',
-        mode: 'idle',
-        orbState: NAVI_ORB_STANDBY_STATE,
-        energy: 0,
-      },
-      {
-        id: 'drowsy-prompt',
-        label: 'Navi 제안',
-        mode: 'assistant-speaking',
-        orbState: 'speaking',
-        energy: 0.64,
-        text: '오늘 피곤한 하루였나봐요. 잠 깰 수 있게 도와드릴까요?',
-      },
-      {
-        id: 'user-reply',
-        label: '사용자 응답',
-        mode: 'user-listening',
-        orbState: 'listening',
-        energy: 0.72,
-        statusLabel: '듣는 중...',
-        userText: '가까운 졸음쉼터랑 기분 전환할 음악 추천해줘',
-      },
-      {
-        id: 'thinking',
-        label: '처리 중',
-        mode: 'thinking',
-        orbState: 'thinking',
-        energy: 0.48,
-        statusLabel: '생각 중...',
-        userText: '가까운 졸음쉼터랑 기분 전환할 음악 추천해줘',
-      },
-      {
-        id: 'recommendations',
-        label: '추천 표시',
-        mode: 'recommendation',
-        orbState: 'speaking',
-        energy: 0.58,
-        text: '현재 경로에서 크게 벗어나지 않는 쉼터와 밝은 음악을 찾았어요.',
-        recommendations: [
-          {
-            type: 'place',
-            title: '서울만남 졸음쉼터',
-            meta: '2.4km · 4분 · 3분 추가',
-            detail: '현재 경로에서 가장 가깝습니다.',
-            action: '경로 추가',
-          },
-          {
-            type: 'place',
-            title: '청담대교 휴게 쉼터',
-            meta: '4.8km · 8분 · 5분 추가',
-            detail: '야간 주행 중 진입이 쉬운 위치입니다.',
-            action: '경로 추가',
-          },
-          {
-            type: 'music',
-            title: 'Drive Boost',
-            meta: '밝은 팝 · 20곡',
-            detail: '졸음 방지를 위해 템포가 빠른 곡으로 구성했습니다.',
-            action: '재생',
-          },
-        ],
-      },
-    ],
-  },
-  {
-    id: 'wake-call',
-    title: '나비야 호출',
-    steps: [
-      {
-        id: 'idle',
-        label: '대기',
-        mode: 'idle',
-        orbState: NAVI_ORB_STANDBY_STATE,
-        energy: 0,
-      },
-      {
-        id: 'wake-listening',
-        label: '듣기 시작',
-        mode: 'user-listening',
-        orbState: 'listening',
-        energy: 0.68,
-        statusLabel: '듣는 중...',
-        userText: '나비야',
-      },
-      {
-        id: 'user-request',
-        label: '요청 수신',
-        mode: 'user-listening',
-        orbState: 'listening',
-        energy: 0.76,
-        statusLabel: '듣는 중...',
-        userText: '가까운 졸음쉼터 찾아줘',
-      },
-      {
-        id: 'thinking',
-        label: '처리 중',
-        mode: 'thinking',
-        orbState: 'thinking',
-        energy: 0.5,
-        statusLabel: '생각 중...',
-        userText: '가까운 졸음쉼터 찾아줘',
-      },
-      {
-        id: 'answer',
-        label: 'Navi 응답',
-        mode: 'recommendation',
-        orbState: 'speaking',
-        energy: 0.56,
-        text: '가장 가까운 졸음쉼터를 찾았어요. 경로에 추가할 수 있습니다.',
-        recommendations: [
-          {
-            type: 'place',
-            title: '서울만남 졸음쉼터',
-            meta: '2.4km · 4분 · 3분 추가',
-            detail: '현재 경로에서 가장 가까운 휴식 지점입니다.',
-            action: '경로 추가',
-          },
-          {
-            type: 'place',
-            title: '청담대교 휴게 쉼터',
-            meta: '4.8km · 8분 · 5분 추가',
-            detail: '진입 동선이 단순해 운전 부담이 낮습니다.',
-            action: '경로 추가',
-          },
-        ],
-      },
-    ],
-  },
-  ...AIAI_DEBUG_SCENARIOS.map(createNaviAssistantScenario),
-]
+export function getAssistantVisibleOrbState(
+  assistantStep: Pick<NaviAssistantStep, 'orbState' | 'speechRole'>,
+  playbackKey: string,
+): OrbAssistantState {
+  if (assistantStep.orbState === 'speaking' && assistantStep.speechRole === 'agent' && !playbackKey) {
+    return 'thinking'
+  }
+
+  return assistantStep.orbState
+}
+
+export function isAssistantVoiceWaveVisible(
+  assistantStep: Pick<NaviAssistantStep, 'orbState' | 'speechRole' | 'statusLabel'>,
+  playbackKey: string,
+) {
+  return getAssistantVisibleOrbState(assistantStep, playbackKey) === 'speaking' && !assistantStep.statusLabel
+}
+
 const DEBUG_DRIVING_ASSIST_SEQUENCE = ([
   {
     alert: {
@@ -694,8 +312,9 @@ export function NavigationShell() {
   const [musicPlaying, setMusicPlaying] = useState(false)
   const [musicTrackId, setMusicTrackId] = useState<(typeof MUSIC_LIBRARY)[number]['id']>(MUSIC_LIBRARY[0].id)
   const [musicSearchKeyword, setMusicSearchKeyword] = useState('')
-  const [assistantScenarioId, setAssistantScenarioId] = useState<NaviAssistantScenarioId>('drowsy-assist')
+  const [assistantScenarioId, setAssistantScenarioId] = useState<NaviAssistantScenarioId>('drowsiness-rest-area')
   const [assistantStepIndex, setAssistantStepIndex] = useState(0)
+  const [speechPlaybackKey, setSpeechPlaybackKey] = useState('')
   const [showLocationFallbackToast, setShowLocationFallbackToast] = useState(false)
   const [mapCameraSettings, setMapCameraSettings] = useState<MapCameraSettings>(DEFAULT_MAP_CAMERA_SETTINGS)
   const updateMapCameraSettings = useCallback((settings: Partial<MapCameraSettings>) => {
@@ -943,6 +562,15 @@ export function NavigationShell() {
   const assistantStep = assistantScenario.steps[
     Math.min(assistantStepIndex, assistantScenario.steps.length - 1)
   ]
+  const clampedAssistantStepIndex = Math.min(assistantStepIndex, assistantScenario.steps.length - 1)
+  const assistantSpeech = useMemo(
+    () => getScenarioSpeech(assistantScenario.id, clampedAssistantStepIndex),
+    [assistantScenario.id, clampedAssistantStepIndex],
+  )
+  const expectedSpeechPlaybackKey = assistantSpeech?.key ?? `${assistantScenario.id}-${clampedAssistantStepIndex}-visual`
+  const activeSpeechPlaybackKey = isAssistantPlaybackReady(speechPlaybackKey, expectedSpeechPlaybackKey)
+    ? speechPlaybackKey
+    : ''
   const motionTiming = shouldReduceMotion
     ? { duration: 0 }
     : { duration: 0.22, ease: PRODUCT_EASE }
@@ -1018,6 +646,20 @@ export function NavigationShell() {
   const resetAssistantScenario = useCallback(() => {
     setAssistantStepIndex(0)
   }, [])
+
+  useEffect(() => {
+    setSpeechPlaybackKey('')
+
+    if (!assistantSpeech) {
+      setSpeechPlaybackKey(expectedSpeechPlaybackKey)
+      return
+    }
+
+    return startScenarioSpeech({
+      ...assistantSpeech,
+      onStart: ({ key }) => setSpeechPlaybackKey(key),
+    })
+  }, [assistantSpeech, expectedSpeechPlaybackKey])
 
   useEffect(() => {
     if (locationStatus === 'granted') {
@@ -1403,10 +1045,11 @@ export function NavigationShell() {
               motionTiming={motionTiming}
               onClose={resetAssistantScenario}
               onWakeCall={() => {
-                selectAssistantScenario('wake-call')
+                selectAssistantScenario('route-search-voice')
                 setAssistantStepIndex(1)
               }}
               reducedMotion={Boolean(shouldReduceMotion)}
+              speechPlaybackKey={activeSpeechPlaybackKey}
             />
             {!activeRoute ? (
               <>
@@ -1623,6 +1266,7 @@ function NaviOrbControl({
   onClose,
   onWakeCall,
   reducedMotion,
+  speechPlaybackKey,
 }: {
   assistantStep: NaviAssistantStep
   hidden: boolean
@@ -1630,12 +1274,18 @@ function NaviOrbControl({
   onClose: () => void
   onWakeCall: () => void
   reducedMotion: boolean
+  speechPlaybackKey: string
 }) {
   if (hidden) {
     return null
   }
 
   const expanded = assistantStep.mode !== 'idle'
+  const visibleOrbState = getAssistantVisibleOrbState(assistantStep, speechPlaybackKey)
+  const showVoiceWave = isAssistantVoiceWaveVisible(assistantStep, speechPlaybackKey)
+  const contentRevealDelay = assistantStep.text || assistantStep.userText
+    ? 0
+    : NAVI_ASSISTANT_CONTENT_REVEAL_DELAY_SECONDS
 
   return (
     <motion.div
@@ -1748,7 +1398,7 @@ function NaviOrbControl({
             energy={assistantStep.energy}
             reducedMotion={reducedMotion}
             size={NAVI_ORB_CONTROL_SIZE}
-            state={assistantStep.orbState}
+            state={visibleOrbState}
           />
         </motion.div>
         {expanded ? (
@@ -1762,13 +1412,21 @@ function NaviOrbControl({
               animate={{ opacity: 1, y: 0 }}
               transition={{
                 ...motionTiming,
-                delay: motionTiming.duration === 0 ? 0 : NAVI_ASSISTANT_TEXT_REVEAL_DELAY_SECONDS,
+                delay: motionTiming.duration === 0 ? 0 : contentRevealDelay,
                 duration: motionTiming.duration === 0 ? 0 : 0.18,
               }}
             >
               <div className="flex h-5 items-center justify-center">
                 {assistantStep.statusLabel ? (
                   <div className="text-sm font-bold text-[var(--nav-ai-primary)]">{assistantStep.statusLabel}</div>
+                ) : showVoiceWave ? (
+                  <VoiceWave
+                    active
+                    className="pointer-events-none"
+                    colorTheme={NAVI_ORB_THEME}
+                    energy={assistantStep.energy}
+                    reducedMotion={reducedMotion}
+                  />
                 ) : null}
               </div>
               <div className="mt-2 flex min-h-[4.5rem] w-full items-center justify-center">
@@ -1776,13 +1434,16 @@ function NaviOrbControl({
                   <AssistantUserText
                     animateWords={assistantStep.mode === 'user-listening'}
                     motionTiming={motionTiming}
+                    playbackKey={speechPlaybackKey}
                     reducedMotion={reducedMotion}
                     text={assistantStep.userText}
                   />
                 ) : null}
                 {assistantStep.text ? (
                   <AssistantSpeechText
+                    key={speechPlaybackKey}
                     motionTiming={motionTiming}
+                    playbackKey={speechPlaybackKey}
                     reducedMotion={reducedMotion}
                     text={assistantStep.text}
                   />
@@ -1806,13 +1467,19 @@ function NaviOrbControl({
 
 function AssistantSpeechText({
   motionTiming,
+  playbackKey,
   reducedMotion,
   text,
 }: {
   motionTiming: MotionTiming
+  playbackKey: string
   reducedMotion: boolean
   text: string
 }) {
+  if (!playbackKey) {
+    return null
+  }
+
   if (reducedMotion || motionTiming.duration === 0) {
     return (
       <p className="max-w-[17rem] text-pretty text-xl font-bold leading-8 tracking-normal">
@@ -1836,7 +1503,7 @@ function AssistantSpeechText({
             animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
             key={`${character}-${index}`}
             transition={{
-              delay: NAVI_ASSISTANT_TEXT_REVEAL_DELAY_SECONDS + index * NAVI_ASSISTANT_TEXT_STAGGER_SECONDS,
+              delay: getAssistantSpeechCharacterDelaySeconds(index),
               duration: 0.18,
               ease: [0.22, 1, 0.36, 1],
             }}
@@ -1852,34 +1519,23 @@ function AssistantSpeechText({
 function AssistantUserText({
   animateWords,
   motionTiming,
+  playbackKey,
   reducedMotion,
   text,
 }: {
   animateWords: boolean
   motionTiming: MotionTiming
+  playbackKey: string
   reducedMotion: boolean
   text: string
 }) {
-  const [shouldReveal, setShouldReveal] = useState(!animateWords)
-
-  useEffect(() => {
-    if (!animateWords || reducedMotion || motionTiming.duration === 0) {
-      setShouldReveal(true)
-      return
-    }
-
-    setShouldReveal(false)
-
-    const revealTimer = window.setTimeout(() => {
-      setShouldReveal(true)
-    }, NAVI_ASSISTANT_USER_TEXT_DELAY_SECONDS * 1000)
-
-    return () => {
-      window.clearTimeout(revealTimer)
-    }
-  }, [animateWords, motionTiming.duration, reducedMotion, text])
+  const shouldReveal = Boolean(playbackKey)
 
   if (!animateWords || reducedMotion || motionTiming.duration === 0) {
+    if (!shouldReveal) {
+      return null
+    }
+
     return (
       <p
         aria-label={text}
