@@ -1209,6 +1209,7 @@ export function NavigationShell({
       data-testid="navigation-stage"
       className="relative grid h-screen min-h-0 grid-cols-[minmax(0,1fr)_24rem] grid-rows-[minmax(17rem,38vh)_minmax(0,1fr)] gap-3 bg-[#06080c] p-3"
     >
+      {/* Top cockpit surface: this area is reserved for the driver's in-cabin video. */}
       <DriverVideoPanel
         error={driverVideoError}
         fileName={driverVideo?.name}
@@ -2185,6 +2186,7 @@ function DriverVideoPanel({
   onError: () => void
   onSelectVideo: (file: File) => void
 }) {
+  // Driver monitoring video playback surface for the top cockpit layout.
   const videoInputId = 'driver-video-file-input'
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const videoInputRef = useRef<HTMLInputElement | null>(null)
