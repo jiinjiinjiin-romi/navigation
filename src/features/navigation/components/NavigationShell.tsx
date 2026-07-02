@@ -1,4 +1,5 @@
-import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import Avatar from 'boring-avatars'
 import Plyr from 'plyr'
 import {
   ArrowBendUpRight,
@@ -12,6 +13,7 @@ import {
   Clock,
   CarSimple,
   ClipboardText,
+  DotsThree,
   FileVideo,
   GearSix,
   HouseLine,
@@ -19,6 +21,7 @@ import {
   MapPin,
   Minus,
   MusicNotes,
+  PencilSimple,
   Play,
   Pause,
   Plus,
@@ -28,6 +31,7 @@ import {
   SpeakerHigh,
   Stop,
   Timer,
+  Trash,
   UploadSimple,
   UserCircle,
   WifiHigh,
@@ -48,6 +52,19 @@ import {
 } from '@/features/assistant-scenarios'
 import { VoiceWave } from '@/features/voice-wave'
 import { type CSSProperties, type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  createProfile,
+  DEFAULT_PROFILE_CREATE_REQUEST,
+  deleteProfile,
+  listProfiles,
+  selectProfile,
+  updateProfile,
+  type AgentPersonality,
+  type Profile,
+  type ProfileCreateRequest,
+  type ProfileTheme,
+  type WarningSensitivity,
+} from '../api/profileApi'
 import { getCurrentAddress, getRoadMatch, getRouteOptions, searchPlaces } from '../api/tmapApi'
 import { createRoundedRoutePath } from '../map/routeGeometry'
 import { markRoutePerformance, measureRoutePerformance } from '../performance/routePerformance'
@@ -73,6 +90,7 @@ import { TmapPanel, type MapCameraSettings } from './TmapPanel'
 type SearchFieldId = 'origin' | 'destination'
 type LocationStatus = 'checking' | 'granted' | 'denied' | 'unsupported'
 type SidePanelId = 'settings' | 'report' | 'connect'
+type ProfileSetupView = 'list' | 'create' | 'edit'
 type DriverVideoSource = {
   name: string
   type: string
@@ -137,6 +155,7 @@ const SAVED_PLACES: Place[] = [
     coordinate: { lat: 37.4979, lng: 127.0276 },
   },
 ]
+const NAVIGATION_PROFILE_AVATAR_COLORS = ['#1746A2', '#6D5DF6', '#00A8FF', '#E8EEFF', '#101828']
 const MUSIC_LIBRARY = [
   {
     id: 'drive-neon',
@@ -335,8 +354,18 @@ const DEBUG_DRIVING_ASSIST_SEQUENCE = ([
   },
 ] satisfies DrivingAssistInfo[]).map((assist) => ({ speedLimitKph: 30, ...assist }))
 
-export function NavigationShell() {
+export function NavigationShell({
+  initialProfileSetupComplete = false,
+}: {
+  initialProfileSetupComplete?: boolean
+} = {}) {
   const shouldReduceMotion = useReducedMotion()
+  const queryClient = useQueryClient()
+  const [profileSetupComplete, setProfileSetupComplete] = useState(initialProfileSetupComplete)
+  const [profileSetupView, setProfileSetupView] = useState<ProfileSetupView>('list')
+  const [selectedProfileId, setSelectedProfileId] = useState<string>()
+  const [editingProfileId, setEditingProfileId] = useState<string>()
+  const [profileForm, setProfileForm] = useState<ProfileCreateRequest>(DEFAULT_PROFILE_CREATE_REQUEST)
   const [now, setNow] = useState(() => new Date())
   const [originKeyword, setOriginKeyword] = useState(DEFAULT_CURRENT_LOCATION_PLACE.name)
   const [destinationKeyword, setDestinationKeyword] = useState('')
@@ -400,17 +429,57 @@ export function NavigationShell() {
     [currentPosition],
   )
 
+  const profilesQuery = useQuery({
+    queryKey: ['profiles'],
+    queryFn: ({ signal }) => listProfiles(undefined, signal),
+  })
+  const createProfileMutation = useMutation({
+    mutationFn: (payload: ProfileCreateRequest) => createProfile(payload),
+    onSuccess: async (profile) => {
+      setSelectedProfileId(profile.id)
+      setProfileSetupView('list')
+      setEditingProfileId(undefined)
+      setProfileForm(DEFAULT_PROFILE_CREATE_REQUEST)
+      await queryClient.invalidateQueries({ queryKey: ['profiles'] })
+    },
+  })
+  const updateProfileMutation = useMutation({
+    mutationFn: ({ profileId, payload }: { profileId: string; payload: ProfileCreateRequest }) => updateProfile(profileId, payload),
+    onSuccess: async (profile) => {
+      setSelectedProfileId(profile.id)
+      setProfileSetupView('list')
+      setEditingProfileId(undefined)
+      setProfileForm(DEFAULT_PROFILE_CREATE_REQUEST)
+      await queryClient.invalidateQueries({ queryKey: ['profiles'] })
+    },
+  })
+  const deleteProfileMutation = useMutation({
+    mutationFn: (profileId: string) => deleteProfile(profileId),
+    onSuccess: async (_, profileId) => {
+      if (selectedProfileId === profileId) {
+        setSelectedProfileId(undefined)
+      }
+      await queryClient.invalidateQueries({ queryKey: ['profiles'] })
+    },
+  })
+  const selectProfileMutation = useMutation({
+    mutationFn: (profileId: string) => selectProfile(profileId),
+    onSuccess: () => {
+      setProfileSetupComplete(true)
+    },
+  })
+
   const originSearch = useQuery({
     queryKey: ['places', debouncedOriginKeyword],
     queryFn: ({ signal }) => searchPlaces(debouncedOriginKeyword, undefined, signal),
-    enabled: activeField === 'origin' && debouncedOriginKeyword.length >= 2 && debouncedOriginKeyword !== origin?.name,
+    enabled: profileSetupComplete && activeField === 'origin' && debouncedOriginKeyword.length >= 2 && debouncedOriginKeyword !== origin?.name,
     placeholderData: keepPreviousData,
   })
 
   const destinationSearch = useQuery({
     queryKey: ['places', debouncedDestinationKeyword],
     queryFn: ({ signal }) => searchPlaces(debouncedDestinationKeyword, undefined, signal),
-    enabled: activeField === 'destination' && debouncedDestinationKeyword.length >= 2 && debouncedDestinationKeyword !== destination?.name,
+    enabled: profileSetupComplete && activeField === 'destination' && debouncedDestinationKeyword.length >= 2 && debouncedDestinationKeyword !== destination?.name,
     placeholderData: keepPreviousData,
   })
 
@@ -431,20 +500,20 @@ export function NavigationShell() {
       measureRoutePerformance('route-options-query-total', 'route-options-query-start', 'route-options-query-end')
       return options
     },
-    enabled: Boolean(origin && destination && routeOptionsSearchReady) && !selectedRouteOptionId,
+    enabled: profileSetupComplete && Boolean(origin && destination && routeOptionsSearchReady) && !selectedRouteOptionId,
   })
 
   const weatherQuery = useQuery({
     queryKey: ['weather', weatherQueryCoordinate?.lat, weatherQueryCoordinate?.lng],
     queryFn: () => getCurrentWeatherLabel(weatherQueryCoordinate!),
-    enabled: Boolean(weatherQueryCoordinate),
+    enabled: profileSetupComplete && Boolean(weatherQueryCoordinate),
     staleTime: WEATHER_STALE_TIME_MS,
     retry: false,
   })
   const currentAddressQuery = useQuery({
     queryKey: ['current-address', addressQueryCoordinate?.lat, addressQueryCoordinate?.lng],
     queryFn: ({ signal }) => getCurrentAddress(addressQueryCoordinate!, undefined, signal),
-    enabled: Boolean(addressQueryCoordinate),
+    enabled: profileSetupComplete && Boolean(addressQueryCoordinate),
     staleTime: WEATHER_STALE_TIME_MS,
     retry: false,
   })
@@ -496,7 +565,7 @@ export function NavigationShell() {
   const roadMatchQuery = useQuery({
     queryKey: ['road-match', selectedRouteOptionId, activeRoute?.coordinates.length],
     queryFn: ({ signal }) => getRoadMatch(activeRoute!.coordinates, undefined, signal),
-    enabled: Boolean(activeRoute?.coordinates.length),
+    enabled: profileSetupComplete && Boolean(activeRoute?.coordinates.length),
     staleTime: 5 * 60 * 1000,
     retry: false,
   })
@@ -507,7 +576,7 @@ export function NavigationShell() {
       currentRoadMatchCoordinates?.[0].lng,
     ],
     queryFn: ({ signal }) => getRoadMatch(currentRoadMatchCoordinates!, undefined, signal),
-    enabled: Boolean(currentRoadMatchCoordinates) && !activeRoute,
+    enabled: profileSetupComplete && Boolean(currentRoadMatchCoordinates) && !activeRoute,
     staleTime: 60 * 1000,
     retry: false,
   })
@@ -599,6 +668,8 @@ export function NavigationShell() {
       ? destinationSearch.data ?? []
       : []
   const activeLabel = activeField === 'origin' ? '출발지 검색 결과' : '도착지 검색 결과'
+  const profiles = profilesQuery.data?.profiles ?? []
+  const selectedProfile = profiles.find((profile) => profile.id === selectedProfileId)
   const showSuggestions = Boolean(activeField && activePlaces.length > 0)
   const assistantScenario = useMemo(
     () => NAVI_ASSISTANT_SCENARIOS.find((scenario) => scenario.id === assistantScenarioId) ?? NAVI_ASSISTANT_SCENARIOS[0],
@@ -709,6 +780,10 @@ export function NavigationShell() {
   useEffect(() => {
     setSpeechPlaybackKey('')
 
+    if (!profileSetupComplete) {
+      return
+    }
+
     if (!assistantSpeech) {
       setSpeechPlaybackKey(expectedSpeechPlaybackKey)
       return
@@ -718,9 +793,13 @@ export function NavigationShell() {
       ...assistantSpeech,
       onStart: ({ key }) => setSpeechPlaybackKey(key),
     })
-  }, [assistantSpeech, expectedSpeechPlaybackKey])
+  }, [assistantSpeech, expectedSpeechPlaybackKey, profileSetupComplete])
 
   useEffect(() => {
+    if (!profileSetupComplete) {
+      return
+    }
+
     if (locationStatus === 'granted') {
       setShowLocationFallbackToast(false)
       return
@@ -732,7 +811,7 @@ export function NavigationShell() {
     }, 5_000)
 
     return () => window.clearTimeout(timer)
-  }, [locationStatus])
+  }, [locationStatus, profileSetupComplete])
 
   const openSidePanel = useCallback((panel: SidePanelId) => {
     setMusicModalOpen(false)
@@ -767,8 +846,12 @@ export function NavigationShell() {
   }, [clearPendingRouteSearchEditor])
 
   useEffect(() => {
+    if (!profileSetupComplete) {
+      return
+    }
+
     requestCurrentLocation()
-  }, [requestCurrentLocation])
+  }, [profileSetupComplete, requestCurrentLocation])
 
   useEffect(() => {
     if (locationStatus !== 'granted' || origin?.id !== CURRENT_LOCATION_PLACE_ID || !currentPosition) {
@@ -1067,7 +1150,7 @@ export function NavigationShell() {
   return (
     <main
       data-testid="navigation-stage"
-      className="grid h-screen min-h-0 grid-cols-[minmax(0,1fr)_24rem] grid-rows-[minmax(17rem,38vh)_minmax(0,1fr)] gap-3 bg-[#06080c] p-3"
+      className="relative grid h-screen min-h-0 grid-cols-[minmax(0,1fr)_24rem] grid-rows-[minmax(17rem,38vh)_minmax(0,1fr)] gap-3 bg-[#06080c] p-3"
     >
       <DriverVideoPanel
         error={driverVideoError}
@@ -1088,6 +1171,8 @@ export function NavigationShell() {
             'w-full',
           ].join(' ')}
         >
+          {profileSetupComplete ? (
+            <>
             <TmapPanel
               cameraSettings={mapCameraSettings}
               currentPosition={currentPosition}
@@ -1295,19 +1380,77 @@ export function NavigationShell() {
                 ) : null}
               </AnimatePresence>
             </motion.div>
+            </>
+          ) : null}
         </div>
 
-        <AnimatePresence initial={false} mode="wait">
-          {activeSidePanel ? (
-            <SideDrawerPanel
-              cameraSettings={mapCameraSettings}
-              currentLocationLabel={currentLocationLabel}
-              locationStatus={locationStatus}
+        {profileSetupComplete ? (
+          <AnimatePresence initial={false} mode="wait">
+            {activeSidePanel ? (
+              <SideDrawerPanel
+                cameraSettings={mapCameraSettings}
+                currentLocationLabel={currentLocationLabel}
+                locationStatus={locationStatus}
+                motionTiming={motionTiming}
+                panel={activeSidePanel}
+                onChangeCameraSettings={updateMapCameraSettings}
+                onClose={() => setActiveSidePanel(null)}
+                onRequestCurrentLocation={requestCurrentLocation}
+              />
+            ) : null}
+          </AnimatePresence>
+        ) : null}
+        <AnimatePresence initial={false}>
+          {!profileSetupComplete ? (
+            <NavigationProfileSetup
+              createError={createProfileMutation.isError}
+              creating={createProfileMutation.isPending}
+              deleteError={deleteProfileMutation.isError}
+              deletingProfileId={deleteProfileMutation.variables}
+              editing={updateProfileMutation.isPending}
+              form={profileForm}
+              limit={profilesQuery.data?.limit ?? 5}
+              loading={profilesQuery.isLoading}
               motionTiming={motionTiming}
-              panel={activeSidePanel}
-              onChangeCameraSettings={updateMapCameraSettings}
-              onClose={() => setActiveSidePanel(null)}
-              onRequestCurrentLocation={requestCurrentLocation}
+              profileError={profilesQuery.isError}
+              profileSetupView={profileSetupView}
+              profiles={profiles}
+              selectError={selectProfileMutation.isError}
+              selecting={selectProfileMutation.isPending}
+              selectedProfile={selectedProfile}
+              updateError={updateProfileMutation.isError}
+              onBackToList={() => {
+                setProfileSetupView('list')
+                setEditingProfileId(undefined)
+                setProfileForm(DEFAULT_PROFILE_CREATE_REQUEST)
+              }}
+              onChangeForm={setProfileForm}
+              onCreateProfile={() => createProfileMutation.mutate(normalizeProfileForm(profileForm))}
+              onDeleteProfile={(profileId) => deleteProfileMutation.mutate(profileId)}
+              onOpenCreate={() => {
+                setEditingProfileId(undefined)
+                setProfileForm(DEFAULT_PROFILE_CREATE_REQUEST)
+                setProfileSetupView('create')
+              }}
+              onOpenEdit={(profile) => {
+                setEditingProfileId(profile.id)
+                setProfileForm(createProfileFormFromProfile(profile))
+                setProfileSetupView('edit')
+              }}
+              onSelectProfile={(profileId) => setSelectedProfileId(profileId)}
+              onStart={() => {
+                if (selectedProfileId) {
+                  selectProfileMutation.mutate(selectedProfileId)
+                }
+              }}
+              onUpdateProfile={() => {
+                if (editingProfileId) {
+                  updateProfileMutation.mutate({
+                    profileId: editingProfileId,
+                    payload: normalizeProfileForm(profileForm),
+                  })
+                }
+              }}
             />
           ) : null}
         </AnimatePresence>
@@ -1324,6 +1467,579 @@ export function NavigationShell() {
       />
     </main>
   )
+}
+
+function NavigationProfileSetup({
+  createError,
+  creating,
+  deleteError,
+  deletingProfileId,
+  editing,
+  form,
+  limit,
+  loading,
+  motionTiming,
+  profileError,
+  profileSetupView,
+  profiles,
+  selectError,
+  selecting,
+  selectedProfile,
+  updateError,
+  onBackToList,
+  onChangeForm,
+  onCreateProfile,
+  onDeleteProfile,
+  onOpenCreate,
+  onOpenEdit,
+  onSelectProfile,
+  onStart,
+  onUpdateProfile,
+}: {
+  createError: boolean
+  creating: boolean
+  deleteError: boolean
+  deletingProfileId?: string
+  editing: boolean
+  form: ProfileCreateRequest
+  limit: number
+  loading: boolean
+  motionTiming: MotionTiming
+  profileError: boolean
+  profileSetupView: ProfileSetupView
+  profiles: Profile[]
+  selectError: boolean
+  selecting: boolean
+  selectedProfile?: Profile
+  updateError: boolean
+  onBackToList: () => void
+  onChangeForm: (form: ProfileCreateRequest) => void
+  onCreateProfile: () => void
+  onDeleteProfile: (profileId: string) => void
+  onOpenCreate: () => void
+  onOpenEdit: (profile: Profile) => void
+  onSelectProfile: (profileId: string) => void
+  onStart: () => void
+  onUpdateProfile: () => void
+}) {
+  const canCreate = profiles.length < limit
+  const startLabel = selectedProfile ? `${selectedProfile.displayName}으로 Navi 시작` : 'Navi 시작'
+  const [actionMenuProfileId, setActionMenuProfileId] = useState<string>()
+  const formMode = profileSetupView === 'edit' ? 'edit' : 'create'
+
+  return (
+    <motion.section
+      aria-label="프로필 설정"
+      aria-modal="true"
+      className="absolute inset-0 z-[90] flex min-h-0 flex-col items-center justify-center overflow-hidden bg-[var(--nav-frame)] px-6 py-8 text-[var(--nav-ink)]"
+      data-testid="navigation-profile-setup"
+      exit={{ opacity: 0, scale: 1.015 }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={motionTiming}
+      role="dialog"
+    >
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 bg-[radial-gradient(circle_at_50%_8%,rgb(232_238_255/0.92)_0%,rgb(246_248_251)_34%,rgb(255_255_255)_100%)]"
+      />
+      <div
+        className={[
+          'relative z-[1] flex w-full max-w-4xl flex-col items-center',
+          profileSetupView !== 'list' ? 'h-full min-h-0' : 'justify-center',
+        ].join(' ')}
+      >
+        {profileSetupView !== 'list' ? (
+          <ProfileSettingsForm
+            saveError={formMode === 'edit' ? updateError : createError}
+            saving={formMode === 'edit' ? editing : creating}
+            form={form}
+            motionTiming={motionTiming}
+            onBackToList={onBackToList}
+            onChangeForm={onChangeForm}
+            onSaveProfile={formMode === 'edit' ? onUpdateProfile : onCreateProfile}
+          />
+        ) : (
+          <>
+            <motion.div
+              className="text-center"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{
+                ...motionTiming,
+                delay: motionTiming.duration === 0 ? 0 : 0.06,
+              }}
+            >
+              <h1 className="text-4xl font-black tracking-normal text-[var(--nav-ink)] max-sm:text-3xl">
+                누가 운전하나요?
+              </h1>
+            </motion.div>
+            <div className="mt-10 w-full overflow-x-auto overflow-y-hidden pb-3" data-testid="profile-scroll-row">
+              <div className="flex w-max min-w-full flex-nowrap gap-5">
+                {loading ? (
+                  <div
+                    aria-label="프로필 로딩 중"
+                    className="flex flex-nowrap gap-5"
+                    role="status"
+                  >
+                    {Array.from({ length: 3 }).map((_, index) => (
+                      <span
+                        className="block h-[15rem] w-[17.5rem] shrink-0 animate-pulse rounded-lg bg-white/8"
+                        key={index}
+                      />
+                    ))}
+                  </div>
+                ) : profileError ? (
+                  <div
+                    aria-label="프로필 로딩 실패"
+                    className="grid h-[15rem] min-w-full place-items-center rounded-lg bg-white/8 text-[#ffb4a8]"
+                    role="status"
+                  >
+                    <Warning className="size-8" weight="fill" />
+                  </div>
+                ) : profiles.map((profile, index) => {
+                  const selected = profile.id === selectedProfile?.id
+
+                  return (
+                    <motion.div
+                      className={[
+                        'group relative flex w-[17.5rem] shrink-0 flex-col items-center rounded-lg p-3 text-center transition',
+                        selected ? 'bg-white text-[var(--nav-ink)] shadow-[var(--nav-shadow-panel)]' : 'bg-white/72 text-[var(--nav-ink)] hover:bg-white',
+                      ].join(' ')}
+                      initial={{ opacity: 0, y: 14 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      key={profile.id}
+                      transition={{
+                        ...motionTiming,
+                        delay: motionTiming.duration === 0 ? 0 : 0.1 + index * 0.04,
+                      }}
+                    >
+                      <div className="absolute right-2 top-2 z-10">
+                        <button
+                          aria-expanded={actionMenuProfileId === profile.id}
+                          aria-label={`${profile.displayName} 프로필 메뉴`}
+                          className={[
+                            'grid size-8 place-items-center rounded-full transition',
+                            selected
+                              ? 'bg-[var(--nav-primary-soft)] text-[var(--nav-primary)] hover:bg-[var(--nav-selection)]'
+                              : 'bg-[var(--nav-panel)] text-[var(--nav-muted)] hover:bg-[var(--nav-selection)] hover:text-[var(--nav-ink)]',
+                          ].join(' ')}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            setActionMenuProfileId((currentProfileId) => currentProfileId === profile.id ? undefined : profile.id)
+                          }}
+                          type="button"
+                        >
+                          <DotsThree className="size-5" weight="bold" />
+                        </button>
+                        {actionMenuProfileId === profile.id ? (
+                          <div
+                            className="absolute right-0 top-10 w-max overflow-hidden rounded-xl bg-white text-sm font-bold text-[var(--nav-ink)] shadow-[var(--nav-shadow-panel)] ring-1 ring-[rgb(16_24_40/0.08)]"
+                            role="menu"
+                          >
+                            <button
+                              className="flex min-h-10 w-full items-center gap-2 whitespace-nowrap px-3 text-left transition hover:bg-[var(--nav-panel)] focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-[var(--nav-primary)]"
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                setActionMenuProfileId(undefined)
+                                onOpenEdit(profile)
+                              }}
+                              role="menuitem"
+                              type="button"
+                            >
+                              <PencilSimple className="size-4" weight="bold" />
+                              수정
+                            </button>
+                            <button
+                              aria-label={`${profile.displayName} 프로필 삭제`}
+                              className="flex min-h-10 w-full items-center gap-2 whitespace-nowrap px-3 text-left text-[var(--nav-danger)] transition hover:bg-[var(--nav-panel)] focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-[var(--nav-primary)] disabled:cursor-not-allowed disabled:opacity-45"
+                              disabled={deletingProfileId === profile.id}
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                setActionMenuProfileId(undefined)
+                                onDeleteProfile(profile.id)
+                              }}
+                              role="menuitem"
+                              type="button"
+                            >
+                              <Trash className="size-4" weight="bold" />
+                              삭제
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
+                      <button
+                        aria-label={`${profile.displayName} 프로필 선택`}
+                        aria-pressed={selected}
+                        className="flex w-full min-w-0 flex-col items-center rounded-md focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
+                        onClick={() => onSelectProfile(profile.id)}
+                        type="button"
+                      >
+                        <span
+                          aria-hidden="true"
+                          className={[
+                            'grid aspect-square w-full max-w-[11rem] place-items-center overflow-hidden rounded-lg transition',
+                            selected
+                              ? 'ring-4 ring-[var(--nav-primary)]'
+                              : 'opacity-[0.86] group-hover:opacity-100',
+                          ].join(' ')}
+                        >
+                          {profile.profileImageUrl ? (
+                            <img
+                              alt=""
+                              className="h-full w-full object-cover"
+                              src={profile.profileImageUrl}
+                            />
+                          ) : (
+                            <Avatar
+                              colors={NAVIGATION_PROFILE_AVATAR_COLORS}
+                              name={profile.displayName}
+                              size={176}
+                              square
+                              variant="beam"
+                            />
+                          )}
+                        </span>
+                        <span className="mt-4 text-xl font-black tracking-normal">{profile.displayName}</span>
+                        <span
+                          className={[
+                            'mt-1 text-sm font-semibold',
+                            selected ? 'text-[var(--nav-primary)]' : 'text-[var(--nav-muted)]',
+                          ].join(' ')}
+                        >
+                          {profile.agentCallName}
+                        </span>
+                      </button>
+                    </motion.div>
+                  )
+                })}
+
+                {!loading && !profileError ? (
+                  <motion.button
+                    aria-label="프로필 추가"
+                    className="grid h-[15rem] w-[17.5rem] shrink-0 place-items-center rounded-lg border border-dashed border-[var(--nav-border)] bg-white/56 p-3 text-[var(--nav-primary)] transition hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--nav-primary)] disabled:cursor-not-allowed disabled:opacity-40"
+                    disabled={!canCreate}
+                    initial={{ opacity: 0, y: 14 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    onClick={onOpenCreate}
+                    transition={{
+                      ...motionTiming,
+                      delay: motionTiming.duration === 0 ? 0 : 0.16,
+                    }}
+                    type="button"
+                  >
+                    <span className="grid size-16 place-items-center rounded-full bg-[var(--nav-primary-soft)] text-[var(--nav-primary)]">
+                      <Plus className="size-7" weight="bold" />
+                    </span>
+                  </motion.button>
+                ) : null}
+              </div>
+            </div>
+
+            {deleteError ? (
+              <p className="mt-5 text-sm font-bold text-[#ffb4a8]">프로필 삭제에 실패했습니다.</p>
+            ) : null}
+            {selectError ? (
+              <p className="mt-5 text-sm font-bold text-[#ffb4a8]">프로필 선택에 실패했습니다.</p>
+            ) : null}
+
+            <motion.button
+              className="mt-8 inline-flex min-h-12 items-center justify-center rounded-full bg-[var(--nav-primary)] px-8 text-base font-bold text-white shadow-[var(--nav-shadow-control)] transition hover:bg-[var(--nav-primary-hover)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--nav-primary)] disabled:cursor-not-allowed disabled:opacity-45"
+              disabled={!selectedProfile || selecting}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              onClick={onStart}
+              transition={{
+                ...motionTiming,
+                delay: motionTiming.duration === 0 ? 0 : 0.24,
+              }}
+              type="button"
+            >
+              {startLabel}
+            </motion.button>
+          </>
+        )}
+      </div>
+    </motion.section>
+  )
+}
+
+function ProfileSettingsForm({
+  form,
+  motionTiming,
+  saveError,
+  saving,
+  onBackToList,
+  onChangeForm,
+  onSaveProfile,
+}: {
+  form: ProfileCreateRequest
+  motionTiming: MotionTiming
+  saveError: boolean
+  saving: boolean
+  onBackToList: () => void
+  onChangeForm: (form: ProfileCreateRequest) => void
+  onSaveProfile: () => void
+}) {
+  const updateForm = <Key extends keyof ProfileCreateRequest>(
+    key: Key,
+    value: ProfileCreateRequest[Key],
+  ) => {
+    onChangeForm({ ...form, [key]: value })
+  }
+
+  return (
+    <motion.form
+      className="flex h-full min-h-0 w-full max-w-3xl flex-col overflow-hidden rounded-[1.1rem] bg-white text-left shadow-[var(--nav-shadow-panel)] ring-1 ring-[rgb(16_24_40/0.06)]"
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      onSubmit={(event) => {
+        event.preventDefault()
+        onSaveProfile()
+      }}
+      transition={motionTiming}
+    >
+      <div className="min-h-0 overflow-y-auto px-8 py-7 max-sm:px-5">
+        <div className="flex items-center gap-5 border-b border-[var(--nav-border)] pb-6 max-sm:flex-col max-sm:items-start">
+          <span
+            aria-hidden="true"
+            className="grid size-24 shrink-0 place-items-center overflow-hidden rounded-2xl bg-[var(--nav-panel)] ring-1 ring-[var(--nav-border)]"
+          >
+            <Avatar
+              colors={NAVIGATION_PROFILE_AVATAR_COLORS}
+              name={form.displayName || form.agentCallName || '새 운전자'}
+              size={96}
+              square
+              variant="beam"
+            />
+          </span>
+          <div className="min-w-0">
+            <h2 className="text-2xl font-black tracking-normal text-[var(--nav-ink)]">프로필 설정</h2>
+            <div className="mt-3 flex min-w-0 flex-wrap gap-2">
+              <span className="rounded-full bg-[var(--nav-primary-soft)] px-3 py-1 text-sm font-bold text-[var(--nav-primary)]">
+                {form.displayName || '새 운전자'}
+              </span>
+              <span className="rounded-full bg-[var(--nav-panel)] px-3 py-1 text-sm font-semibold text-[var(--nav-muted)]">
+                {form.agentCallName || '나비'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-7 grid grid-cols-2 gap-5 max-sm:grid-cols-1">
+          <ProfileTextField
+            label="프로필 이름"
+            value={form.displayName}
+            onChange={(value) => updateForm('displayName', value)}
+          />
+          <ProfileTextField
+            label="호출 이름"
+            value={form.agentCallName}
+            onChange={(value) => updateForm('agentCallName', value)}
+          />
+          <ProfileTextField
+            className="col-span-full max-sm:col-span-1"
+            label="리포트 이메일"
+            type="email"
+            value={form.reportEmail ?? ''}
+            onChange={(value) => updateForm('reportEmail', value)}
+          />
+        </div>
+
+        <div className="mt-8 grid grid-cols-2 gap-5 border-t border-[var(--nav-border)] pt-7 max-sm:grid-cols-1">
+          <ProfileSelectField<AgentPersonality>
+            label="Agent 성격"
+            options={[
+              ['FRIENDLY', '친근함'],
+              ['FORMAL', '정중함'],
+              ['WARM', '따뜻함'],
+              ['WITTY', '위트'],
+            ]}
+            value={form.agentPersonality}
+            onChange={(value) => updateForm('agentPersonality', value)}
+          />
+          <ProfileSelectField<WarningSensitivity>
+            label="경고 민감도"
+            options={[
+              ['LOW', '낮음'],
+              ['MEDIUM', '보통'],
+              ['HIGH', '높음'],
+            ]}
+            value={form.warningSensitivity}
+            onChange={(value) => updateForm('warningSensitivity', value)}
+          />
+          <ProfileNumberField
+            label="TTS 속도"
+            max={2}
+            min={0.5}
+            step={0.1}
+            value={form.ttsSpeed}
+            onChange={(value) => updateForm('ttsSpeed', value)}
+          />
+          <ProfileNumberField
+            label="안내 음량"
+            max={100}
+            min={0}
+            step={1}
+            value={form.guidanceVolume}
+            onChange={(value) => updateForm('guidanceVolume', value)}
+          />
+          <ProfileSelectField<ProfileTheme>
+            className="col-span-full max-sm:col-span-1"
+            disabled
+            label="테마"
+            options={[
+              ['LIGHT', '라이트'],
+            ]}
+            value="LIGHT"
+            onChange={() => updateForm('theme', 'LIGHT')}
+          />
+        </div>
+
+        {saveError ? (
+          <p className="mt-5 text-sm font-bold text-[var(--nav-danger)]">프로필 저장에 실패했습니다.</p>
+        ) : null}
+      </div>
+
+      <div className="flex justify-end gap-3 border-t border-[var(--nav-border)] bg-[var(--nav-surface-raised)] px-8 py-5 max-sm:px-5">
+        <button
+          className="inline-flex min-h-12 items-center justify-center rounded-full bg-[var(--nav-panel)] px-5 text-sm font-bold text-[var(--nav-muted)] transition hover:bg-[var(--nav-selection)] hover:text-[var(--nav-ink)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
+          onClick={onBackToList}
+          type="button"
+        >
+          목록으로 돌아가기
+        </button>
+        <button
+          className="inline-flex min-h-12 items-center justify-center rounded-full bg-[var(--nav-primary)] px-6 text-sm font-bold text-white shadow-[var(--nav-shadow-control)] transition hover:bg-[var(--nav-primary-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)] disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={saving || !form.displayName.trim() || !form.agentCallName.trim()}
+          type="submit"
+        >
+          프로필 저장
+        </button>
+      </div>
+    </motion.form>
+  )
+}
+
+function ProfileTextField({
+  className,
+  label,
+  type = 'text',
+  value,
+  onChange,
+}: {
+  className?: string
+  label: string
+  type?: string
+  value: string
+  onChange: (value: string) => void
+}) {
+  return (
+    <label className={['flex min-w-0 flex-col gap-2', className].filter(Boolean).join(' ')}>
+      <span className="text-sm font-bold text-[var(--nav-muted)]">{label}</span>
+      <input
+        className="min-h-14 rounded-xl border border-[var(--nav-border)] bg-white px-4 text-base font-bold text-[var(--nav-ink)] outline-none transition placeholder:text-[var(--nav-subtle)] focus:border-[var(--nav-primary)] focus:shadow-[0_0_0_3px_var(--nav-focus-ring)]"
+        type={type}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </label>
+  )
+}
+
+function ProfileNumberField({
+  label,
+  max,
+  min,
+  step,
+  value,
+  onChange,
+}: {
+  label: string
+  max: number
+  min: number
+  step: number
+  value: number
+  onChange: (value: number) => void
+}) {
+  return (
+    <label className="flex min-w-0 flex-col gap-2">
+      <span className="text-sm font-bold text-[var(--nav-muted)]">{label}</span>
+      <input
+        className="min-h-14 rounded-xl border border-[var(--nav-border)] bg-white px-4 text-base font-bold text-[var(--nav-ink)] outline-none transition focus:border-[var(--nav-primary)] focus:shadow-[0_0_0_3px_var(--nav-focus-ring)]"
+        max={max}
+        min={min}
+        step={step}
+        type="number"
+        value={value}
+        onChange={(event) => onChange(Number(event.target.value))}
+      />
+    </label>
+  )
+}
+
+function ProfileSelectField<Value extends string>({
+  className,
+  disabled = false,
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  className?: string
+  disabled?: boolean
+  label: string
+  options: Array<[Value, string]>
+  value: Value
+  onChange: (value: Value) => void
+}) {
+  return (
+    <label className={['flex min-w-0 flex-col gap-2', className].filter(Boolean).join(' ')}>
+      <span className="text-sm font-bold text-[var(--nav-muted)]">{label}</span>
+      <select
+        className="min-h-14 rounded-xl border border-[var(--nav-border)] bg-white px-4 text-base font-bold text-[var(--nav-ink)] outline-none transition focus:border-[var(--nav-primary)] focus:shadow-[0_0_0_3px_var(--nav-focus-ring)] disabled:cursor-not-allowed disabled:bg-[var(--nav-panel)] disabled:text-[var(--nav-muted)]"
+        disabled={disabled}
+        value={value}
+        onChange={(event) => onChange(event.target.value as Value)}
+      >
+        {options.map(([optionValue, optionLabel]) => (
+          <option key={optionValue} value={optionValue}>{optionLabel}</option>
+        ))}
+      </select>
+    </label>
+  )
+}
+
+function normalizeProfileForm(form: ProfileCreateRequest): ProfileCreateRequest {
+  return {
+    ...form,
+    agentCallName: form.agentCallName.trim(),
+    displayName: form.displayName.trim(),
+    guidanceVolume: Number(form.guidanceVolume),
+    reportEmail: normalizeOptionalProfileText(form.reportEmail),
+    ttsSpeed: Number(form.ttsSpeed),
+    ttsVoiceId: normalizeOptionalProfileText(form.ttsVoiceId),
+  }
+}
+
+function createProfileFormFromProfile(profile: Profile): ProfileCreateRequest {
+  return {
+    displayName: profile.displayName,
+    agentCallName: profile.agentCallName,
+    reportEmail: profile.reportEmail,
+    agentPersonality: profile.agentPersonality,
+    warningSensitivity: profile.warningSensitivity,
+    ttsVoiceId: profile.ttsVoiceId,
+    ttsSpeed: profile.ttsSpeed,
+    guidanceVolume: profile.guidanceVolume,
+    theme: 'LIGHT',
+  }
+}
+
+function normalizeOptionalProfileText(value: string | null) {
+  const normalized = value?.trim() ?? ''
+
+  return normalized ? normalized : null
 }
 
 function DriverVideoPanel({

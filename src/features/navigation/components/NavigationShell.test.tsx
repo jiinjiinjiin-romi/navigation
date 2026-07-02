@@ -10,6 +10,13 @@ import {
   isAssistantVoiceWaveVisible,
   NavigationShell,
 } from './NavigationShell'
+import {
+  createProfile,
+  deleteProfile,
+  listProfiles,
+  selectProfile,
+  updateProfile,
+} from '../api/profileApi'
 import { getCurrentAddress, getRoadMatch, getRouteOptions, searchPlaces } from '../api/tmapApi'
 
 let routeOptionsOverlayReadyByDefault = true
@@ -25,6 +32,19 @@ vi.mock('../api/tmapApi', () => ({
   getRoadMatch: vi.fn(),
   getCurrentAddress: vi.fn(),
 }))
+
+vi.mock('../api/profileApi', async () => {
+  const actual = await vi.importActual<typeof import('../api/profileApi')>('../api/profileApi')
+
+  return {
+    ...actual,
+    listProfiles: vi.fn(),
+    createProfile: vi.fn(),
+    deleteProfile: vi.fn(),
+    selectProfile: vi.fn(),
+    updateProfile: vi.fn(),
+  }
+})
 
 vi.mock('@/features/orb', () => ({
   VoiceOrb: ({
@@ -81,6 +101,31 @@ vi.mock('plyr', () => {
     default: mockPlyr,
   }
 })
+
+vi.mock('boring-avatars', () => ({
+  default: ({
+    colors,
+    name,
+    size,
+    square,
+    variant,
+  }: {
+    colors?: string[]
+    name?: string
+    size?: number | string
+    square?: boolean
+    variant?: string
+  }) => (
+    <div
+      data-colors={colors?.join(',')}
+      data-name={name}
+      data-size={size}
+      data-square={String(square)}
+      data-testid="boring-avatar"
+      data-variant={variant}
+    />
+  ),
+}))
 
 vi.mock('./TmapPanel', () => ({
   TmapPanel: ({
@@ -167,6 +212,46 @@ const mockedGetRouteOptions = vi.mocked(getRouteOptions)
 const mockedGetRoute = vi.fn()
 const mockedGetRoadMatch = vi.mocked(getRoadMatch)
 const mockedGetCurrentAddress = vi.mocked(getCurrentAddress)
+const mockedListProfiles = vi.mocked(listProfiles)
+const mockedCreateProfile = vi.mocked(createProfile)
+const mockedDeleteProfile = vi.mocked(deleteProfile)
+const mockedSelectProfile = vi.mocked(selectProfile)
+const mockedUpdateProfile = vi.mocked(updateProfile)
+
+const mockProfiles = [
+  {
+    id: 'profile-1',
+    displayName: '민준',
+    agentCallName: '나비',
+    profileImageUrl: '/storage/profile-images/default-family/father.svg',
+    reportEmail: null,
+    agentPersonality: 'FRIENDLY' as const,
+    warningSensitivity: 'MEDIUM' as const,
+    ttsVoiceId: null,
+    ttsSpeed: 1,
+    guidanceVolume: 70,
+    theme: 'SYSTEM' as const,
+    lastUsedAt: null,
+    createdAt: '2026-07-02T00:00:00.000000Z',
+    updatedAt: '2026-07-02T00:00:00.000000Z',
+  },
+  {
+    id: 'profile-2',
+    displayName: '서윤',
+    agentCallName: 'Navi',
+    profileImageUrl: null,
+    reportEmail: 'seoyun@example.com',
+    agentPersonality: 'WARM' as const,
+    warningSensitivity: 'HIGH' as const,
+    ttsVoiceId: null,
+    ttsSpeed: 1.2,
+    guidanceVolume: 80,
+    theme: 'DARK' as const,
+    lastUsedAt: '2026-07-02T00:00:00.000000Z',
+    createdAt: '2026-07-02T00:00:00.000000Z',
+    updatedAt: '2026-07-02T00:00:00.000000Z',
+  },
+]
 
 function createMockRouteOption(route: Awaited<ReturnType<typeof mockedGetRoute>>) {
   return {
@@ -217,6 +302,39 @@ describe('NavigationShell', () => {
     ])
     mockedGetRoadMatch.mockReset()
     mockedGetCurrentAddress.mockReset()
+    mockedListProfiles.mockReset()
+    mockedCreateProfile.mockReset()
+    mockedDeleteProfile.mockReset()
+    mockedSelectProfile.mockReset()
+    mockedUpdateProfile.mockReset()
+    mockedListProfiles.mockResolvedValue({
+      profiles: mockProfiles,
+      count: mockProfiles.length,
+      limit: 5,
+    })
+    mockedCreateProfile.mockImplementation(async (payload) => ({
+      ...mockProfiles[0],
+      id: 'profile-created',
+      displayName: payload.displayName,
+      agentCallName: payload.agentCallName,
+      reportEmail: payload.reportEmail,
+      agentPersonality: payload.agentPersonality,
+      warningSensitivity: payload.warningSensitivity,
+      ttsVoiceId: payload.ttsVoiceId,
+      ttsSpeed: payload.ttsSpeed,
+      guidanceVolume: payload.guidanceVolume,
+      theme: payload.theme,
+    }))
+    mockedDeleteProfile.mockResolvedValue(undefined)
+    mockedSelectProfile.mockResolvedValue({
+      selectedProfileId: 'profile-1',
+      selectedAt: '2026-07-02T00:00:00.000000Z',
+    })
+    mockedUpdateProfile.mockImplementation(async (profileId, payload) => ({
+      ...mockProfiles[0],
+      ...payload,
+      id: profileId,
+    }))
     HTMLMediaElement.prototype.play = vi.fn(() => Promise.reject(new Error('test audio fallback')))
     HTMLMediaElement.prototype.pause = vi.fn()
     mockedGetRoadMatch.mockResolvedValue([
@@ -277,12 +395,197 @@ describe('NavigationShell', () => {
     return screen.findByPlaceholderText('목적지 검색')
   }
 
-  it('renders the desktop cockpit layout with video, navigation, and scenario debug regions', () => {
+  it('loads backend profiles before entering navigation and selects one', async () => {
     const queryClient = new QueryClient()
 
     render(
       <QueryClientProvider client={queryClient}>
         <NavigationShell />
+      </QueryClientProvider>,
+    )
+
+    expect(screen.getByTestId('navigation-profile-setup')).toBeInTheDocument()
+    expect(screen.getByTestId('navigation-viewport')).toContainElement(screen.getByTestId('navigation-profile-setup'))
+    expect(screen.getByTestId('navigation-stage')).not.toBe(screen.getByTestId('navigation-profile-setup').parentElement)
+    expect(screen.queryByTestId('tmap-panel')).not.toBeInTheDocument()
+    expect(mockedGetCurrentAddress).not.toHaveBeenCalled()
+    expect(mockedGetRoadMatch).not.toHaveBeenCalled()
+    expect(fetch).not.toHaveBeenCalled()
+    expect(screen.getByRole('heading', { name: '누가 운전하나요?' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /민준 프로필 선택/ })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByRole('button', { name: /서윤 프로필 선택/ })).toBeInTheDocument()
+    const minjunProfileButton = screen.getByRole('button', { name: /민준 프로필 선택/ })
+    const minjunProfileImage = minjunProfileButton.querySelector('img')
+    expect(minjunProfileImage).toHaveAttribute('src', '/storage/profile-images/default-family/father.svg')
+    const avatars = screen.getAllByTestId('boring-avatar')
+    expect(avatars).toHaveLength(1)
+    expect(avatars[0]).toHaveAttribute('data-name', '서윤')
+    expect(avatars[0]).toHaveAttribute('data-variant', 'beam')
+    expect(avatars[0]).toHaveAttribute('data-size', '176')
+    expect(avatars[0]).toHaveAttribute('data-square', 'true')
+    expect(screen.queryByRole('img')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '프로필 추가' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Navi 시작' })).toBeDisabled()
+
+    fireEvent.click(screen.getByRole('button', { name: /민준 프로필 선택/ }))
+    expect(screen.getByRole('button', { name: '민준으로 Navi 시작' })).not.toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: '민준으로 Navi 시작' }))
+
+    await waitFor(() => {
+      expect(mockedSelectProfile).toHaveBeenCalledWith('profile-1')
+      expect(screen.queryByTestId('navigation-profile-setup')).not.toBeInTheDocument()
+    })
+    expect(screen.getByRole('button', { name: /어디로 갈까요/ })).toBeInTheDocument()
+  })
+
+  it('keeps profile cards on one horizontal scroll row', async () => {
+    mockedListProfiles.mockResolvedValueOnce({
+      profiles: [
+        ...mockProfiles,
+        {
+          ...mockProfiles[0],
+          id: 'profile-3',
+          displayName: '아빠',
+          profileImageUrl: '/storage/profile-images/default-family/father.svg',
+        },
+        {
+          ...mockProfiles[1],
+          id: 'profile-4',
+          displayName: '엄마',
+          profileImageUrl: '/storage/profile-images/default-family/mother.svg',
+        },
+      ],
+      count: 4,
+      limit: 5,
+    })
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell />
+      </QueryClientProvider>,
+    )
+
+    await screen.findByRole('button', { name: /엄마 프로필 선택/ })
+
+    const profileScrollRow = screen.getByTestId('profile-scroll-row')
+    expect(profileScrollRow).toHaveClass('overflow-x-auto')
+    expect(profileScrollRow.firstElementChild).toHaveClass('flex-nowrap')
+    expect(screen.getByRole('button', { name: '프로필 추가' })).toHaveClass('shrink-0')
+  })
+
+  it('opens a profile settings page from the add button and creates a profile', async () => {
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: '프로필 추가' }))
+
+    expect(screen.getByRole('heading', { name: '프로필 설정' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: '누가 운전하나요?' })).not.toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('프로필 이름'), {
+      target: { value: '도현' },
+    })
+    fireEvent.change(screen.getByLabelText('호출 이름'), {
+      target: { value: '도현아' },
+    })
+    fireEvent.change(screen.getByLabelText('리포트 이메일'), {
+      target: { value: 'dohyun@example.com' },
+    })
+    fireEvent.change(screen.getByLabelText('Agent 성격'), {
+      target: { value: 'WITTY' },
+    })
+    fireEvent.change(screen.getByLabelText('경고 민감도'), {
+      target: { value: 'HIGH' },
+    })
+    fireEvent.change(screen.getByLabelText('TTS 속도'), {
+      target: { value: '1.4' },
+    })
+    fireEvent.change(screen.getByLabelText('안내 음량'), {
+      target: { value: '82' },
+    })
+    expect(screen.getByLabelText('테마')).toBeDisabled()
+    expect(screen.getByLabelText('테마')).toHaveValue('LIGHT')
+    fireEvent.click(screen.getByRole('button', { name: '프로필 저장' }))
+
+    await waitFor(() => {
+      expect(mockedCreateProfile).toHaveBeenCalledWith({
+        displayName: '도현',
+        agentCallName: '도현아',
+        reportEmail: 'dohyun@example.com',
+        agentPersonality: 'WITTY',
+        warningSensitivity: 'HIGH',
+        ttsVoiceId: null,
+        ttsSpeed: 1.4,
+        guidanceVolume: 82,
+        theme: 'LIGHT',
+      })
+    })
+  })
+
+  it('deletes a backend profile from the profile screen', async () => {
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: '민준 프로필 메뉴' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: '민준 프로필 삭제' }))
+
+    await waitFor(() => {
+      expect(mockedDeleteProfile).toHaveBeenCalledWith('profile-1')
+    })
+  })
+
+  it('opens a profile settings page from the profile action menu and updates a profile', async () => {
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: '민준 프로필 메뉴' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: '수정' }))
+
+    expect(screen.getByRole('heading', { name: '프로필 설정' })).toBeInTheDocument()
+    expect(screen.getByLabelText('프로필 이름')).toHaveValue('민준')
+    expect(screen.getByLabelText('호출 이름')).toHaveValue('나비')
+
+    fireEvent.change(screen.getByLabelText('프로필 이름'), {
+      target: { value: '민준 수정' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '프로필 저장' }))
+
+    await waitFor(() => {
+      expect(mockedUpdateProfile).toHaveBeenCalledWith('profile-1', {
+        displayName: '민준 수정',
+        agentCallName: '나비',
+        reportEmail: null,
+        agentPersonality: 'FRIENDLY',
+        warningSensitivity: 'MEDIUM',
+        ttsVoiceId: null,
+        ttsSpeed: 1,
+        guidanceVolume: 70,
+        theme: 'LIGHT',
+      })
+    })
+  })
+
+  it('renders the desktop cockpit layout with video, navigation, and scenario debug regions', () => {
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell initialProfileSetupComplete />
       </QueryClientProvider>,
     )
 
@@ -321,7 +624,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell />
+        <NavigationShell initialProfileSetupComplete />
       </QueryClientProvider>,
     )
 
@@ -361,7 +664,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell />
+        <NavigationShell initialProfileSetupComplete />
       </QueryClientProvider>,
     )
 
@@ -386,7 +689,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell />
+        <NavigationShell initialProfileSetupComplete />
       </QueryClientProvider>,
     )
 
@@ -402,7 +705,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell />
+        <NavigationShell initialProfileSetupComplete />
       </QueryClientProvider>,
     )
 
@@ -479,7 +782,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell />
+        <NavigationShell initialProfileSetupComplete />
       </QueryClientProvider>,
     )
 
@@ -498,7 +801,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell />
+        <NavigationShell initialProfileSetupComplete />
       </QueryClientProvider>,
     )
 
@@ -529,7 +832,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell />
+        <NavigationShell initialProfileSetupComplete />
       </QueryClientProvider>,
     )
 
@@ -574,7 +877,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell />
+        <NavigationShell initialProfileSetupComplete />
       </QueryClientProvider>,
     )
 
@@ -620,7 +923,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell />
+        <NavigationShell initialProfileSetupComplete />
       </QueryClientProvider>,
     )
 
@@ -648,7 +951,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell />
+        <NavigationShell initialProfileSetupComplete />
       </QueryClientProvider>,
     )
 
@@ -678,7 +981,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell />
+        <NavigationShell initialProfileSetupComplete />
       </QueryClientProvider>,
     )
 
@@ -695,7 +998,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell />
+        <NavigationShell initialProfileSetupComplete />
       </QueryClientProvider>,
     )
 
@@ -719,7 +1022,7 @@ describe('NavigationShell', () => {
     try {
       render(
         <QueryClientProvider client={queryClient}>
-          <NavigationShell />
+          <NavigationShell initialProfileSetupComplete />
         </QueryClientProvider>,
       )
 
@@ -745,7 +1048,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell />
+        <NavigationShell initialProfileSetupComplete />
       </QueryClientProvider>,
     )
 
@@ -848,7 +1151,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell />
+        <NavigationShell initialProfileSetupComplete />
       </QueryClientProvider>,
     )
 
@@ -961,7 +1264,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell />
+        <NavigationShell initialProfileSetupComplete />
       </QueryClientProvider>,
     )
 
@@ -1016,7 +1319,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell />
+        <NavigationShell initialProfileSetupComplete />
       </QueryClientProvider>,
     )
 
@@ -1120,7 +1423,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell />
+        <NavigationShell initialProfileSetupComplete />
       </QueryClientProvider>,
     )
 
@@ -1172,7 +1475,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell />
+        <NavigationShell initialProfileSetupComplete />
       </QueryClientProvider>,
     )
 
@@ -1236,7 +1539,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell />
+        <NavigationShell initialProfileSetupComplete />
       </QueryClientProvider>,
     )
 
@@ -1306,7 +1609,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell />
+        <NavigationShell initialProfileSetupComplete />
       </QueryClientProvider>,
     )
 
@@ -1372,7 +1675,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell />
+        <NavigationShell initialProfileSetupComplete />
       </QueryClientProvider>,
     )
 
@@ -1441,7 +1744,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell />
+        <NavigationShell initialProfileSetupComplete />
       </QueryClientProvider>,
     )
 
@@ -1509,7 +1812,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell />
+        <NavigationShell initialProfileSetupComplete />
       </QueryClientProvider>,
     )
 
@@ -1592,7 +1895,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell />
+        <NavigationShell initialProfileSetupComplete />
       </QueryClientProvider>,
     )
 
@@ -1634,7 +1937,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell />
+        <NavigationShell initialProfileSetupComplete />
       </QueryClientProvider>,
     )
 
@@ -1679,7 +1982,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell />
+        <NavigationShell initialProfileSetupComplete />
       </QueryClientProvider>,
     )
 
@@ -1727,7 +2030,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell />
+        <NavigationShell initialProfileSetupComplete />
       </QueryClientProvider>,
     )
 
@@ -1772,7 +2075,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell />
+        <NavigationShell initialProfileSetupComplete />
       </QueryClientProvider>,
     )
 
@@ -1809,7 +2112,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell />
+        <NavigationShell initialProfileSetupComplete />
       </QueryClientProvider>,
     )
 
@@ -1886,7 +2189,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell />
+        <NavigationShell initialProfileSetupComplete />
       </QueryClientProvider>,
     )
 
@@ -1934,7 +2237,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell />
+        <NavigationShell initialProfileSetupComplete />
       </QueryClientProvider>,
     )
 
@@ -1989,7 +2292,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell />
+        <NavigationShell initialProfileSetupComplete />
       </QueryClientProvider>,
     )
 
@@ -2031,7 +2334,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell />
+        <NavigationShell initialProfileSetupComplete />
       </QueryClientProvider>,
     )
 
@@ -2103,7 +2406,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell />
+        <NavigationShell initialProfileSetupComplete />
       </QueryClientProvider>,
     )
 
@@ -2185,7 +2488,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell />
+        <NavigationShell initialProfileSetupComplete />
       </QueryClientProvider>,
     )
 
@@ -2263,7 +2566,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell />
+        <NavigationShell initialProfileSetupComplete />
       </QueryClientProvider>,
     )
 
@@ -2339,7 +2642,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell />
+        <NavigationShell initialProfileSetupComplete />
       </QueryClientProvider>,
     )
 
@@ -2397,7 +2700,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell />
+        <NavigationShell initialProfileSetupComplete />
       </QueryClientProvider>,
     )
 
