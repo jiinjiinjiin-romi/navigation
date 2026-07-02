@@ -110,6 +110,8 @@ const WEATHER_COORDINATE_PRECISION = 3
 const ROUTE_SEARCH_SUMMARY_FIELDS_HEIGHT = 140
 const ROUTE_SEARCH_EDITOR_FIELDS_HEIGHT = 380
 const SIDE_PANEL_WIDTH = 320
+const SIDE_PANEL_TRANSITION_DURATION_SECONDS = 0.34
+const SIDE_PANEL_TRANSITION_EASE: [number, number, number, number] = [0.34, 0, 0.2, 1]
 const MUSIC_POPOVER_WIDTH = 320
 const MUSIC_MINI_PLAYER_IDLE_BOTTOM = 136
 const MUSIC_MINI_PLAYER_GUIDANCE_BOTTOM = 72
@@ -1345,13 +1347,7 @@ export function NavigationShell({
               <AppIconDock
                 activeSidePanel={activeSidePanel}
                 className={[
-                  'absolute bottom-[43px] z-40 transition-[right] max-sm:bottom-[37px]',
-                  motionTiming.duration === 0
-                    ? 'duration-0'
-                    : 'duration-[340ms] ease-[cubic-bezier(0.34,0,0.2,1)]',
-                  activeSidePanel
-                    ? 'right-[320px] max-sm:right-[min(20rem,calc(100vw-4rem))]'
-                    : 'right-0',
+                  'absolute bottom-[43px] right-0 z-40 max-sm:bottom-[37px]',
                 ].join(' ')}
                 motionTiming={motionTiming}
                 onOpenSettings={() => openSidePanel('settings')}
@@ -2699,9 +2695,16 @@ function AppIconDock({
     <motion.div
       aria-label="오른쪽 도구 모음"
       className={['pointer-events-none flex flex-none items-start', className].filter(Boolean).join(' ')}
-      initial={{ opacity: 0, y: -6 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={motionTiming}
+      initial={{ opacity: 0, x: 0, y: -6 }}
+      animate={{ opacity: 1, x: activeSidePanel ? -SIDE_PANEL_WIDTH : 0, y: 0 }}
+      transition={{
+        opacity: motionTiming,
+        x: {
+          ease: motionTiming.duration === 0 ? undefined : SIDE_PANEL_TRANSITION_EASE,
+          duration: motionTiming.duration === 0 ? 0 : SIDE_PANEL_TRANSITION_DURATION_SECONDS,
+        },
+        y: motionTiming,
+      }}
     >
       <div
         data-testid="right-rail-dock"
@@ -2791,8 +2794,8 @@ function SideDrawerPanel({
     },
   }
   const drawerTransition = {
-    ease: motionTiming.duration === 0 ? undefined : [0.34, 0, 0.2, 1] as [number, number, number, number],
-    duration: motionTiming.duration === 0 ? 0 : 0.34,
+    ease: motionTiming.duration === 0 ? undefined : SIDE_PANEL_TRANSITION_EASE,
+    duration: motionTiming.duration === 0 ? 0 : SIDE_PANEL_TRANSITION_DURATION_SECONDS,
   }
   const drawerOffset = motionTiming.duration === 0 ? 0 : SIDE_PANEL_WIDTH
   const drawerMeta = {
