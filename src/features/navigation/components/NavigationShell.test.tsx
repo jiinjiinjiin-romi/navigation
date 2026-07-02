@@ -505,7 +505,7 @@ describe('NavigationShell', () => {
     expect(mockedGetCurrentAddress).not.toHaveBeenCalled()
     expect(mockedGetRoadMatch).not.toHaveBeenCalled()
     expect(fetch).not.toHaveBeenCalled()
-    expect(screen.getByRole('heading', { name: '누가 운전하나요?' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '오늘은 누가 운전할까요?' })).toBeInTheDocument()
     expect(await screen.findByRole('button', { name: /민준 프로필 선택/ })).toHaveAttribute('aria-pressed', 'false')
     expect(screen.getByRole('button', { name: /서윤 프로필 선택/ })).toBeInTheDocument()
     const minjunProfileButton = screen.getByRole('button', { name: /민준 프로필 선택/ })
@@ -517,12 +517,17 @@ describe('NavigationShell', () => {
     expect(avatars[0]).toHaveAttribute('data-variant', 'beam')
     expect(avatars[0]).toHaveAttribute('data-size', '176')
     expect(avatars[0]).toHaveAttribute('data-square', 'true')
+    expect(screen.queryByText('나비')).not.toBeInTheDocument()
+    expect(screen.queryByText('Navi')).not.toBeInTheDocument()
     expect(screen.queryByRole('img')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: '프로필 추가' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Navi 시작' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '프로필 수정' })).toBeDisabled()
+    expect(screen.queryByRole('button', { name: '민준 프로필 메뉴' })).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: /민준 프로필 선택/ }))
     expect(screen.getByRole('button', { name: '민준으로 Navi 시작' })).not.toBeDisabled()
+    expect(screen.getByRole('button', { name: '프로필 수정' })).not.toBeDisabled()
     fireEvent.click(screen.getByRole('button', { name: '민준으로 Navi 시작' }))
 
     await waitFor(() => {
@@ -580,7 +585,7 @@ describe('NavigationShell', () => {
     fireEvent.click(await screen.findByRole('button', { name: '프로필 추가' }))
 
     expect(screen.getByRole('heading', { name: '프로필 설정' })).toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: '누가 운전하나요?' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: '오늘은 누가 운전할까요?' })).not.toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('프로필 이름'), {
       target: { value: '도현' },
     })
@@ -621,7 +626,7 @@ describe('NavigationShell', () => {
     })
   })
 
-  it('deletes a backend profile from the profile screen', async () => {
+  it('deletes a backend profile from the profile settings screen', async () => {
     const queryClient = new QueryClient()
 
     render(
@@ -630,15 +635,16 @@ describe('NavigationShell', () => {
       </QueryClientProvider>,
     )
 
-    fireEvent.click(await screen.findByRole('button', { name: '민준 프로필 메뉴' }))
-    fireEvent.click(await screen.findByRole('menuitem', { name: '민준 프로필 삭제' }))
+    fireEvent.click(await screen.findByRole('button', { name: /민준 프로필 선택/ }))
+    fireEvent.click(screen.getByRole('button', { name: '프로필 수정' }))
+    fireEvent.click(await screen.findByRole('button', { name: '프로필 삭제' }))
 
     await waitFor(() => {
       expect(mockedDeleteProfile).toHaveBeenCalledWith('profile-1')
     })
   })
 
-  it('opens a profile settings page from the profile action menu and updates a profile', async () => {
+  it('opens a profile settings page from the selected profile edit button and updates a profile', async () => {
     const queryClient = new QueryClient()
 
     render(
@@ -647,8 +653,8 @@ describe('NavigationShell', () => {
       </QueryClientProvider>,
     )
 
-    fireEvent.click(await screen.findByRole('button', { name: '민준 프로필 메뉴' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: '수정' }))
+    fireEvent.click(await screen.findByRole('button', { name: /민준 프로필 선택/ }))
+    fireEvent.click(screen.getByRole('button', { name: '프로필 수정' }))
 
     expect(screen.getByRole('heading', { name: '프로필 설정' })).toBeInTheDocument()
     expect(screen.getByLabelText('프로필 이름')).toHaveValue('민준')
@@ -2147,9 +2153,11 @@ describe('NavigationShell', () => {
     expect(screen.queryByText('현재 선택 위치 추가')).not.toBeInTheDocument()
     expect(screen.getByText('출발지 라벨')).toBeInTheDocument()
     expect(screen.getByText('목적지 라벨')).toBeInTheDocument()
+    expect(screen.queryByText('즐겨찾기')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '집을 출발지로 설정' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '성수 카페를 목적지로 설정' })).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: '성수 카페 목적지 라벨 수정' }))
+    fireEvent.click(screen.getByRole('button', { name: '성수 카페 목적지 라벨 메뉴' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: '성수 카페 목적지 라벨 수정' }))
     fireEvent.change(screen.getByLabelText('성수 카페 라벨 이름 수정'), {
       target: { value: '성수 작업실' },
     })
@@ -2157,7 +2165,8 @@ describe('NavigationShell', () => {
     await waitFor(() => {
       expect(mockedUpdateSavedPlace).toHaveBeenCalledWith('favorite-id', { label: '성수 작업실' })
     })
-    fireEvent.click(screen.getByRole('button', { name: '성수 카페 목적지 라벨 삭제' }))
+    fireEvent.click(screen.getByRole('button', { name: '성수 카페 목적지 라벨 메뉴' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: '성수 카페 목적지 라벨 삭제' }))
     await waitFor(() => {
       expect(mockedDeleteSavedPlace).toHaveBeenCalledWith('favorite-id')
     })

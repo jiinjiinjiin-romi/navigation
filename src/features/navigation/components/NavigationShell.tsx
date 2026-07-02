@@ -1589,7 +1589,6 @@ function NavigationProfileSetup({
 }) {
   const canCreate = profiles.length < limit
   const startLabel = selectedProfile ? `${selectedProfile.displayName}으로 Navi 시작` : 'Navi 시작'
-  const [actionMenuProfileId, setActionMenuProfileId] = useState<string>()
   const formMode = profileSetupView === 'edit' ? 'edit' : 'create'
 
   return (
@@ -1616,12 +1615,16 @@ function NavigationProfileSetup({
       >
         {profileSetupView !== 'list' ? (
           <ProfileSettingsForm
+            deleteError={deleteError}
+            deleting={Boolean(selectedProfile && deletingProfileId === selectedProfile.id)}
             saveError={formMode === 'edit' ? updateError : createError}
             saving={formMode === 'edit' ? editing : creating}
             form={form}
             motionTiming={motionTiming}
+            mode={formMode}
             onBackToList={onBackToList}
             onChangeForm={onChangeForm}
+            onDeleteProfile={selectedProfile ? () => onDeleteProfile(selectedProfile.id) : undefined}
             onSaveProfile={formMode === 'edit' ? onUpdateProfile : onCreateProfile}
           />
         ) : (
@@ -1635,21 +1638,21 @@ function NavigationProfileSetup({
                 delay: motionTiming.duration === 0 ? 0 : 0.06,
               }}
             >
-              <h1 className="text-4xl font-black tracking-normal text-[var(--nav-ink)] max-sm:text-3xl">
-                누가 운전하나요?
+              <h1 className="text-4xl font-bold tracking-normal text-[var(--nav-ink)] max-sm:text-3xl">
+                오늘은 누가 운전할까요?
               </h1>
             </motion.div>
             <div className="mt-10 w-full overflow-x-auto overflow-y-hidden pb-3" data-testid="profile-scroll-row">
-              <div className="flex w-max min-w-full flex-nowrap gap-5">
+              <div className="flex w-max min-w-full flex-nowrap gap-3">
                 {loading ? (
                   <div
                     aria-label="프로필 로딩 중"
-                    className="flex flex-nowrap gap-5"
+                    className="flex flex-nowrap gap-3"
                     role="status"
                   >
                     {Array.from({ length: 3 }).map((_, index) => (
                       <span
-                        className="block h-[15rem] w-[17.5rem] shrink-0 animate-pulse rounded-lg bg-white/8"
+                        className="block h-[13rem] w-[13.75rem] shrink-0 animate-pulse rounded-lg bg-white/8"
                         key={index}
                       />
                     ))}
@@ -1668,7 +1671,7 @@ function NavigationProfileSetup({
                   return (
                     <motion.div
                       className={[
-                        'group relative flex w-[17.5rem] shrink-0 flex-col items-center rounded-lg p-3 text-center transition',
+                        'group relative flex w-[13.75rem] shrink-0 flex-col items-center rounded-lg p-3 text-center transition',
                         selected ? 'bg-white text-[var(--nav-ink)] shadow-[var(--nav-shadow-panel)]' : 'bg-white/72 text-[var(--nav-ink)] hover:bg-white',
                       ].join(' ')}
                       initial={{ opacity: 0, y: 14 }}
@@ -1679,60 +1682,6 @@ function NavigationProfileSetup({
                         delay: motionTiming.duration === 0 ? 0 : 0.1 + index * 0.04,
                       }}
                     >
-                      <div className="absolute right-2 top-2 z-10">
-                        <button
-                          aria-expanded={actionMenuProfileId === profile.id}
-                          aria-label={`${profile.displayName} 프로필 메뉴`}
-                          className={[
-                            'grid size-8 place-items-center rounded-full transition',
-                            selected
-                              ? 'bg-[var(--nav-primary-soft)] text-[var(--nav-primary)] hover:bg-[var(--nav-selection)]'
-                              : 'bg-[var(--nav-panel)] text-[var(--nav-muted)] hover:bg-[var(--nav-selection)] hover:text-[var(--nav-ink)]',
-                          ].join(' ')}
-                          onClick={(event) => {
-                            event.stopPropagation()
-                            setActionMenuProfileId((currentProfileId) => currentProfileId === profile.id ? undefined : profile.id)
-                          }}
-                          type="button"
-                        >
-                          <DotsThree className="size-5" weight="bold" />
-                        </button>
-                        {actionMenuProfileId === profile.id ? (
-                          <div
-                            className="absolute right-0 top-10 w-max overflow-hidden rounded-xl bg-white text-sm font-bold text-[var(--nav-ink)] shadow-[var(--nav-shadow-panel)] ring-1 ring-[rgb(16_24_40/0.08)]"
-                            role="menu"
-                          >
-                            <button
-                              className="flex min-h-10 w-full items-center gap-2 whitespace-nowrap px-3 text-left transition hover:bg-[var(--nav-panel)] focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-[var(--nav-primary)]"
-                              onClick={(event) => {
-                                event.stopPropagation()
-                                setActionMenuProfileId(undefined)
-                                onOpenEdit(profile)
-                              }}
-                              role="menuitem"
-                              type="button"
-                            >
-                              <PencilSimple className="size-4" weight="bold" />
-                              수정
-                            </button>
-                            <button
-                              aria-label={`${profile.displayName} 프로필 삭제`}
-                              className="flex min-h-10 w-full items-center gap-2 whitespace-nowrap px-3 text-left text-[var(--nav-danger)] transition hover:bg-[var(--nav-panel)] focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-[var(--nav-primary)] disabled:cursor-not-allowed disabled:opacity-45"
-                              disabled={deletingProfileId === profile.id}
-                              onClick={(event) => {
-                                event.stopPropagation()
-                                setActionMenuProfileId(undefined)
-                                onDeleteProfile(profile.id)
-                              }}
-                              role="menuitem"
-                              type="button"
-                            >
-                              <Trash className="size-4" weight="bold" />
-                              삭제
-                            </button>
-                          </div>
-                        ) : null}
-                      </div>
                       <button
                         aria-label={`${profile.displayName} 프로필 선택`}
                         aria-pressed={selected}
@@ -1743,7 +1692,7 @@ function NavigationProfileSetup({
                         <span
                           aria-hidden="true"
                           className={[
-                            'grid aspect-square w-full max-w-[11rem] place-items-center overflow-hidden rounded-lg transition',
+                            'grid aspect-square w-full max-w-[9.25rem] place-items-center overflow-hidden rounded-lg transition',
                             selected
                               ? 'ring-4 ring-[var(--nav-primary)]'
                               : 'opacity-[0.86] group-hover:opacity-100',
@@ -1765,15 +1714,7 @@ function NavigationProfileSetup({
                             />
                           )}
                         </span>
-                        <span className="mt-4 text-xl font-black tracking-normal">{profile.displayName}</span>
-                        <span
-                          className={[
-                            'mt-1 text-sm font-semibold',
-                            selected ? 'text-[var(--nav-primary)]' : 'text-[var(--nav-muted)]',
-                          ].join(' ')}
-                        >
-                          {profile.agentCallName}
-                        </span>
+                        <span className="mt-4 text-xl font-bold tracking-normal">{profile.displayName}</span>
                       </button>
                     </motion.div>
                   )
@@ -1782,7 +1723,7 @@ function NavigationProfileSetup({
                 {!loading && !profileError ? (
                   <motion.button
                     aria-label="프로필 추가"
-                    className="grid h-[15rem] w-[17.5rem] shrink-0 place-items-center rounded-lg border border-dashed border-[var(--nav-border)] bg-white/56 p-3 text-[var(--nav-primary)] transition hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--nav-primary)] disabled:cursor-not-allowed disabled:opacity-40"
+                    className="grid h-[13rem] w-[13.75rem] shrink-0 place-items-center rounded-lg border border-dashed border-[var(--nav-border)] bg-white/56 p-3 text-[var(--nav-primary)] transition hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--nav-primary)] disabled:cursor-not-allowed disabled:opacity-40"
                     disabled={!canCreate}
                     initial={{ opacity: 0, y: 14 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -1808,20 +1749,37 @@ function NavigationProfileSetup({
               <p className="mt-5 text-sm font-bold text-[#ffb4a8]">프로필 선택에 실패했습니다.</p>
             ) : null}
 
-            <motion.button
-              className="mt-8 inline-flex min-h-12 items-center justify-center rounded-full bg-[var(--nav-primary)] px-8 text-base font-bold text-white shadow-[var(--nav-shadow-control)] transition hover:bg-[var(--nav-primary-hover)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--nav-primary)] disabled:cursor-not-allowed disabled:opacity-45"
-              disabled={!selectedProfile || selecting}
+            <motion.div
+              className="mt-8 flex flex-wrap items-center justify-center gap-3"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              onClick={onStart}
               transition={{
                 ...motionTiming,
                 delay: motionTiming.duration === 0 ? 0 : 0.24,
               }}
-              type="button"
             >
-              {startLabel}
-            </motion.button>
+              <button
+                className="inline-flex min-h-12 items-center justify-center rounded-full bg-[var(--nav-primary)] px-8 text-base font-bold text-white shadow-[var(--nav-shadow-control)] transition hover:bg-[var(--nav-primary-hover)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--nav-primary)] disabled:cursor-not-allowed disabled:opacity-45"
+                disabled={!selectedProfile || selecting}
+                onClick={onStart}
+                type="button"
+              >
+                {startLabel}
+              </button>
+              <button
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-white px-5 text-sm font-bold text-[var(--nav-primary)] shadow-[0_6px_16px_rgb(15_23_42/0.08)] transition hover:bg-[var(--nav-selection)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--nav-primary)] disabled:cursor-not-allowed disabled:opacity-45"
+                disabled={!selectedProfile}
+                onClick={() => {
+                  if (selectedProfile) {
+                    onOpenEdit(selectedProfile)
+                  }
+                }}
+                type="button"
+              >
+                <PencilSimple className="size-4" weight="bold" />
+                프로필 수정
+              </button>
+            </motion.div>
           </>
         )}
       </div>
@@ -1830,20 +1788,28 @@ function NavigationProfileSetup({
 }
 
 function ProfileSettingsForm({
+  deleteError,
+  deleting,
   form,
+  mode,
   motionTiming,
   saveError,
   saving,
   onBackToList,
   onChangeForm,
+  onDeleteProfile,
   onSaveProfile,
 }: {
+  deleteError: boolean
+  deleting: boolean
   form: ProfileCreateRequest
+  mode: 'create' | 'edit'
   motionTiming: MotionTiming
   saveError: boolean
   saving: boolean
   onBackToList: () => void
   onChangeForm: (form: ProfileCreateRequest) => void
+  onDeleteProfile?: () => void
   onSaveProfile: () => void
 }) {
   const updateForm = <Key extends keyof ProfileCreateRequest>(
@@ -1879,7 +1845,7 @@ function ProfileSettingsForm({
             />
           </span>
           <div className="min-w-0">
-            <h2 className="text-2xl font-black tracking-normal text-[var(--nav-ink)]">프로필 설정</h2>
+            <h2 className="text-2xl font-bold tracking-normal text-[var(--nav-ink)]">프로필 설정</h2>
             <div className="mt-3 flex min-w-0 flex-wrap gap-2">
               <span className="rounded-full bg-[var(--nav-primary-soft)] px-3 py-1 text-sm font-bold text-[var(--nav-primary)]">
                 {form.displayName || '새 운전자'}
@@ -1964,9 +1930,26 @@ function ProfileSettingsForm({
         {saveError ? (
           <p className="mt-5 text-sm font-bold text-[var(--nav-danger)]">프로필 저장에 실패했습니다.</p>
         ) : null}
+        {deleteError ? (
+          <p className="mt-3 text-sm font-bold text-[var(--nav-danger)]">프로필 삭제에 실패했습니다.</p>
+        ) : null}
       </div>
 
-      <div className="flex justify-end gap-3 border-t border-[var(--nav-border)] bg-[var(--nav-surface-raised)] px-8 py-5 max-sm:px-5">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--nav-border)] bg-[var(--nav-surface-raised)] px-8 py-5 max-sm:px-5">
+        {mode === 'edit' && onDeleteProfile ? (
+          <button
+            className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-white px-5 text-sm font-bold text-[var(--nav-danger)] ring-1 ring-[rgb(225_29_72/0.14)] transition hover:bg-[rgb(255_241_242)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-danger)] disabled:cursor-not-allowed disabled:opacity-45"
+            disabled={deleting}
+            onClick={onDeleteProfile}
+            type="button"
+          >
+            <Trash className="size-4" weight="bold" />
+            프로필 삭제
+          </button>
+        ) : (
+          <span />
+        )}
+        <div className="flex flex-wrap justify-end gap-3">
         <button
           className="inline-flex min-h-12 items-center justify-center rounded-full bg-[var(--nav-panel)] px-5 text-sm font-bold text-[var(--nav-muted)] transition hover:bg-[var(--nav-selection)] hover:text-[var(--nav-ink)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
           onClick={onBackToList}
@@ -1981,6 +1964,7 @@ function ProfileSettingsForm({
         >
           프로필 저장
         </button>
+        </div>
       </div>
     </motion.form>
   )
@@ -2726,7 +2710,7 @@ function NaviAssistantDebugPanel({
     >
       <div className="flex flex-col gap-4">
         <div className="border-b border-[var(--nav-border)] pb-3">
-          <p className="text-sm font-black">시나리오 디버깅</p>
+          <p className="text-sm font-bold">시나리오 디버깅</p>
           <p className="mt-1 text-xs font-semibold text-[var(--nav-muted)]">
             운전자 이상행동 안내 흐름을 단계별로 점검합니다.
           </p>
@@ -2754,7 +2738,7 @@ function NaviAssistantDebugPanel({
 
         <div className="rounded-xl bg-[var(--nav-panel)] p-3">
           <div className="text-xs font-bold text-[var(--nav-muted)]">현재 단계</div>
-          <div className="mt-1 truncate text-base font-black">{currentStep.label}</div>
+          <div className="mt-1 truncate text-base font-bold">{currentStep.label}</div>
           <div className="mt-1 text-sm font-semibold text-[var(--nav-muted)]">{progress}</div>
           {currentStep.text ? (
             <p className="mt-3 text-sm font-semibold leading-6 text-[var(--nav-ink)]">
@@ -3259,7 +3243,7 @@ function LabelEditorContent({
         >
           <CaretLeft className="size-5" weight="bold" />
         </button>
-        <h3 className="min-w-0 truncate text-sm font-black text-[var(--nav-ink)]">{title}</h3>
+        <h3 className="min-w-0 truncate text-sm font-bold text-[var(--nav-ink)]">{title}</h3>
       </div>
 
       <label className="grid gap-2">
@@ -3293,7 +3277,7 @@ function LabelEditorContent({
                 onClick={() => onSelectPlace(place)}
                 type="button"
               >
-                <div className="truncate text-sm font-black text-[var(--nav-ink)]">{place.name}</div>
+                <div className="truncate text-sm font-bold text-[var(--nav-ink)]">{place.name}</div>
                 <div className="mt-0.5 truncate text-xs font-semibold text-[var(--nav-muted)]">{place.address}</div>
               </button>
             ))
@@ -3306,7 +3290,7 @@ function LabelEditorContent({
       ) : (
         <div className="grid gap-3">
           <div className="rounded-xl bg-[var(--nav-panel)] px-3 py-3">
-            <div className="truncate text-sm font-black text-[var(--nav-ink)]">{selectedPlace.name}</div>
+            <div className="truncate text-sm font-bold text-[var(--nav-ink)]">{selectedPlace.name}</div>
             <div className="mt-0.5 truncate text-xs font-semibold text-[var(--nav-muted)]">{selectedPlace.address}</div>
           </div>
           <label className="grid gap-2">
@@ -3320,7 +3304,7 @@ function LabelEditorContent({
           </label>
           <button
             aria-label={`${fieldLabel} 라벨 저장`}
-            className="min-h-11 rounded-xl bg-[var(--nav-primary)] px-4 text-sm font-black text-white transition hover:bg-[var(--nav-primary-hover)] disabled:cursor-not-allowed disabled:opacity-40"
+            className="min-h-11 rounded-xl bg-[var(--nav-primary)] px-4 text-sm font-bold text-white transition hover:bg-[var(--nav-primary-hover)] disabled:cursor-not-allowed disabled:opacity-40"
             disabled={!labelName.trim()}
             onClick={onSave}
             type="button"
@@ -3381,7 +3365,7 @@ function LabelGroupSection({
       variants={itemVariants}
     >
       <div className="flex items-center justify-between gap-2">
-        <h3 className="text-sm font-black text-[var(--nav-ink)]">{title}</h3>
+        <h3 className="text-sm font-bold text-[var(--nav-ink)]">{title}</h3>
         {loading ? (
           <span className="text-xs font-bold text-[var(--nav-muted)]">불러오는 중</span>
         ) : null}
@@ -3479,12 +3463,14 @@ function SavedPlaceLabelItem({
   onSaveEditLabel: (placeId: string) => void
   onStartEditLabel: (place: SavedPlaceQuickItem) => void
 }) {
+  const [actionMenuOpen, setActionMenuOpen] = useState(false)
   const Icon = getSavedPlaceIcon(place.placeType)
+  const menuLabel = `${place.name} ${field === 'origin' ? '출발지' : '목적지'} 라벨 메뉴`
   const editLabel = `${place.name} ${field === 'origin' ? '출발지' : '목적지'} 라벨 수정`
   const deleteLabel = `${place.name} ${field === 'origin' ? '출발지' : '목적지'} 라벨 삭제`
 
   return (
-    <div className="rounded-xl bg-[var(--nav-panel)] p-3">
+    <div className="relative rounded-xl bg-[var(--nav-panel)] p-3">
       <div className="flex min-w-0 items-start gap-2.5">
         <span className="grid size-9 shrink-0 place-items-center rounded-full bg-white text-[var(--nav-primary)] shadow-[0_3px_10px_rgb(15_23_42/0.06)]">
           <Icon className="size-4" weight="bold" />
@@ -3519,12 +3505,9 @@ function SavedPlaceLabelItem({
           ) : (
             <div className="flex min-w-0 items-center gap-2">
               <OverflowMarqueeText
-                className="flex-1 text-sm font-black text-[var(--nav-ink)]"
+                className="flex-1 text-sm font-bold text-[var(--nav-ink)]"
                 text={place.name}
               />
-              <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[11px] font-black text-[var(--nav-muted)]">
-                {formatSavedPlaceTypeLabel(place.placeType)}
-              </span>
             </div>
           )}
           <OverflowMarqueeText
@@ -3532,24 +3515,53 @@ function SavedPlaceLabelItem({
             text={place.address}
           />
         </div>
-        <button
-          aria-label={editLabel}
-          className="grid size-8 shrink-0 place-items-center rounded-full text-[var(--nav-muted)] transition hover:bg-white hover:text-[var(--nav-primary)] disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
-          disabled={deleting || updating || editing}
-          onClick={() => onStartEditLabel(place)}
-          type="button"
-        >
-          <PencilSimple className="size-4" weight="bold" />
-        </button>
-        <button
-          aria-label={deleteLabel}
-          className="grid size-8 shrink-0 place-items-center rounded-full text-[var(--nav-muted)] transition hover:bg-white hover:text-[var(--nav-danger)] disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-danger)]"
-          disabled={deleting || updating || editing}
-          onClick={() => onDeletePlaceLabel(place.id)}
-          type="button"
-        >
-          <Trash className="size-4" weight="bold" />
-        </button>
+        {!editing ? (
+          <div className="relative shrink-0">
+            <button
+              aria-expanded={actionMenuOpen}
+              aria-label={menuLabel}
+              className="grid size-8 place-items-center rounded-full bg-white text-[var(--nav-muted)] transition hover:bg-[var(--nav-selection)] hover:text-[var(--nav-ink)] disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
+              disabled={deleting || updating}
+              onClick={() => setActionMenuOpen((open) => !open)}
+              type="button"
+            >
+              <DotsThree className="size-5" weight="bold" />
+            </button>
+            {actionMenuOpen ? (
+              <div
+                className="absolute right-0 top-10 z-20 w-max overflow-hidden rounded-xl bg-white text-sm font-bold text-[var(--nav-ink)] shadow-[var(--nav-shadow-panel)] ring-1 ring-[rgb(16_24_40/0.08)]"
+                role="menu"
+              >
+                <button
+                  aria-label={editLabel}
+                  className="flex min-h-10 w-full items-center gap-2 whitespace-nowrap px-3 text-left transition hover:bg-[var(--nav-panel)] focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-[var(--nav-primary)]"
+                  onClick={() => {
+                    setActionMenuOpen(false)
+                    onStartEditLabel(place)
+                  }}
+                  role="menuitem"
+                  type="button"
+                >
+                  <PencilSimple className="size-4" weight="bold" />
+                  수정
+                </button>
+                <button
+                  aria-label={deleteLabel}
+                  className="flex min-h-10 w-full items-center gap-2 whitespace-nowrap px-3 text-left text-[var(--nav-danger)] transition hover:bg-[var(--nav-panel)] focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-[var(--nav-primary)]"
+                  onClick={() => {
+                    setActionMenuOpen(false)
+                    onDeletePlaceLabel(place.id)
+                  }}
+                  role="menuitem"
+                  type="button"
+                >
+                  <Trash className="size-4" weight="bold" />
+                  삭제
+                </button>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     </div>
   )
@@ -3604,19 +3616,6 @@ function OverflowMarqueeText({
       </span>
     </div>
   )
-}
-
-function formatSavedPlaceTypeLabel(placeType: SavedPlaceType) {
-  switch (placeType) {
-    case 'HOME':
-      return '집'
-    case 'WORK':
-      return '회사'
-    case 'SCHOOL':
-      return '학교'
-    case 'FAVORITE':
-      return '즐겨찾기'
-  }
 }
 
 function getSavedPlaceIcon(placeType: SavedPlaceType) {
@@ -4671,7 +4670,7 @@ function RouteSelectionSummary({
                       <motion.button
                         key="start-guidance"
                         aria-label={`${label} 안내 시작`}
-                        className="flex h-8 w-full items-center justify-center gap-1.5 rounded-full bg-[var(--nav-ink)] px-3 text-xs font-black text-white shadow-[0_8px_18px_rgb(15_23_42/0.18)] transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)] active:scale-[0.98]"
+                        className="flex h-8 w-full items-center justify-center gap-1.5 rounded-full bg-[var(--nav-ink)] px-3 text-xs font-bold text-white shadow-[0_8px_18px_rgb(15_23_42/0.18)] transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)] active:scale-[0.98]"
                         initial={{ opacity: 0, y: 6, scale: 0.98 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 4, scale: 0.98 }}
@@ -4710,7 +4709,7 @@ function RouteSelectionSummary({
                     <span className="min-w-0 truncate text-xs font-extrabold">{label}</span>
                     {option.isRecommended ? (
                       <span className={[
-                        'ml-auto shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-black',
+                        'ml-auto shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold',
                         active ? 'bg-white/20 text-white' : 'bg-[var(--nav-selection)] text-[var(--nav-primary)]',
                       ].join(' ')}
                       >
@@ -4718,7 +4717,7 @@ function RouteSelectionSummary({
                       </span>
                     ) : null}
                   </div>
-                  <div className={['text-base font-black leading-none', active ? 'text-white' : 'text-[var(--nav-ink)]'].join(' ')}>
+                  <div className={['text-base font-bold leading-none', active ? 'text-white' : 'text-[var(--nav-ink)]'].join(' ')}>
                     {formatRouteOptionDuration(option.route.summary.durationSeconds)}
                   </div>
                   <div className={['mt-1 truncate text-[11px] font-bold', active ? 'text-white/85' : 'text-[var(--nav-muted)]'].join(' ')}>
@@ -4800,7 +4799,7 @@ function RouteSearchLoadingModal({
             state="thinking"
           />
         </div>
-        <div className="relative z-[1] -mt-2 text-base font-black">경로를 계산하고 있어요</div>
+        <div className="relative z-[1] -mt-2 text-base font-bold">경로를 계산하고 있어요</div>
         <div className="relative z-[1] mt-1 text-xs font-semibold text-[var(--nav-muted)]">
           교통 흐름과 후보 경로를 비교하는 중
         </div>
@@ -5274,7 +5273,7 @@ function getFacilitySignSrc(signCode?: number) {
 function DistancePlaque({ label, tone }: { label: string; tone: 'danger' | 'info' }) {
   return (
     <div className={[
-      'mt-[-2px] w-full rounded-b-md px-2 py-1 text-center text-2xl font-black leading-none text-white shadow-[0_4px_8px_rgba(15,23,42,0.22)] max-sm:text-xl',
+      'mt-[-2px] w-full rounded-b-md px-2 py-1 text-center text-2xl font-bold leading-none text-white shadow-[0_4px_8px_rgba(15,23,42,0.22)] max-sm:text-xl',
       tone === 'danger' ? 'bg-[#E84B2F]' : 'bg-[#1267B1]',
     ].join(' ')}
     >
@@ -5287,7 +5286,7 @@ function SpeedLimitSign({ speed }: { speed: number }) {
   return (
     <div
       aria-label={`제한속도 ${speed}km/h`}
-      className="grid size-24 place-items-center rounded-full border-[12px] border-[#E30613] bg-white text-center font-black leading-none text-[#1C1411] shadow-[0_4px_8px_rgba(15,23,42,0.22)] max-sm:size-20 max-sm:border-[10px]"
+      className="grid size-24 place-items-center rounded-full border-[12px] border-[#E30613] bg-white text-center font-bold leading-none text-[#1C1411] shadow-[0_4px_8px_rgba(15,23,42,0.22)] max-sm:size-20 max-sm:border-[10px]"
     >
       <span className="text-[2.65rem] max-sm:text-[2.15rem]">{speed}</span>
     </div>
