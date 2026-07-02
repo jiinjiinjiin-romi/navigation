@@ -204,6 +204,41 @@
   }
 }
 
+.navi-overflow-marquee {
+  position: relative;
+}
+
+.navi-overflow-marquee__track {
+  display: inline-block;
+  min-width: max-content;
+  padding-right: 2rem;
+  will-change: transform;
+  animation: navi-overflow-marquee 7s linear infinite;
+}
+
+@keyframes navi-overflow-marquee {
+  0%,
+  18% {
+    transform: translateX(0);
+  }
+
+  82%,
+  100% {
+    transform: translateX(var(--marquee-offset, -2rem));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .navi-overflow-marquee__track {
+    display: block;
+    min-width: 0;
+    padding-right: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    animation: none;
+  }
+}
+
 .driver-video-player-surface .plyr {
   position: absolute;
   inset: 0;

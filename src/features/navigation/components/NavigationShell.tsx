@@ -9,6 +9,7 @@ import {
   Buildings,
   CaretLeft,
   CaretRight,
+  Check,
   CloudSun,
   Clock,
   CarSimple,
@@ -65,6 +66,16 @@ import {
   type ProfileTheme,
   type WarningSensitivity,
 } from '../api/profileApi'
+import {
+  createFavorite,
+  deleteSavedPlace,
+  listSavedPlaces,
+  updateSavedPlace,
+  type SavedPlaceSummary,
+  type SavedPlaceType,
+  type SavedPlaceWriteRequest,
+} from '../api/savedPlaceApi'
+import { createSearchHistory, type SearchHistoryCreateRequest } from '../api/searchHistoryApi'
 import { getCurrentAddress, getRoadMatch, getRouteOptions, searchPlaces } from '../api/tmapApi'
 import { createRoundedRoutePath } from '../map/routeGeometry'
 import { markRoutePerformance, measureRoutePerformance } from '../performance/routePerformance'
@@ -89,7 +100,7 @@ import { TmapPanel, type MapCameraSettings } from './TmapPanel'
 
 type SearchFieldId = 'origin' | 'destination'
 type LocationStatus = 'checking' | 'granted' | 'denied' | 'unsupported'
-type SidePanelId = 'settings' | 'report' | 'connect'
+type SidePanelId = 'labels' | 'settings' | 'report' | 'connect'
 type ProfileSetupView = 'list' | 'create' | 'edit'
 type DriverVideoSource = {
   name: string
@@ -99,6 +110,13 @@ type DriverVideoSource = {
 type MotionTiming = {
   duration: number
   ease?: [number, number, number, number]
+}
+type SavedPlaceQuickItem = Place & {
+  placeType: SavedPlaceType
+  targetField: SearchFieldId
+}
+type RouteSearchSavedPlace = Place & {
+  targetField?: SearchFieldId
 }
 
 const CURRENT_LOCATION_PLACE_ID = 'current-location'
@@ -143,20 +161,6 @@ const DEFAULT_CURRENT_LOCATION_PLACE: Place = {
   address: '서울 광진구 능동로 209',
   coordinate: { lat: 37.5502, lng: 127.073 },
 }
-const SAVED_PLACES: Place[] = [
-  {
-    id: 'saved-home',
-    name: '집',
-    address: '서울 중구 세종대로 110',
-    coordinate: { lat: 37.5547, lng: 126.9706 },
-  },
-  {
-    id: 'saved-work',
-    name: '회사',
-    address: '서울 강남구 테헤란로 152',
-    coordinate: { lat: 37.4979, lng: 127.0276 },
-  },
-]
 const NAVIGATION_PROFILE_AVATAR_COLORS = ['#1746A2', '#6D5DF6', '#00A8FF', '#E8EEFF', '#101828']
 const MUSIC_LIBRARY = [
   {
@@ -358,14 +362,16 @@ const DEBUG_DRIVING_ASSIST_SEQUENCE = ([
 
 export function NavigationShell({
   initialProfileSetupComplete = false,
+  initialSelectedProfileId,
 }: {
   initialProfileSetupComplete?: boolean
+  initialSelectedProfileId?: string
 } = {}) {
   const shouldReduceMotion = useReducedMotion()
   const queryClient = useQueryClient()
   const [profileSetupComplete, setProfileSetupComplete] = useState(initialProfileSetupComplete)
   const [profileSetupView, setProfileSetupView] = useState<ProfileSetupView>('list')
-  const [selectedProfileId, setSelectedProfileId] = useState<string>()
+  const [selectedProfileId, setSelectedProfileId] = useState<string | undefined>(initialSelectedProfileId)
   const [editingProfileId, setEditingProfileId] = useState<string>()
   const [profileForm, setProfileForm] = useState<ProfileCreateRequest>(DEFAULT_PROFILE_CREATE_REQUEST)
   const [now, setNow] = useState(() => new Date())
@@ -434,6 +440,41 @@ export function NavigationShell({
   const profilesQuery = useQuery({
     queryKey: ['profiles'],
     queryFn: ({ signal }) => listProfiles(undefined, signal),
+  })
+  const savedPlacesQuery = useQuery({
+    queryKey: ['saved-places', selectedProfileId],
+    queryFn: ({ signal }) => listSavedPlaces(selectedProfileId!, undefined, signal),
+    enabled: profileSetupComplete && Boolean(selectedProfileId),
+  })
+  const createFavoriteMutation = useMutation({
+    mutationFn: ({ field, profileId, place }: { field: SearchFieldId; profileId: string; place: Place }) => (
+      createFavorite(profileId, createSavedPlacePayload(field, place))
+    ),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['saved-places', selectedProfileId] })
+    },
+  })
+  const deleteSavedPlaceMutation = useMutation({
+    mutationFn: (placeId: string) => deleteSavedPlace(placeId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['saved-places', selectedProfileId] })
+    },
+  })
+  const updateSavedPlaceMutation = useMutation({
+    mutationFn: ({ label, placeId }: { label: string; placeId: string }) => (
+      updateSavedPlace(placeId, { label })
+    ),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['saved-places', selectedProfileId] })
+    },
+  })
+  const createSearchHistoryMutation = useMutation({
+    mutationFn: ({ payload, profileId }: { payload: SearchHistoryCreateRequest; profileId: string }) => (
+      createSearchHistory(profileId, payload)
+    ),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['search-histories', selectedProfileId] })
+    },
   })
   const createProfileMutation = useMutation({
     mutationFn: (payload: ProfileCreateRequest) => createProfile(payload),
@@ -672,6 +713,11 @@ export function NavigationShell({
   const activeLabel = activeField === 'origin' ? '출발지 검색 결과' : '도착지 검색 결과'
   const profiles = profilesQuery.data?.profiles ?? []
   const selectedProfile = profiles.find((profile) => profile.id === selectedProfileId)
+  const savedPlaceQuickItems = useMemo(
+    () => createSavedPlaceQuickItems(savedPlacesQuery.data),
+    [savedPlacesQuery.data],
+  )
+  const routeSearchSavedPlaces: RouteSearchSavedPlace[] = savedPlaceQuickItems
   const showSuggestions = Boolean(activeField && activePlaces.length > 0)
   const assistantScenario = useMemo(
     () => NAVI_ASSISTANT_SCENARIOS.find((scenario) => scenario.id === assistantScenarioId) ?? NAVI_ASSISTANT_SCENARIOS[0],
@@ -970,7 +1016,7 @@ export function NavigationShell({
     selectRouteOption,
   ])
 
-  const selectPlace = (field: SearchFieldId, place: Place) => {
+  const selectPlace = (field: SearchFieldId, place: Place, options: { recordHistory?: boolean } = {}) => {
     stopSimulation()
     setSelectedRouteOptionId(undefined)
     setSimulationPosition(undefined)
@@ -978,6 +1024,15 @@ export function NavigationShell({
     setSimulationRemainingDuration(0)
     setGuidanceDistanceUpdateKey(0)
     guidanceDistanceDisplayRef.current.clear()
+
+    const searchQuery = field === 'origin' ? originKeyword.trim() : destinationKeyword.trim()
+
+    if (options.recordHistory !== false && selectedProfileId) {
+      createSearchHistoryMutation.mutate({
+        profileId: selectedProfileId,
+        payload: createSearchHistoryPayload(searchQuery || place.name, place),
+      })
+    }
 
     if (field === 'origin') {
       setOrigin(place)
@@ -993,7 +1048,7 @@ export function NavigationShell({
   }
 
   const selectSavedPlace = (field: SearchFieldId, place: Place) => {
-    selectPlace(field, place)
+    selectPlace(field, place, { recordHistory: false })
     setActiveField(null)
   }
 
@@ -1250,7 +1305,7 @@ export function NavigationShell({
                       motionTiming={motionTiming}
                       originKeyword={originKeyword}
                       places={activePlaces}
-                      savedPlaces={SAVED_PLACES}
+                      savedPlaces={routeSearchSavedPlaces}
                       showSuggestions={showSuggestions}
                       onChangeOrigin={(value) => {
                         setOriginKeyword(value)
@@ -1350,6 +1405,7 @@ export function NavigationShell({
                   'absolute bottom-[43px] right-0 z-40 max-sm:bottom-[37px]',
                 ].join(' ')}
                 motionTiming={motionTiming}
+                onOpenLabels={() => openSidePanel('labels')}
                 onOpenSettings={() => openSidePanel('settings')}
                 onOpenReport={() => openSidePanel('report')}
                 onOpenConnect={() => openSidePanel('connect')}
@@ -1389,9 +1445,21 @@ export function NavigationShell({
                 locationStatus={locationStatus}
                 motionTiming={motionTiming}
                 panel={activeSidePanel}
+                savedPlaces={savedPlaceQuickItems}
+                savedPlacesError={savedPlacesQuery.isError}
+                savedPlacesLoading={savedPlacesQuery.isFetching}
+                deletingLabelId={deleteSavedPlaceMutation.isPending ? deleteSavedPlaceMutation.variables : undefined}
+                updatingLabelId={updateSavedPlaceMutation.isPending ? updateSavedPlaceMutation.variables?.placeId : undefined}
                 onChangeCameraSettings={updateMapCameraSettings}
                 onClose={() => setActiveSidePanel(null)}
                 onRequestCurrentLocation={requestCurrentLocation}
+                onAddPlaceLabel={(field, place) => {
+                  if (selectedProfileId) {
+                    createFavoriteMutation.mutate({ field, profileId: selectedProfileId, place })
+                  }
+                }}
+                onDeletePlaceLabel={(placeId) => deleteSavedPlaceMutation.mutate(placeId)}
+                onUpdatePlaceLabel={(placeId, label) => updateSavedPlaceMutation.mutate({ placeId, label })}
               />
             ) : null}
           </AnimatePresence>
@@ -2032,6 +2100,70 @@ function createProfileFormFromProfile(profile: Profile): ProfileCreateRequest {
   }
 }
 
+function createSavedPlaceQuickItems(data: Awaited<ReturnType<typeof listSavedPlaces>> | undefined): SavedPlaceQuickItem[] {
+  if (!data) {
+    return []
+  }
+
+  return [
+    data.fixedPlaces.home,
+    data.fixedPlaces.work,
+    data.fixedPlaces.school,
+    ...data.favorites,
+  ].flatMap((place) => (
+    place ? [savedPlaceToQuickItem(place)] : []
+  ))
+}
+
+function savedPlaceToQuickItem(savedPlace: SavedPlaceSummary): SavedPlaceQuickItem {
+  return {
+    id: savedPlace.id,
+    name: savedPlace.label,
+    address: savedPlace.address,
+    coordinate: {
+      lat: savedPlace.latitude,
+      lng: savedPlace.longitude,
+    },
+    placeType: savedPlace.placeType,
+    targetField: getSavedPlaceTargetField(savedPlace),
+  }
+}
+
+function getSavedPlaceTargetField(savedPlace: SavedPlaceSummary): SearchFieldId {
+  if (savedPlace.providerPlaceId?.startsWith('origin:')) {
+    return 'origin'
+  }
+
+  if (savedPlace.providerPlaceId?.startsWith('destination:')) {
+    return 'destination'
+  }
+
+  return savedPlace.placeType === 'HOME' ? 'origin' : 'destination'
+}
+
+function createSavedPlacePayload(field: SearchFieldId, place: Place): SavedPlaceWriteRequest {
+  return {
+    label: place.name,
+    provider: 'TMAP',
+    providerPlaceId: `${field}:${place.id}`,
+    address: place.address,
+    latitude: place.coordinate.lat,
+    longitude: place.coordinate.lng,
+  }
+}
+
+function createSearchHistoryPayload(query: string, place: Place): SearchHistoryCreateRequest {
+  return {
+    query,
+    provider: 'TMAP',
+    providerPlaceId: place.id,
+    placeName: place.name,
+    address: place.address,
+    latitude: place.coordinate.lat,
+    longitude: place.coordinate.lng,
+  }
+}
+
 function normalizeOptionalProfileText(value: string | null) {
   const normalized = value?.trim() ?? ''
 
@@ -2668,6 +2800,7 @@ function AppIconDock({
   motionTiming,
   musicModalOpen,
   settingsDisabled,
+  onOpenLabels,
   onOpenSettings,
   onOpenReport,
   onOpenConnect,
@@ -2678,6 +2811,7 @@ function AppIconDock({
   motionTiming: MotionTiming
   musicModalOpen: boolean
   settingsDisabled: boolean
+  onOpenLabels: () => void
   onOpenSettings: () => void
   onOpenReport: () => void
   onOpenConnect: () => void
@@ -2722,6 +2856,16 @@ function AppIconDock({
           <GearSix className="size-5" weight="bold" />
         </button>
         <button
+          aria-controls="labels-drawer"
+          aria-expanded={activeSidePanel === 'labels'}
+          aria-label="라벨 설정"
+          className={railButtonClassName(activeSidePanel === 'labels')}
+          onClick={onOpenLabels}
+          type="button"
+        >
+          <RoadHorizon className="size-5" weight="bold" />
+        </button>
+        <button
           aria-controls="report-drawer"
           aria-expanded={activeSidePanel === 'report'}
           aria-label="보고서"
@@ -2762,18 +2906,34 @@ function SideDrawerPanel({
   locationStatus,
   motionTiming,
   panel,
+  savedPlaces,
+  savedPlacesError,
+  savedPlacesLoading,
+  deletingLabelId,
+  updatingLabelId,
   onChangeCameraSettings,
   onClose,
   onRequestCurrentLocation,
+  onAddPlaceLabel,
+  onDeletePlaceLabel,
+  onUpdatePlaceLabel,
 }: {
   cameraSettings: MapCameraSettings
   currentLocationLabel: string
   locationStatus: LocationStatus
   motionTiming: MotionTiming
   panel: SidePanelId
+  savedPlaces: SavedPlaceQuickItem[]
+  savedPlacesError: boolean
+  savedPlacesLoading: boolean
+  deletingLabelId: string | undefined
+  updatingLabelId: string | undefined
   onChangeCameraSettings: (settings: Partial<MapCameraSettings>) => void
   onClose: () => void
   onRequestCurrentLocation: () => void
+  onAddPlaceLabel: (field: SearchFieldId, place: Place) => void
+  onDeletePlaceLabel: (placeId: string) => void
+  onUpdatePlaceLabel: (placeId: string, label: string) => void
 }) {
   const itemTransition = {
     ...motionTiming,
@@ -2799,6 +2959,10 @@ function SideDrawerPanel({
   }
   const drawerOffset = motionTiming.duration === 0 ? 0 : SIDE_PANEL_WIDTH
   const drawerMeta = {
+    labels: {
+      label: '라벨 설정',
+      icon: RoadHorizon,
+    },
     settings: {
       label: '설정',
       icon: GearSix,
@@ -2812,7 +2976,19 @@ function SideDrawerPanel({
       icon: PlugsConnected,
     },
   }[panel]
-  const content = panel === 'settings' ? (
+  const content = panel === 'labels' ? (
+      <LabelsDrawerContent
+        deletingLabelId={deletingLabelId}
+        itemVariants={itemVariants}
+        savedPlaces={savedPlaces}
+        savedPlacesError={savedPlacesError}
+        savedPlacesLoading={savedPlacesLoading}
+        updatingLabelId={updatingLabelId}
+        onAddPlaceLabel={onAddPlaceLabel}
+        onDeletePlaceLabel={onDeletePlaceLabel}
+        onUpdatePlaceLabel={onUpdatePlaceLabel}
+      />
+  ) : panel === 'settings' ? (
     <SettingsDrawerContent
       cameraSettings={cameraSettings}
       currentLocationLabel={currentLocationLabel}
@@ -2858,7 +3034,8 @@ function SideDrawerPanel({
         </div>
         <motion.div
           animate="visible"
-          className="grid gap-3 overflow-auto px-4 py-4"
+          className="grid gap-3 overflow-x-hidden overflow-y-auto px-4 py-4"
+          data-testid="side-drawer-content"
           initial="hidden"
           variants={{
             hidden: {
@@ -2880,6 +3057,576 @@ function SideDrawerPanel({
       </div>
     </motion.aside>
   )
+}
+
+function LabelsDrawerContent({
+  deletingLabelId,
+  itemVariants,
+  savedPlaces,
+  savedPlacesError,
+  savedPlacesLoading,
+  updatingLabelId,
+  onAddPlaceLabel,
+  onDeletePlaceLabel,
+  onUpdatePlaceLabel,
+}: {
+  deletingLabelId: string | undefined
+  itemVariants: {
+    hidden: { opacity: number; y: number; scale: number; transition: MotionTiming }
+    visible: { opacity: number; y: number; scale: number; transition: MotionTiming }
+  }
+  savedPlaces: SavedPlaceQuickItem[]
+  savedPlacesError: boolean
+  savedPlacesLoading: boolean
+  updatingLabelId: string | undefined
+  onAddPlaceLabel: (field: SearchFieldId, place: Place) => void
+  onDeletePlaceLabel: (placeId: string) => void
+  onUpdatePlaceLabel: (placeId: string, label: string) => void
+}) {
+  const [editingField, setEditingField] = useState<SearchFieldId | null>(null)
+  const [editingLabelId, setEditingLabelId] = useState<string>()
+  const [editingLabelName, setEditingLabelName] = useState('')
+  const [labelSearchKeyword, setLabelSearchKeyword] = useState('')
+  const [selectedLabelPlace, setSelectedLabelPlace] = useState<Place>()
+  const [labelName, setLabelName] = useState('')
+  const debouncedLabelSearchKeyword = useDebouncedValue(labelSearchKeyword.trim(), SEARCH_DEBOUNCE_MS)
+  const labelSearchQuery = useQuery({
+    queryKey: ['label-place-search', editingField, debouncedLabelSearchKeyword],
+    queryFn: ({ signal }) => searchPlaces(debouncedLabelSearchKeyword, undefined, signal),
+    enabled: Boolean(editingField) && debouncedLabelSearchKeyword.length >= 2 && !selectedLabelPlace,
+    placeholderData: keepPreviousData,
+  })
+  const originLabels = savedPlaces.filter((place) => place.targetField === 'origin')
+  const destinationLabels = savedPlaces.filter((place) => place.targetField === 'destination')
+  const resetLabelEditor = () => {
+    setEditingField(null)
+    setLabelSearchKeyword('')
+    setSelectedLabelPlace(undefined)
+    setLabelName('')
+  }
+  const openLabelEditor = (field: SearchFieldId) => {
+    setEditingLabelId(undefined)
+    setEditingLabelName('')
+    setEditingField(field)
+    setLabelSearchKeyword('')
+    setSelectedLabelPlace(undefined)
+    setLabelName('')
+  }
+  const startEditLabel = (place: SavedPlaceQuickItem) => {
+    setEditingField(null)
+    setEditingLabelId(place.id)
+    setEditingLabelName(place.name)
+  }
+  const cancelEditLabel = () => {
+    setEditingLabelId(undefined)
+    setEditingLabelName('')
+  }
+  const saveEditLabel = (placeId: string) => {
+    const nextLabel = editingLabelName.trim()
+    if (!nextLabel) {
+      return
+    }
+
+    onUpdatePlaceLabel(placeId, nextLabel)
+    cancelEditLabel()
+  }
+
+  if (editingField) {
+    const title = editingField === 'origin' ? '출발지 라벨 추가' : '목적지 라벨 추가'
+
+    return (
+      <LabelEditorContent
+        field={editingField}
+        labelName={labelName}
+        loading={labelSearchQuery.isFetching}
+        places={labelSearchQuery.data ?? []}
+        searchKeyword={labelSearchKeyword}
+        selectedPlace={selectedLabelPlace}
+        title={title}
+        onBack={resetLabelEditor}
+        onChangeLabelName={setLabelName}
+        onChangeSearchKeyword={(value) => {
+          setLabelSearchKeyword(value)
+          setSelectedLabelPlace(undefined)
+          setLabelName('')
+        }}
+        onSave={() => {
+          if (selectedLabelPlace) {
+            onAddPlaceLabel(editingField, {
+              ...selectedLabelPlace,
+              name: labelName.trim() || selectedLabelPlace.name,
+            })
+            resetLabelEditor()
+          }
+        }}
+        onSelectPlace={(place) => {
+          setSelectedLabelPlace(place)
+          setLabelSearchKeyword(place.name)
+          setLabelName(place.name)
+        }}
+      />
+    )
+  }
+
+  return (
+    <>
+      <LabelGroupSection
+        addLabel="출발지 라벨 추가"
+        emptyLabel="출발지 라벨이 없습니다."
+        field="origin"
+        itemVariants={itemVariants}
+        loading={savedPlacesLoading}
+        places={originLabels}
+        savedPlacesError={savedPlacesError}
+        deletingLabelId={deletingLabelId}
+        editingLabelId={editingLabelId}
+        editingLabelName={editingLabelName}
+        updatingLabelId={updatingLabelId}
+        onCancelEditLabel={cancelEditLabel}
+        onChangeEditingLabelName={setEditingLabelName}
+        onOpenLabelEditor={openLabelEditor}
+        onDeletePlaceLabel={onDeletePlaceLabel}
+        onSaveEditLabel={saveEditLabel}
+        onStartEditLabel={startEditLabel}
+      />
+      <LabelGroupSection
+        addLabel="목적지 라벨 추가"
+        emptyLabel="목적지 라벨이 없습니다."
+        field="destination"
+        itemVariants={itemVariants}
+        loading={savedPlacesLoading}
+        places={destinationLabels}
+        savedPlacesError={savedPlacesError}
+        deletingLabelId={deletingLabelId}
+        editingLabelId={editingLabelId}
+        editingLabelName={editingLabelName}
+        updatingLabelId={updatingLabelId}
+        onCancelEditLabel={cancelEditLabel}
+        onChangeEditingLabelName={setEditingLabelName}
+        onOpenLabelEditor={openLabelEditor}
+        onDeletePlaceLabel={onDeletePlaceLabel}
+        onSaveEditLabel={saveEditLabel}
+        onStartEditLabel={startEditLabel}
+      />
+    </>
+  )
+}
+
+function LabelEditorContent({
+  field,
+  labelName,
+  loading,
+  places,
+  searchKeyword,
+  selectedPlace,
+  title,
+  onBack,
+  onChangeLabelName,
+  onChangeSearchKeyword,
+  onSave,
+  onSelectPlace,
+}: {
+  field: SearchFieldId
+  labelName: string
+  loading: boolean
+  places: Place[]
+  searchKeyword: string
+  selectedPlace: Place | undefined
+  title: string
+  onBack: () => void
+  onChangeLabelName: (value: string) => void
+  onChangeSearchKeyword: (value: string) => void
+  onSave: () => void
+  onSelectPlace: (place: Place) => void
+}) {
+  const fieldLabel = field === 'origin' ? '출발지' : '목적지'
+
+  return (
+    <motion.section
+      animate={{ opacity: 1, y: 0 }}
+      className="grid gap-3"
+      initial={{ opacity: 0, y: 8 }}
+      transition={{ duration: 0.18 }}
+    >
+      <div className="flex items-center gap-2">
+        <button
+          aria-label="라벨 목록으로 돌아가기"
+          className="grid size-9 place-items-center rounded-full text-[var(--nav-muted)] transition hover:bg-[var(--nav-panel)] hover:text-[var(--nav-ink)]"
+          onClick={onBack}
+          type="button"
+        >
+          <CaretLeft className="size-5" weight="bold" />
+        </button>
+        <h3 className="min-w-0 truncate text-sm font-black text-[var(--nav-ink)]">{title}</h3>
+      </div>
+
+      <label className="grid gap-2">
+        <span className="text-xs font-bold text-[var(--nav-muted)]">주소 검색</span>
+        <span className="flex min-h-11 items-center gap-2 rounded-xl bg-[var(--nav-panel)] px-3">
+          <MagnifyingGlass className="size-4 shrink-0 text-[var(--nav-muted)]" weight="bold" />
+          <input
+            aria-label={`${fieldLabel} 라벨 주소 검색`}
+            className="min-w-0 flex-1 bg-transparent text-sm font-bold text-[var(--nav-ink)] outline-none placeholder:text-[var(--nav-muted)]"
+            onChange={(event) => onChangeSearchKeyword(event.target.value)}
+            placeholder="주소 또는 장소 검색"
+            role="combobox"
+            type="text"
+            value={searchKeyword}
+          />
+        </span>
+      </label>
+
+      {!selectedPlace ? (
+        <div className="grid min-h-[9rem] gap-2">
+          {loading ? (
+            <div className="rounded-xl bg-[var(--nav-panel)] px-3 py-3 text-sm font-semibold text-[var(--nav-muted)]">
+              검색 중
+            </div>
+          ) : places.length ? (
+            places.map((place) => (
+              <button
+                aria-label={`${place.name} 주소 선택`}
+                className="rounded-xl bg-[var(--nav-panel)] px-3 py-3 text-left transition hover:bg-[var(--nav-selection)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
+                key={place.id}
+                onClick={() => onSelectPlace(place)}
+                type="button"
+              >
+                <div className="truncate text-sm font-black text-[var(--nav-ink)]">{place.name}</div>
+                <div className="mt-0.5 truncate text-xs font-semibold text-[var(--nav-muted)]">{place.address}</div>
+              </button>
+            ))
+          ) : (
+            <div className="rounded-xl bg-[var(--nav-panel)] px-3 py-3 text-sm font-semibold text-[var(--nav-muted)]">
+              검색어를 입력하세요.
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="grid gap-3">
+          <div className="rounded-xl bg-[var(--nav-panel)] px-3 py-3">
+            <div className="truncate text-sm font-black text-[var(--nav-ink)]">{selectedPlace.name}</div>
+            <div className="mt-0.5 truncate text-xs font-semibold text-[var(--nav-muted)]">{selectedPlace.address}</div>
+          </div>
+          <label className="grid gap-2">
+            <span className="text-xs font-bold text-[var(--nav-muted)]">라벨 이름</span>
+            <input
+              aria-label={`${fieldLabel} 라벨 이름`}
+              className="min-h-11 rounded-xl bg-[var(--nav-panel)] px-3 text-sm font-bold text-[var(--nav-ink)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--nav-focus-ring)]"
+              onChange={(event) => onChangeLabelName(event.target.value)}
+              value={labelName}
+            />
+          </label>
+          <button
+            aria-label={`${fieldLabel} 라벨 저장`}
+            className="min-h-11 rounded-xl bg-[var(--nav-primary)] px-4 text-sm font-black text-white transition hover:bg-[var(--nav-primary-hover)] disabled:cursor-not-allowed disabled:opacity-40"
+            disabled={!labelName.trim()}
+            onClick={onSave}
+            type="button"
+          >
+            저장
+          </button>
+        </div>
+      )}
+    </motion.section>
+  )
+}
+
+function LabelGroupSection({
+  addLabel,
+  deletingLabelId,
+  editingLabelId,
+  editingLabelName,
+  emptyLabel,
+  field,
+  itemVariants,
+  loading,
+  places,
+  savedPlacesError,
+  updatingLabelId,
+  onCancelEditLabel,
+  onChangeEditingLabelName,
+  onOpenLabelEditor,
+  onDeletePlaceLabel,
+  onSaveEditLabel,
+  onStartEditLabel,
+}: {
+  addLabel: string
+  deletingLabelId: string | undefined
+  editingLabelId: string | undefined
+  editingLabelName: string
+  emptyLabel: string
+  field: SearchFieldId
+  itemVariants: {
+    hidden: { opacity: number; y: number; scale: number; transition: MotionTiming }
+    visible: { opacity: number; y: number; scale: number; transition: MotionTiming }
+  }
+  loading: boolean
+  places: SavedPlaceQuickItem[]
+  savedPlacesError: boolean
+  updatingLabelId: string | undefined
+  onCancelEditLabel: () => void
+  onChangeEditingLabelName: (value: string) => void
+  onOpenLabelEditor: (field: SearchFieldId) => void
+  onDeletePlaceLabel: (placeId: string) => void
+  onSaveEditLabel: (placeId: string) => void
+  onStartEditLabel: (place: SavedPlaceQuickItem) => void
+}) {
+  const title = field === 'origin' ? '출발지 라벨' : '목적지 라벨'
+
+  return (
+    <motion.section
+      className="grid gap-2"
+      variants={itemVariants}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-sm font-black text-[var(--nav-ink)]">{title}</h3>
+        {loading ? (
+          <span className="text-xs font-bold text-[var(--nav-muted)]">불러오는 중</span>
+        ) : null}
+      </div>
+      <AddLabelButton
+        label={addLabel}
+        field={field}
+        onOpenLabelEditor={onOpenLabelEditor}
+      />
+      {loading && !places.length ? (
+        <div className="grid gap-2" aria-label={`${title} 로딩`}>
+          {[0, 1].map((index) => (
+            <div
+              className="h-[4.25rem] rounded-xl bg-[var(--nav-panel)]"
+              key={index}
+            />
+          ))}
+        </div>
+      ) : savedPlacesError ? (
+        <div className="rounded-xl bg-[var(--nav-panel)] px-3 py-3 text-sm font-semibold text-[var(--nav-muted)]">
+          저장 장소를 불러오지 못했습니다.
+        </div>
+      ) : places.length ? (
+        <div className="grid gap-2">
+          {places.map((place) => (
+            <SavedPlaceLabelItem
+              deleting={deletingLabelId === place.id}
+              editing={editingLabelId === place.id}
+              editLabelValue={editingLabelName}
+              field={field}
+              key={place.id}
+              place={place}
+              updating={updatingLabelId === place.id}
+              onCancelEditLabel={onCancelEditLabel}
+              onChangeEditingLabelName={onChangeEditingLabelName}
+              onDeletePlaceLabel={onDeletePlaceLabel}
+              onSaveEditLabel={onSaveEditLabel}
+              onStartEditLabel={onStartEditLabel}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-xl bg-[var(--nav-panel)] px-3 py-3 text-sm font-semibold text-[var(--nav-muted)]">
+          {emptyLabel}
+        </div>
+      )}
+    </motion.section>
+  )
+}
+
+function AddLabelButton({
+  field,
+  label,
+  onOpenLabelEditor,
+}: {
+  field: SearchFieldId
+  label: string
+  onOpenLabelEditor: (field: SearchFieldId) => void
+}) {
+  return (
+    <button
+      aria-label={label}
+      className="flex min-h-11 min-w-0 items-center gap-2 rounded-xl bg-white px-3 text-left text-sm font-semibold text-[var(--nav-ink)] transition hover:bg-[var(--nav-selection)] disabled:cursor-not-allowed disabled:bg-white/60 disabled:text-[var(--nav-subtle)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
+      onClick={() => onOpenLabelEditor(field)}
+      type="button"
+    >
+      <Plus className="size-4 shrink-0 text-[var(--nav-primary)]" weight="bold" />
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+    </button>
+  )
+}
+
+function SavedPlaceLabelItem({
+  deleting,
+  editing,
+  editLabelValue,
+  field,
+  place,
+  updating,
+  onCancelEditLabel,
+  onChangeEditingLabelName,
+  onDeletePlaceLabel,
+  onSaveEditLabel,
+  onStartEditLabel,
+}: {
+  deleting: boolean
+  editing: boolean
+  editLabelValue: string
+  field: SearchFieldId
+  place: SavedPlaceQuickItem
+  updating: boolean
+  onCancelEditLabel: () => void
+  onChangeEditingLabelName: (value: string) => void
+  onDeletePlaceLabel: (placeId: string) => void
+  onSaveEditLabel: (placeId: string) => void
+  onStartEditLabel: (place: SavedPlaceQuickItem) => void
+}) {
+  const Icon = getSavedPlaceIcon(place.placeType)
+  const editLabel = `${place.name} ${field === 'origin' ? '출발지' : '목적지'} 라벨 수정`
+  const deleteLabel = `${place.name} ${field === 'origin' ? '출발지' : '목적지'} 라벨 삭제`
+
+  return (
+    <div className="rounded-xl bg-[var(--nav-panel)] p-3">
+      <div className="flex min-w-0 items-start gap-2.5">
+        <span className="grid size-9 shrink-0 place-items-center rounded-full bg-white text-[var(--nav-primary)] shadow-[0_3px_10px_rgb(15_23_42/0.06)]">
+          <Icon className="size-4" weight="bold" />
+        </span>
+        <div className="min-w-0 flex-1">
+          {editing ? (
+            <div className="flex min-w-0 items-center gap-1.5">
+              <input
+                aria-label={`${place.name} 라벨 이름 수정`}
+                className="min-h-8 min-w-0 flex-1 rounded-lg bg-white px-2 text-sm font-bold text-[var(--nav-ink)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--nav-focus-ring)]"
+                onChange={(event) => onChangeEditingLabelName(event.target.value)}
+                value={editLabelValue}
+              />
+              <button
+                aria-label={`${place.name} 라벨 수정 저장`}
+                className="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--nav-primary)] text-white transition hover:bg-[var(--nav-primary-hover)] disabled:cursor-not-allowed disabled:opacity-40"
+                disabled={!editLabelValue.trim() || updating}
+                onClick={() => onSaveEditLabel(place.id)}
+                type="button"
+              >
+                <Check className="size-4" weight="bold" />
+              </button>
+              <button
+                aria-label={`${place.name} 라벨 수정 취소`}
+                className="grid size-8 shrink-0 place-items-center rounded-full text-[var(--nav-muted)] transition hover:bg-white hover:text-[var(--nav-ink)]"
+                onClick={onCancelEditLabel}
+                type="button"
+              >
+                <X className="size-4" weight="bold" />
+              </button>
+            </div>
+          ) : (
+            <div className="flex min-w-0 items-center gap-2">
+              <OverflowMarqueeText
+                className="flex-1 text-sm font-black text-[var(--nav-ink)]"
+                text={place.name}
+              />
+              <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[11px] font-black text-[var(--nav-muted)]">
+                {formatSavedPlaceTypeLabel(place.placeType)}
+              </span>
+            </div>
+          )}
+          <OverflowMarqueeText
+            className="mt-0.5 text-xs font-semibold text-[var(--nav-muted)]"
+            text={place.address}
+          />
+        </div>
+        <button
+          aria-label={editLabel}
+          className="grid size-8 shrink-0 place-items-center rounded-full text-[var(--nav-muted)] transition hover:bg-white hover:text-[var(--nav-primary)] disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
+          disabled={deleting || updating || editing}
+          onClick={() => onStartEditLabel(place)}
+          type="button"
+        >
+          <PencilSimple className="size-4" weight="bold" />
+        </button>
+        <button
+          aria-label={deleteLabel}
+          className="grid size-8 shrink-0 place-items-center rounded-full text-[var(--nav-muted)] transition hover:bg-white hover:text-[var(--nav-danger)] disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-danger)]"
+          disabled={deleting || updating || editing}
+          onClick={() => onDeletePlaceLabel(place.id)}
+          type="button"
+        >
+          <Trash className="size-4" weight="bold" />
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function OverflowMarqueeText({
+  className,
+  text,
+}: {
+  className: string
+  text: string
+}) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const textRef = useRef<HTMLSpanElement>(null)
+  const [overflowing, setOverflowing] = useState(false)
+  const [marqueeOffset, setMarqueeOffset] = useState(0)
+
+  useEffect(() => {
+    const updateOverflow = () => {
+      const container = containerRef.current
+      const textElement = textRef.current
+
+      if (!container || !textElement) {
+        return
+      }
+
+      const overflowAmount = textElement.scrollWidth - container.clientWidth
+      setOverflowing(overflowAmount > 1)
+      setMarqueeOffset(Math.min(0, -overflowAmount))
+    }
+
+    updateOverflow()
+    window.addEventListener('resize', updateOverflow)
+
+    return () => {
+      window.removeEventListener('resize', updateOverflow)
+    }
+  }, [text])
+
+  return (
+    <div
+      className={['navi-overflow-marquee min-w-0 overflow-hidden whitespace-nowrap', className].join(' ')}
+      ref={containerRef}
+      title={text}
+    >
+      <span
+        className={overflowing ? 'navi-overflow-marquee__track' : 'block truncate'}
+        ref={textRef}
+        style={overflowing ? ({ '--marquee-offset': `${marqueeOffset}px` } as CSSProperties) : undefined}
+      >
+        {text}
+      </span>
+    </div>
+  )
+}
+
+function formatSavedPlaceTypeLabel(placeType: SavedPlaceType) {
+  switch (placeType) {
+    case 'HOME':
+      return '집'
+    case 'WORK':
+      return '회사'
+    case 'SCHOOL':
+      return '학교'
+    case 'FAVORITE':
+      return '즐겨찾기'
+  }
+}
+
+function getSavedPlaceIcon(placeType: SavedPlaceType) {
+  if (placeType === 'HOME') {
+    return HouseLine
+  }
+
+  if (placeType === 'WORK' || placeType === 'SCHOOL') {
+    return Buildings
+  }
+
+  return MapPin
 }
 
 function SettingsDrawerContent({
@@ -3486,6 +4233,13 @@ function isRouteKeywordDraftMismatched(keyword: string, place: Place | undefined
   return trimmedKeyword !== place.name && trimmedKeyword !== place.address
 }
 
+function getSavedPlacesForRouteField(
+  savedPlaces: RouteSearchSavedPlace[],
+  field: SearchFieldId,
+): Place[] {
+  return savedPlaces.filter((place) => !place.targetField || place.targetField === field)
+}
+
 function RouteSearchSheet({
   activeField,
   activeIndex,
@@ -3514,7 +4268,7 @@ function RouteSearchSheet({
   motionTiming: MotionTiming
   originKeyword: string
   places: Place[]
-  savedPlaces: Place[]
+  savedPlaces: RouteSearchSavedPlace[]
   showSuggestions: boolean
   onChangeOrigin: (value: string) => void
   onChangeDestination: (value: string) => void
@@ -3692,7 +4446,7 @@ function RouteSearchSheet({
               ) : (
                 <motion.div
                   animate="visible"
-                  className="rounded-2xl bg-white/78 p-3 shadow-[0_6px_14px_rgb(15_23_42/0.06)] ring-1 ring-[rgb(148_163_184/0.14)]"
+                  className="min-w-0 rounded-2xl bg-white/78 p-3 shadow-[0_6px_14px_rgb(15_23_42/0.06)] ring-1 ring-[rgb(148_163_184/0.14)]"
                   exit="hidden"
                   initial="hidden"
                   key={`route-field-editor-${activeField}`}
@@ -3736,11 +4490,12 @@ function RouteSearchSheet({
                       />
                     </motion.div>
                     <motion.div
+                      className="min-w-0"
                       variants={routeSearchElementVariants}
                     >
                       <SavedPlaceButtons
                         field="origin"
-                        places={savedPlaces}
+                        places={getSavedPlacesForRouteField(savedPlaces, 'origin')}
                         onFillCurrentLocation={onFillOriginWithCurrentLocation}
                         onSelect={onSelectSavedPlace}
                       />
@@ -3771,11 +4526,12 @@ function RouteSearchSheet({
                       />
                     </motion.div>
                     <motion.div
+                      className="min-w-0"
                       variants={routeSearchElementVariants}
                     >
                       <SavedPlaceButtons
                         field="destination"
-                        places={savedPlaces}
+                        places={getSavedPlacesForRouteField(savedPlaces, 'destination')}
                         onSelect={onSelectSavedPlace}
                       />
                     </motion.div>
@@ -4941,27 +5697,24 @@ function SavedPlaceButtons({
 
   return (
     <div
-      className={[
-        'mt-2 grid gap-2',
-        onFillCurrentLocation ? 'grid-cols-3' : 'grid-cols-2',
-      ].join(' ')}
+      className="mt-2 flex w-full max-w-full min-w-0 flex-nowrap gap-2 overflow-x-auto overflow-y-hidden pb-1"
       aria-label={`${fieldLabel} 빠른 설정`}
     >
       {onFillCurrentLocation ? (
         <button
           aria-label={`${fieldLabel}를 현재 위치로 설정`}
-          className="inline-flex min-h-10 min-w-0 items-center justify-center gap-2 rounded-xl bg-[var(--nav-panel)] px-3 text-[13px] font-semibold text-[var(--nav-primary)] transition hover:bg-[var(--nav-selection)]"
+          className="inline-flex min-h-10 w-fit shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[var(--nav-panel)] px-3 text-[13px] font-semibold text-[var(--nav-primary)] transition hover:bg-[var(--nav-selection)]"
           onClick={onFillCurrentLocation}
           type="button"
         >
           <MapPin className="h-4 w-4" weight="bold" />
-          <span className="min-w-0 truncate">현재 위치</span>
+          <span>현재 위치</span>
         </button>
       ) : null}
       {places.map((place) => (
         <button
           aria-label={`${fieldLabel}를 ${formatSavedPlaceDirection(place.name)} 설정`}
-          className="inline-flex min-h-10 min-w-0 items-center justify-center gap-2 rounded-xl bg-[var(--nav-panel)] px-3 text-[13px] font-semibold text-[var(--nav-ink)] transition hover:bg-[var(--nav-selection)]"
+          className="inline-flex min-h-10 w-fit shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[var(--nav-panel)] px-3 text-[13px] font-semibold text-[var(--nav-ink)] transition hover:bg-[var(--nav-selection)]"
           key={`${field}-${place.id}`}
           onClick={() => onSelect(field, place)}
           type="button"
@@ -4971,7 +5724,7 @@ function SavedPlaceButtons({
           ) : (
             <Buildings className="h-4 w-4 text-[var(--nav-primary)]" weight="bold" />
           )}
-          <span className="min-w-0 truncate">{place.name}</span>
+          <span>{place.name}</span>
         </button>
       ))}
     </div>

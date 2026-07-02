@@ -17,6 +17,8 @@ import {
   selectProfile,
   updateProfile,
 } from '../api/profileApi'
+import { createFavorite, deleteSavedPlace, listSavedPlaces, updateSavedPlace } from '../api/savedPlaceApi'
+import { createSearchHistory } from '../api/searchHistoryApi'
 import { getCurrentAddress, getRoadMatch, getRouteOptions, searchPlaces } from '../api/tmapApi'
 
 let routeOptionsOverlayReadyByDefault = true
@@ -45,6 +47,17 @@ vi.mock('../api/profileApi', async () => {
     updateProfile: vi.fn(),
   }
 })
+
+vi.mock('../api/savedPlaceApi', () => ({
+  createFavorite: vi.fn(),
+  deleteSavedPlace: vi.fn(),
+  listSavedPlaces: vi.fn(),
+  updateSavedPlace: vi.fn(),
+}))
+
+vi.mock('../api/searchHistoryApi', () => ({
+  createSearchHistory: vi.fn(),
+}))
 
 vi.mock('@/features/orb', () => ({
   VoiceOrb: ({
@@ -217,6 +230,11 @@ const mockedCreateProfile = vi.mocked(createProfile)
 const mockedDeleteProfile = vi.mocked(deleteProfile)
 const mockedSelectProfile = vi.mocked(selectProfile)
 const mockedUpdateProfile = vi.mocked(updateProfile)
+const mockedCreateFavorite = vi.mocked(createFavorite)
+const mockedDeleteSavedPlace = vi.mocked(deleteSavedPlace)
+const mockedListSavedPlaces = vi.mocked(listSavedPlaces)
+const mockedUpdateSavedPlace = vi.mocked(updateSavedPlace)
+const mockedCreateSearchHistory = vi.mocked(createSearchHistory)
 
 const mockProfiles = [
   {
@@ -307,6 +325,11 @@ describe('NavigationShell', () => {
     mockedDeleteProfile.mockReset()
     mockedSelectProfile.mockReset()
     mockedUpdateProfile.mockReset()
+    mockedCreateFavorite.mockReset()
+    mockedDeleteSavedPlace.mockReset()
+    mockedListSavedPlaces.mockReset()
+    mockedUpdateSavedPlace.mockReset()
+    mockedCreateSearchHistory.mockReset()
     mockedListProfiles.mockResolvedValue({
       profiles: mockProfiles,
       count: mockProfiles.length,
@@ -335,6 +358,77 @@ describe('NavigationShell', () => {
       ...payload,
       id: profileId,
     }))
+    mockedListSavedPlaces.mockResolvedValue({
+      fixedPlaces: {
+        home: {
+          id: 'home-id',
+          placeType: 'HOME',
+          label: '집',
+          provider: 'TMAP',
+          providerPlaceId: 'origin:default-home',
+          address: '서울 중구 세종대로 110',
+          latitude: 37.5547,
+          longitude: 126.9706,
+        },
+        work: {
+          id: 'work-id',
+          placeType: 'WORK',
+          label: '회사',
+          provider: 'TMAP',
+          providerPlaceId: 'destination:default-work',
+          address: '서울 강남구 테헤란로 152',
+          latitude: 37.4979,
+          longitude: 127.0276,
+        },
+        school: null,
+      },
+      favorites: [
+        {
+          id: 'favorite-id',
+          placeType: 'FAVORITE',
+          label: '성수 카페',
+          provider: 'KAKAO',
+          providerPlaceId: null,
+          address: '서울 성동구 성수동',
+          latitude: 37.5442,
+          longitude: 127.0557,
+        },
+      ],
+    })
+    mockedCreateFavorite.mockResolvedValue({
+      id: 'added-label-id',
+      placeType: 'FAVORITE',
+      label: '세종대학교',
+      provider: 'TMAP',
+      providerPlaceId: 'current-location',
+      address: '서울특별시 중구 세종대로 110',
+      latitude: 37.5665,
+      longitude: 126.978,
+      createdAt: '2026-07-03T00:00:00.000000Z',
+      updatedAt: '2026-07-03T00:00:00.000000Z',
+    })
+    mockedDeleteSavedPlace.mockResolvedValue(undefined)
+    mockedUpdateSavedPlace.mockResolvedValue({
+      id: 'favorite-id',
+      placeType: 'FAVORITE',
+      label: '성수 작업실',
+      provider: 'KAKAO',
+      providerPlaceId: null,
+      address: '서울 성동구 성수동',
+      latitude: 37.5442,
+      longitude: 127.0557,
+    })
+    mockedCreateSearchHistory.mockResolvedValue({
+      id: 1,
+      query: '서울역',
+      provider: 'TMAP',
+      providerPlaceId: 'poi-1',
+      placeName: '서울역',
+      address: '서울 중구 봉래동2가',
+      latitude: 37.5547,
+      longitude: 126.9706,
+      searchedAt: '2026-07-03T00:00:00.000000Z',
+    })
     HTMLMediaElement.prototype.play = vi.fn(() => Promise.reject(new Error('test audio fallback')))
     HTMLMediaElement.prototype.pause = vi.fn()
     mockedGetRoadMatch.mockResolvedValue([
@@ -585,7 +679,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell initialProfileSetupComplete />
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
       </QueryClientProvider>,
     )
 
@@ -624,7 +718,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell initialProfileSetupComplete />
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
       </QueryClientProvider>,
     )
 
@@ -664,7 +758,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell initialProfileSetupComplete />
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
       </QueryClientProvider>,
     )
 
@@ -689,7 +783,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell initialProfileSetupComplete />
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
       </QueryClientProvider>,
     )
 
@@ -705,7 +799,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell initialProfileSetupComplete />
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
       </QueryClientProvider>,
     )
 
@@ -782,7 +876,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell initialProfileSetupComplete />
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
       </QueryClientProvider>,
     )
 
@@ -801,7 +895,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell initialProfileSetupComplete />
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
       </QueryClientProvider>,
     )
 
@@ -832,7 +926,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell initialProfileSetupComplete />
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
       </QueryClientProvider>,
     )
 
@@ -877,7 +971,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell initialProfileSetupComplete />
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
       </QueryClientProvider>,
     )
 
@@ -924,7 +1018,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell initialProfileSetupComplete />
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
       </QueryClientProvider>,
     )
 
@@ -952,7 +1046,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell initialProfileSetupComplete />
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
       </QueryClientProvider>,
     )
 
@@ -982,7 +1076,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell initialProfileSetupComplete />
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
       </QueryClientProvider>,
     )
 
@@ -999,7 +1093,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell initialProfileSetupComplete />
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
       </QueryClientProvider>,
     )
 
@@ -1023,7 +1117,7 @@ describe('NavigationShell', () => {
     try {
       render(
         <QueryClientProvider client={queryClient}>
-          <NavigationShell initialProfileSetupComplete />
+          <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
         </QueryClientProvider>,
       )
 
@@ -1049,7 +1143,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell initialProfileSetupComplete />
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
       </QueryClientProvider>,
     )
 
@@ -1152,7 +1246,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell initialProfileSetupComplete />
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
       </QueryClientProvider>,
     )
 
@@ -1265,7 +1359,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell initialProfileSetupComplete />
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
       </QueryClientProvider>,
     )
 
@@ -1320,7 +1414,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell initialProfileSetupComplete />
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
       </QueryClientProvider>,
     )
 
@@ -1424,7 +1518,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell initialProfileSetupComplete />
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
       </QueryClientProvider>,
     )
 
@@ -1476,7 +1570,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell initialProfileSetupComplete />
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
       </QueryClientProvider>,
     )
 
@@ -1540,7 +1634,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell initialProfileSetupComplete />
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
       </QueryClientProvider>,
     )
 
@@ -1610,7 +1704,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell initialProfileSetupComplete />
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
       </QueryClientProvider>,
     )
 
@@ -1676,7 +1770,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell initialProfileSetupComplete />
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
       </QueryClientProvider>,
     )
 
@@ -1745,7 +1839,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell initialProfileSetupComplete />
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
       </QueryClientProvider>,
     )
 
@@ -1813,7 +1907,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell initialProfileSetupComplete />
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
       </QueryClientProvider>,
     )
 
@@ -1896,7 +1990,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell initialProfileSetupComplete />
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
       </QueryClientProvider>,
     )
 
@@ -1938,7 +2032,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell initialProfileSetupComplete />
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
       </QueryClientProvider>,
     )
 
@@ -1983,10 +2077,12 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell initialProfileSetupComplete />
+        <NavigationShell />
       </QueryClientProvider>,
     )
 
+    fireEvent.click(await screen.findByRole('button', { name: /민준 프로필 선택/ }))
+    fireEvent.click(screen.getByRole('button', { name: '민준으로 Navi 시작' }))
     await openOriginEditor()
     fireEvent.click(screen.getByRole('button', { name: '출발지를 집으로 설정' }))
     await waitFor(() => {
@@ -2000,6 +2096,125 @@ describe('NavigationShell', () => {
       expect(mockedGetRoute).toHaveBeenCalledWith(
         { lat: 37.5547, lng: 126.9706 },
         { lat: 37.4979, lng: 127.0276 },
+        undefined,
+        expect.objectContaining({ aborted: false }),
+      )
+    })
+  })
+
+  it('manages quick labels and uses them in the route search sheet', async () => {
+    mockedGetRoute.mockResolvedValue({
+      coordinates: [
+        { lat: 37.5501, lng: 127.0734 },
+        { lat: 37.5442, lng: 127.0557 },
+      ],
+      summary: {
+        distanceMeters: 6200,
+        durationSeconds: 960,
+      },
+    })
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: /민준 프로필 선택/ }))
+    fireEvent.click(screen.getByRole('button', { name: '민준으로 Navi 시작' }))
+
+    const railButtons = within(await screen.findByTestId('right-rail-dock')).getAllByRole('button')
+    expect(railButtons.map((button) => button.getAttribute('aria-label'))).toEqual([
+      '설정',
+      '라벨 설정',
+      '보고서',
+      '연동 상태',
+      '음악',
+    ])
+
+    fireEvent.click(await screen.findByRole('button', { name: '라벨 설정' }))
+    expect(await screen.findByTestId('labels-drawer')).toBeInTheDocument()
+    expect(screen.getByTestId('side-drawer-content')).toHaveClass('overflow-x-hidden')
+    expect(screen.getByTestId('side-drawer-content')).toHaveClass('overflow-y-auto')
+    await waitFor(() => {
+      expect(mockedListSavedPlaces).toHaveBeenCalledWith('profile-1', undefined, expect.any(AbortSignal))
+    })
+    expect(screen.getByText('성수 카페')).toBeInTheDocument()
+    expect(screen.queryByText('경로 설정')).not.toBeInTheDocument()
+    expect(screen.queryByText('현재 선택 위치 추가')).not.toBeInTheDocument()
+    expect(screen.getByText('출발지 라벨')).toBeInTheDocument()
+    expect(screen.getByText('목적지 라벨')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '집을 출발지로 설정' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '성수 카페를 목적지로 설정' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '성수 카페 목적지 라벨 수정' }))
+    fireEvent.change(screen.getByLabelText('성수 카페 라벨 이름 수정'), {
+      target: { value: '성수 작업실' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '성수 카페 라벨 수정 저장' }))
+    await waitFor(() => {
+      expect(mockedUpdateSavedPlace).toHaveBeenCalledWith('favorite-id', { label: '성수 작업실' })
+    })
+    fireEvent.click(screen.getByRole('button', { name: '성수 카페 목적지 라벨 삭제' }))
+    await waitFor(() => {
+      expect(mockedDeleteSavedPlace).toHaveBeenCalledWith('favorite-id')
+    })
+    mockedSearchPlaces.mockResolvedValueOnce([
+      {
+        id: 'sejong-poi',
+        name: '세종대학교',
+        address: '서울 광진구 능동로 209',
+        coordinate: { lat: 37.5502, lng: 127.073 },
+      },
+    ])
+    fireEvent.click(screen.getByRole('button', { name: '출발지 라벨 추가' }))
+    fireEvent.change(await screen.findByRole('combobox', { name: '출발지 라벨 주소 검색' }), {
+      target: { value: '세종대' },
+    })
+    fireEvent.click(await screen.findByRole('button', { name: '세종대학교 주소 선택' }))
+    fireEvent.change(screen.getByLabelText('출발지 라벨 이름'), {
+      target: { value: '학교' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '출발지 라벨 저장' }))
+    await waitFor(() => {
+      expect(mockedCreateFavorite).toHaveBeenCalledWith('profile-1', {
+        label: '학교',
+        provider: 'TMAP',
+        providerPlaceId: 'origin:sejong-poi',
+        address: '서울 광진구 능동로 209',
+        latitude: 37.5502,
+        longitude: 127.073,
+      })
+    })
+    expect(screen.getByRole('button', { name: '목적지 라벨 추가' })).not.toBeDisabled()
+    mockedSearchPlaces.mockClear()
+
+    fireEvent.click(screen.getByRole('button', { name: '라벨 설정 닫기' }))
+    await openOriginEditor()
+    const originQuickLabels = screen.getByLabelText('출발지 빠른 설정')
+    expect(originQuickLabels).toHaveClass('flex')
+    expect(originQuickLabels).toHaveClass('flex-nowrap')
+    expect(originQuickLabels).toHaveClass('w-full')
+    expect(originQuickLabels).toHaveClass('max-w-full')
+    expect(originQuickLabels).toHaveClass('min-w-0')
+    expect(originQuickLabels).toHaveClass('overflow-x-auto')
+    expect(originQuickLabels).not.toHaveClass('grid-cols-3')
+    expect(screen.getByRole('button', { name: '출발지를 집으로 설정' })).toHaveClass('w-fit')
+    fireEvent.click(await screen.findByRole('button', { name: '출발지를 집으로 설정' }))
+    await waitFor(() => {
+      expect(screen.getByRole('combobox', { name: '목적지' })).toBeInTheDocument()
+    })
+    fireEvent.focus(screen.getByRole('combobox', { name: '목적지' }))
+    fireEvent.click(await screen.findByRole('button', { name: /도착지를 성수 카페.*설정/ }))
+
+    expect(mockedSearchPlaces).not.toHaveBeenCalled()
+    expect(mockedCreateSearchHistory).not.toHaveBeenCalled()
+    await waitFor(() => {
+      expect(mockedGetRouteOptions).toHaveBeenCalledWith(
+        { lat: 37.5547, lng: 126.9706 },
+        { lat: 37.5442, lng: 127.0557 },
         undefined,
         expect.objectContaining({ aborted: false }),
       )
@@ -2031,7 +2246,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell initialProfileSetupComplete />
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
       </QueryClientProvider>,
     )
 
@@ -2047,6 +2262,17 @@ describe('NavigationShell', () => {
 
     await waitFor(() => {
       expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+    })
+    await waitFor(() => {
+      expect(mockedCreateSearchHistory).toHaveBeenCalledWith('profile-1', {
+        query: '세종',
+        provider: 'TMAP',
+        providerPlaceId: 'origin',
+        placeName: '세종대학교',
+        address: '서울 광진구',
+        latitude: 37.5502,
+        longitude: 127.073,
+      })
     })
     await waitFor(() => {
       expect(mockedGetRoute).toHaveBeenCalledWith(
@@ -2076,7 +2302,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell initialProfileSetupComplete />
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
       </QueryClientProvider>,
     )
 
@@ -2113,7 +2339,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell initialProfileSetupComplete />
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
       </QueryClientProvider>,
     )
 
@@ -2190,7 +2416,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell initialProfileSetupComplete />
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
       </QueryClientProvider>,
     )
 
@@ -2238,7 +2464,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell initialProfileSetupComplete />
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
       </QueryClientProvider>,
     )
 
@@ -2293,7 +2519,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell initialProfileSetupComplete />
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
       </QueryClientProvider>,
     )
 
@@ -2335,7 +2561,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell initialProfileSetupComplete />
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
       </QueryClientProvider>,
     )
 
@@ -2407,7 +2633,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell initialProfileSetupComplete />
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
       </QueryClientProvider>,
     )
 
@@ -2489,7 +2715,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell initialProfileSetupComplete />
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
       </QueryClientProvider>,
     )
 
@@ -2567,7 +2793,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell initialProfileSetupComplete />
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
       </QueryClientProvider>,
     )
 
@@ -2643,7 +2869,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell initialProfileSetupComplete />
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
       </QueryClientProvider>,
     )
 
@@ -2701,7 +2927,7 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell initialProfileSetupComplete />
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
       </QueryClientProvider>,
     )
 
