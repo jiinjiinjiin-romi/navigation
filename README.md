@@ -1,6 +1,6 @@
-# TMAP Web Navigation Demo
+# JIIN Navigation Frontend
 
-React, Vite, and Tailwind frontend for a TMAP-powered web navigation demo. The app is built as a practical personal-driver navigation surface, not a map playground: current location, route search, guidance, simulated driving, road status, and traffic-aware route rendering are all available from the root screen.
+React, Vite, and Tailwind frontend for the JIIN driver-assistance navigation project. The app is built as a practical in-car navigation surface for route search, guidance, simulated driving, road status, and traffic-aware route rendering. It is designed to work with the broader backend that will detect abnormal driver behavior and issue driver guidance/instructions.
 
 ## What This App Does
 
@@ -23,24 +23,26 @@ React, Vite, and Tailwind frontend for a TMAP-powered web navigation demo. The a
 ## Project Layout
 
 ```text
-/Users/anjeonghyeon/web/navi
-├── backend/   # Node/Express TMAP proxy, runs on 8182 by default
-├── docs/      # TMAP API notes and downloaded-guide summaries
-└── frontend/  # React navigation UI, runs on 8181
+/Users/anjeonghyeon/web/jiin
+├── navigation/          # React navigation UI, runs on 8181
+├── backend/             # FastAPI backend and TMAP proxy, runs on 8000
+└── navigation-backend/  # Legacy Node/Express TMAP proxy retained as migration reference
 ```
 
 ## Requirements
 
 - Node.js 18 or newer.
+- Docker Desktop and Docker Compose for the backend.
 - A valid TMAP Open API app key.
 
-Create `/Users/anjeonghyeon/web/navi/backend/.env`:
+Create `/Users/anjeonghyeon/web/jiin/backend/.env` from the backend example:
 
-```env
-TMAP_APP_KEY=issued-app-key
-PORT=8182
-FRONTEND_ORIGIN=http://localhost:8181
+```bash
+cd /Users/anjeonghyeon/web/jiin/backend
+cp .env.example .env
 ```
+
+Set `TMAP_APP_KEY` in `backend/.env`.
 
 The frontend must never import or expose `TMAP_APP_KEY`.
 
@@ -49,23 +51,21 @@ The frontend must never import or expose `TMAP_APP_KEY`.
 Install dependencies:
 
 ```bash
-cd /Users/anjeonghyeon/web/navi/frontend
-npm install
-cd /Users/anjeonghyeon/web/navi/backend
+cd /Users/anjeonghyeon/web/jiin/navigation
 npm install
 ```
 
 Run the backend:
 
 ```bash
-cd /Users/anjeonghyeon/web/navi/backend
-npm run dev
+cd /Users/anjeonghyeon/web/jiin/backend
+docker compose up --build -d
 ```
 
 Run the frontend:
 
 ```bash
-cd /Users/anjeonghyeon/web/navi/frontend
+cd /Users/anjeonghyeon/web/jiin/navigation
 npm run dev
 ```
 
@@ -75,7 +75,7 @@ Open:
 http://localhost:8181
 ```
 
-Vite proxies `/api` to `http://localhost:8182`.
+Vite proxies `/api` to `http://localhost:8000`.
 
 ## Frontend Stack
 
@@ -91,13 +91,13 @@ Vite proxies `/api` to `http://localhost:8182`.
 - Turf for geometry helpers where useful
 - Pretendard local variable font
 
-## Backend Proxy Endpoints
+## Backend API Endpoints
 
-The frontend calls local endpoints only:
+The frontend calls local endpoints only. During development, Vite forwards these requests to the FastAPI backend:
 
 ```text
 GET  /api/tmap/sdk.js
-GET  /api/tmap/vendor/*
+GET  /api/tmap/vendor/{asset_path:path}
 GET  /api/tmap/pois?keyword=...
 POST /api/tmap/routes
 POST /api/tmap/road-match
@@ -106,12 +106,14 @@ GET  /api/tmap/reverse-geocode?lat=...&lng=...
 
 The backend sends `appKey` in request headers and normalizes SDK asset loading so the browser does not call TMAP with the key directly. `/api/tmap/routes` validates finite origin/destination coordinates before proxying the request.
 
+`navigation-backend` no longer needs to run for this frontend in the migrated development flow.
+
 ## Verification
 
-Run from `/Users/anjeonghyeon/web/navi/frontend`:
+Run from `/Users/anjeonghyeon/web/jiin/navigation`:
 
 ```bash
-npm test
+npm test -- src/features/navigation/api/tmapApi.test.ts
 npm run build
 ```
 
@@ -119,7 +121,7 @@ The Vite build may warn that `/api/tmap/sdk.js` is a non-module script in `index
 
 ## Documentation
 
-- `/Users/anjeonghyeon/web/navi/PRODUCT.md`: product-level principles.
-- `/Users/anjeonghyeon/web/navi/frontend/PRODUCT.md`: frontend product behavior and design constraints.
-- `/Users/anjeonghyeon/web/navi/docs/tmap-open-api-reference.md`: TMAP concept and SDK reference notes.
-- `/Users/anjeonghyeon/web/navi/docs/tmap-api-guide-index.md`: endpoint-level request/response guide extracted from downloaded TMAP docs.
+- `/Users/anjeonghyeon/web/jiin/README.md`: workspace-level architecture.
+- `/Users/anjeonghyeon/web/jiin/docs/README.md`: documentation index.
+- `/Users/anjeonghyeon/web/jiin/docs/api/navigation-backend-api-usage.md`: traced navigation API usage and migration scope.
+- `/Users/anjeonghyeon/web/jiin/backend/README.md`: backend APIs and Docker setup.
