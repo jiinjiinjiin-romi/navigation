@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "plyr/dist/plyr.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -201,6 +202,37 @@
   100% {
     transform: translate3d(-1%, 4%, 0) scale(1.05) rotate(-5deg);
   }
+}
+
+.driver-video-player-surface .plyr {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  max-width: none;
+  background: #000;
+}
+
+.driver-video-player-surface .plyr__video-wrapper {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+}
+
+.driver-video-player-surface .plyr__video-wrapper video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+}
+
+.driver-video-player-surface .plyr__controls {
+  width: 100%;
 }
 
 .navi-assistant-user-word {

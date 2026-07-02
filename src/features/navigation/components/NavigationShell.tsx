@@ -1,4 +1,5 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import Plyr from 'plyr'
 import {
   ArrowBendUpRight,
   ArrowCounterClockwise,
@@ -11,6 +12,7 @@ import {
   Clock,
   CarSimple,
   ClipboardText,
+  FileVideo,
   GearSix,
   HouseLine,
   MagnifyingGlass,
@@ -26,6 +28,7 @@ import {
   SpeakerHigh,
   Stop,
   Timer,
+  UploadSimple,
   UserCircle,
   WifiHigh,
   Warning,
@@ -70,6 +73,11 @@ import { TmapPanel, type MapCameraSettings } from './TmapPanel'
 type SearchFieldId = 'origin' | 'destination'
 type LocationStatus = 'checking' | 'granted' | 'denied' | 'unsupported'
 type SidePanelId = 'settings' | 'report' | 'connect'
+type DriverVideoSource = {
+  name: string
+  type: string
+  url: string
+}
 type MotionTiming = {
   duration: number
   ease?: [number, number, number, number]
@@ -151,9 +159,44 @@ const MUSIC_LIBRARY = [
 ] as const
 type NaviAssistantScenarioId = AiaiScenarioId
 const NAVI_ASSISTANT_SCENARIOS: NaviAssistantScenario[] = createNaviAssistantScenarios()
+const DRIVER_VIDEO_MIME_TYPES = new Set([
+  'video/mp4',
+  'video/webm',
+  'video/3gp',
+  'video/ogg',
+  'video/avi',
+  'video/mpeg',
+  'video/object',
+])
 
 export function isAssistantPlaybackReady(playbackKey: string, expectedPlaybackKey: string) {
   return Boolean(playbackKey) && playbackKey === expectedPlaybackKey
+}
+
+function getDriverVideoMimeType(file: File) {
+  if (DRIVER_VIDEO_MIME_TYPES.has(file.type)) {
+    return file.type
+  }
+
+  const extension = file.name.split('.').pop()?.toLowerCase()
+
+  switch (extension) {
+    case 'webm':
+      return 'video/webm'
+    case '3gp':
+    case '3gpp':
+      return 'video/3gp'
+    case 'ogv':
+    case 'ogg':
+      return 'video/ogg'
+    case 'avi':
+      return 'video/avi'
+    case 'mpeg':
+    case 'mpg':
+      return 'video/mpeg'
+    default:
+      return 'video/mp4'
+  }
 }
 
 export function getAssistantSpeechCharacterDelaySeconds(index: number) {
@@ -314,6 +357,8 @@ export function NavigationShell() {
   const [musicSearchKeyword, setMusicSearchKeyword] = useState('')
   const [assistantScenarioId, setAssistantScenarioId] = useState<NaviAssistantScenarioId>('drowsiness-rest-area')
   const [assistantStepIndex, setAssistantStepIndex] = useState(0)
+  const [driverVideo, setDriverVideo] = useState<DriverVideoSource | null>(null)
+  const [driverVideoError, setDriverVideoError] = useState(false)
   const [speechPlaybackKey, setSpeechPlaybackKey] = useState('')
   const [showLocationFallbackToast, setShowLocationFallbackToast] = useState(false)
   const [mapCameraSettings, setMapCameraSettings] = useState<MapCameraSettings>(DEFAULT_MAP_CAMERA_SETTINGS)
@@ -575,9 +620,23 @@ export function NavigationShell() {
     ? { duration: 0 }
     : { duration: 0.22, ease: PRODUCT_EASE }
   const navigationViewportClassName = [
-    'relative aspect-[16/10] max-w-[1440px] overflow-hidden rounded-[1.35rem] border border-white/70 bg-[var(--nav-frame)] shadow-[0_24px_70px_rgb(15_23_42/0.20)] ring-1 ring-[rgb(148_163_184/0.18)] max-sm:w-[calc(100vw-2rem)] max-sm:aspect-auto',
-    'w-[min(100vw,calc(100vh*1.6))] max-sm:h-[calc(100vh-2rem)]',
+    'relative col-start-1 row-start-2 h-full min-h-0 overflow-hidden rounded-[1.1rem] border border-white/70 bg-[var(--nav-frame)] shadow-[0_18px_46px_rgb(15_23_42/0.24)] ring-1 ring-[rgb(148_163_184/0.18)]',
   ].join(' ')
+
+  useEffect(() => () => {
+    if (driverVideo?.url) {
+      URL.revokeObjectURL(driverVideo.url)
+    }
+  }, [driverVideo?.url])
+
+  const selectDriverVideo = useCallback((file: File) => {
+    setDriverVideo({
+      name: file.name,
+      type: getDriverVideoMimeType(file),
+      url: URL.createObjectURL(file),
+    })
+    setDriverVideoError(false)
+  }, [])
 
   const requestCurrentLocation = useCallback(() => {
     if (!navigator.geolocation) {
@@ -1008,8 +1067,16 @@ export function NavigationShell() {
   return (
     <main
       data-testid="navigation-stage"
-      className="flex min-h-screen flex-col items-center justify-center gap-3 bg-black p-4"
+      className="grid h-screen min-h-0 grid-cols-[minmax(0,1fr)_24rem] grid-rows-[minmax(17rem,38vh)_minmax(0,1fr)] gap-3 bg-[#06080c] p-3"
     >
+      <DriverVideoPanel
+        error={driverVideoError}
+        fileName={driverVideo?.name}
+        motionTiming={motionTiming}
+        source={driverVideo ?? undefined}
+        onError={() => setDriverVideoError(true)}
+        onSelectVideo={selectDriverVideo}
+      />
       <section
         data-testid="navigation-viewport"
         className={navigationViewportClassName}
@@ -1245,7 +1312,7 @@ export function NavigationShell() {
           ) : null}
         </AnimatePresence>
       </section>
-      <NaviAssistantDebugBar
+      <NaviAssistantDebugPanel
         motionTiming={motionTiming}
         scenario={assistantScenario}
         scenarioId={assistantScenarioId}
@@ -1256,6 +1323,136 @@ export function NavigationShell() {
         onSelectScenario={selectAssistantScenario}
       />
     </main>
+  )
+}
+
+function DriverVideoPanel({
+  error,
+  fileName,
+  motionTiming,
+  source,
+  onError,
+  onSelectVideo,
+}: {
+  error: boolean
+  fileName?: string
+  motionTiming: MotionTiming
+  source?: DriverVideoSource
+  onError: () => void
+  onSelectVideo: (file: File) => void
+}) {
+  const videoInputId = 'driver-video-file-input'
+  const videoRef = useRef<HTMLVideoElement | null>(null)
+  const videoInputRef = useRef<HTMLInputElement | null>(null)
+
+  useEffect(() => {
+    if (!source || !videoRef.current) {
+      return undefined
+    }
+
+    const player = new Plyr(videoRef.current, {
+      controls: [
+        'play-large',
+        'play',
+        'progress',
+        'current-time',
+        'duration',
+        'mute',
+        'volume',
+        'settings',
+        'pip',
+        'fullscreen',
+      ],
+      settings: ['speed'],
+      speed: {
+        selected: 1,
+        options: [0.5, 0.75, 1, 1.25, 1.5, 2],
+      },
+    })
+
+    return () => {
+      player.destroy()
+    }
+  }, [source])
+
+  const openVideoFilePicker = useCallback(() => {
+    videoInputRef.current?.click()
+  }, [])
+
+  return (
+    <motion.section
+      aria-label="운전자 영상"
+      className="driver-video-player-surface relative col-start-1 row-start-1 flex h-full min-h-0 items-center justify-center overflow-hidden rounded-[1.1rem] border border-white/10 bg-black text-white shadow-[0_18px_46px_rgb(0_0_0/0.28)]"
+      data-testid="driver-video-panel"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      onClick={() => {
+        if (!source) {
+          openVideoFilePicker()
+        }
+      }}
+      transition={motionTiming}
+    >
+      {source ? (
+        <video
+          key={source.url}
+          ref={videoRef}
+          className="h-full w-full bg-black object-contain [--plyr-color-main:#2563eb] [--plyr-control-radius:0.55rem] [--plyr-video-background:#000]"
+          controls
+          data-testid="driver-video-player"
+          onClick={(event) => event.stopPropagation()}
+          onError={onError}
+          playsInline
+          title={fileName ?? '운전자 영상'}
+        >
+          <source src={source.url} type={source.type} />
+        </video>
+      ) : (
+        <div className="flex h-full w-full flex-col items-center justify-center gap-4 px-6 text-center">
+          <div className="grid size-14 place-items-center rounded-full bg-white/10 text-white">
+            <FileVideo className="size-7" weight="duotone" />
+          </div>
+          <div>
+            <p className="text-base font-bold">운전자 영상을 선택하세요</p>
+            <p className="mt-1 text-sm font-medium text-white/62">
+              로컬 영상 파일은 브라우저에서만 재생됩니다.
+            </p>
+          </div>
+        </div>
+      )}
+
+      <div className="absolute left-4 top-4 flex max-w-[calc(100%-2rem)] items-center gap-2 rounded-full bg-black/58 px-3 py-2 text-xs font-semibold text-white backdrop-blur">
+        <span className="min-w-0 truncate">{fileName ?? '선택된 영상 없음'}</span>
+        {error ? <span className="shrink-0 text-[#fda4af]">재생 오류</span> : null}
+      </div>
+
+      <input
+        accept="video/*"
+        aria-label="운전자 영상 파일 선택"
+        className="sr-only"
+        id={videoInputId}
+        ref={videoInputRef}
+        onChange={(event) => {
+          const file = event.currentTarget.files?.[0]
+          if (file) {
+            onSelectVideo(file)
+            event.currentTarget.value = ''
+          }
+        }}
+        type="file"
+      />
+      {!source ? (
+        <label
+          className="absolute right-4 top-4 inline-flex h-10 cursor-pointer items-center gap-2 rounded-full bg-white px-4 text-sm font-bold text-[#101828] shadow-[0_8px_18px_rgb(0_0_0/0.18)] transition hover:bg-[#eef2ff] focus-within:ring-2 focus-within:ring-white/70"
+          htmlFor={videoInputId}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <UploadSimple className="size-4" weight="bold" />
+          <span>영상 선택</span>
+          <span className="sr-only">운전자 영상 파일 선택</span>
+        </label>
+      ) : null}
+    </motion.section>
   )
 }
 
@@ -1650,7 +1847,7 @@ function AssistantRecommendationList({
   )
 }
 
-function NaviAssistantDebugBar({
+function NaviAssistantDebugPanel({
   motionTiming,
   scenario,
   scenarioId,
@@ -1675,17 +1872,31 @@ function NaviAssistantDebugBar({
   return (
     <motion.section
       aria-label="Navi AI 시나리오 디버그"
-      className="w-[min(40rem,calc(100vw-2rem))] rounded-2xl bg-white px-2.5 py-2 text-[var(--nav-ink)] shadow-[0_14px_34px_rgb(0_0_0/0.28)]"
-      data-testid="navi-assistant-debug-bar"
+      className="col-start-2 row-start-2 self-start rounded-[1.1rem] border border-white/70 bg-white p-4 text-[var(--nav-ink)] shadow-[0_18px_46px_rgb(0_0_0/0.24)]"
+      data-testid="navi-assistant-debug-panel"
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={motionTiming}
     >
-      <div className="flex items-center gap-2">
-        <div className="flex min-w-0 flex-1 items-center gap-2">
+      <div className="flex flex-col gap-4">
+        <div className="border-b border-[var(--nav-border)] pb-3">
+          <p className="text-sm font-black">시나리오 디버깅</p>
+          <p className="mt-1 text-xs font-semibold text-[var(--nav-muted)]">
+            운전자 이상행동 안내 흐름을 단계별로 점검합니다.
+          </p>
+        </div>
+
+        <div className="flex min-w-0 flex-col gap-2">
+          <label
+            className="text-xs font-bold text-[var(--nav-muted)]"
+            htmlFor="navi-assistant-scenario-select"
+          >
+            시나리오
+          </label>
           <select
             aria-label="AI 시나리오 선택"
-            className="h-10 min-w-0 max-w-[17rem] flex-1 rounded-xl bg-[var(--nav-panel)] px-3 text-sm font-bold text-[var(--nav-ink)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--nav-focus-ring)]"
+            className="h-11 min-w-0 rounded-xl bg-[var(--nav-panel)] px-3 text-sm font-bold text-[var(--nav-ink)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--nav-focus-ring)]"
+            id="navi-assistant-scenario-select"
             onChange={(event) => onSelectScenario(event.target.value as NaviAssistantScenarioId)}
             value={scenarioId}
           >
@@ -1693,15 +1904,23 @@ function NaviAssistantDebugBar({
               <option key={item.id} value={item.id}>{item.title}</option>
             ))}
           </select>
-          <div className="min-w-[4.5rem]">
-            <div className="truncate text-sm font-bold">{currentStep.label}</div>
-            <div className="text-xs font-semibold text-[var(--nav-muted)]">{progress}</div>
-          </div>
         </div>
-        <div className="flex items-center gap-1">
+
+        <div className="rounded-xl bg-[var(--nav-panel)] p-3">
+          <div className="text-xs font-bold text-[var(--nav-muted)]">현재 단계</div>
+          <div className="mt-1 truncate text-base font-black">{currentStep.label}</div>
+          <div className="mt-1 text-sm font-semibold text-[var(--nav-muted)]">{progress}</div>
+          {currentStep.text ? (
+            <p className="mt-3 text-sm font-semibold leading-6 text-[var(--nav-ink)]">
+              {currentStep.text}
+            </p>
+          ) : null}
+        </div>
+
+        <div className="grid grid-cols-3 gap-2">
           <button
             aria-label="이전 AI 시나리오 단계"
-            className="grid size-10 place-items-center rounded-full bg-[var(--nav-panel)] text-[var(--nav-ink)] transition hover:bg-[var(--nav-selection)] disabled:cursor-not-allowed disabled:opacity-40"
+            className="grid h-11 place-items-center rounded-xl bg-[var(--nav-panel)] text-[var(--nav-ink)] transition hover:bg-[var(--nav-selection)] disabled:cursor-not-allowed disabled:opacity-40"
             disabled={stepIndex === 0}
             onClick={onPrevious}
             type="button"
@@ -1710,7 +1929,7 @@ function NaviAssistantDebugBar({
           </button>
           <button
             aria-label="다음 AI 시나리오 단계"
-            className="grid size-10 place-items-center rounded-full bg-[var(--nav-primary)] text-white transition hover:bg-[var(--nav-primary-hover)] disabled:cursor-not-allowed disabled:opacity-40"
+            className="grid h-11 place-items-center rounded-xl bg-[var(--nav-primary)] text-white transition hover:bg-[var(--nav-primary-hover)] disabled:cursor-not-allowed disabled:opacity-40"
             disabled={stepIndex === scenario.steps.length - 1}
             onClick={onNext}
             type="button"
@@ -1719,7 +1938,7 @@ function NaviAssistantDebugBar({
           </button>
           <button
             aria-label="AI 시나리오 초기화"
-            className="grid size-10 place-items-center rounded-full bg-[var(--nav-panel)] text-[var(--nav-ink)] transition hover:bg-[var(--nav-selection)]"
+            className="grid h-11 place-items-center rounded-xl bg-[var(--nav-panel)] text-[var(--nav-ink)] transition hover:bg-[var(--nav-selection)]"
             onClick={onReset}
             type="button"
           >

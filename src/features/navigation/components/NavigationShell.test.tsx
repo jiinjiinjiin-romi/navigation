@@ -14,6 +14,10 @@ import { getCurrentAddress, getRoadMatch, getRouteOptions, searchPlaces } from '
 
 let routeOptionsOverlayReadyByDefault = true
 let latestRouteOptionsOverlayReady: ((ready: boolean) => void) | undefined
+const mockPlyrDestroy = vi.hoisted(() => vi.fn())
+const mockPlyr = vi.hoisted(() => vi.fn(function PlyrMock() {
+  return { destroy: mockPlyrDestroy }
+}))
 
 vi.mock('../api/tmapApi', () => ({
   searchPlaces: vi.fn(),
@@ -71,6 +75,12 @@ vi.mock('@/features/voice-wave', () => ({
     />
   ),
 }))
+
+vi.mock('plyr', () => {
+  return {
+    default: mockPlyr,
+  }
+})
 
 vi.mock('./TmapPanel', () => ({
   TmapPanel: ({
@@ -267,7 +277,7 @@ describe('NavigationShell', () => {
     return screen.findByPlaceholderText('목적지 검색')
   }
 
-  it('centers a 16:10 navigation viewport on the AI mobility stage', () => {
+  it('renders the desktop cockpit layout with video, navigation, and scenario debug regions', () => {
     const queryClient = new QueryClient()
 
     render(
@@ -277,14 +287,98 @@ describe('NavigationShell', () => {
     )
 
     const stage = screen.getByTestId('navigation-stage')
+    const videoPanel = screen.getByTestId('driver-video-panel')
     const viewport = screen.getByTestId('navigation-viewport')
+    const debugPanel = screen.getByTestId('navi-assistant-debug-panel')
 
-    expect(stage).toHaveClass('bg-black')
-    expect(stage).toHaveClass('flex')
-    expect(stage).toHaveClass('items-center')
-    expect(stage).toHaveClass('justify-center')
-    expect(viewport).toHaveClass('aspect-[16/10]')
-    expect(viewport).toHaveClass('w-[min(100vw,calc(100vh*1.6))]')
+    expect(stage).toHaveClass('grid')
+    expect(stage).toHaveClass('grid-cols-[minmax(0,1fr)_24rem]')
+    expect(videoPanel).toBeInTheDocument()
+    expect(videoPanel).toHaveClass('h-full')
+    expect(videoPanel).toHaveClass('driver-video-player-surface')
+    expect(videoPanel).toHaveClass('col-start-1')
+    expect(videoPanel).toHaveClass('row-start-1')
+    expect(viewport).toHaveClass('h-full')
+    expect(viewport).toHaveClass('col-start-1')
+    expect(viewport).toHaveClass('row-start-2')
+    expect(viewport).not.toHaveClass('aspect-[16/10]')
+    expect(debugPanel).toHaveClass('col-start-2')
+    expect(debugPanel).toHaveClass('row-start-2')
+    expect(debugPanel).not.toHaveClass('row-span-2')
+    expect(debugPanel).not.toHaveClass('h-full')
+    expect(debugPanel).toHaveClass('self-start')
+  })
+
+  it('loads a selected local driver video into the top video panel', () => {
+    const queryClient = new QueryClient()
+    const createObjectURL = vi.fn(() => 'blob:test-driver-video')
+    const revokeObjectURL = vi.fn()
+    vi.stubGlobal('URL', {
+      ...URL,
+      createObjectURL,
+      revokeObjectURL,
+    })
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell />
+      </QueryClientProvider>,
+    )
+
+    const file = new File(['driver video'], 'driver.mp4', { type: 'video/mp4' })
+    fireEvent.change(screen.getByLabelText('운전자 영상 파일 선택'), {
+      target: { files: [file] },
+    })
+
+    expect(createObjectURL).toHaveBeenCalledWith(file)
+    const player = screen.getByTestId('driver-video-player')
+    const source = player.querySelector('source')
+    expect(source).toHaveAttribute('src', 'blob:test-driver-video')
+    expect(source).toHaveAttribute('type', 'video/mp4')
+    expect(player).toHaveAttribute('controls')
+    expect(player).toHaveClass('h-full')
+    expect(player).toHaveClass('w-full')
+    expect(player).toHaveClass('object-contain')
+    expect(screen.getByText('driver.mp4')).toBeInTheDocument()
+    expect(screen.queryByText('영상 선택')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('운전자 영상 썸네일 VTT 파일 선택')).not.toBeInTheDocument()
+    expect(mockPlyr).toHaveBeenLastCalledWith(expect.any(HTMLVideoElement), expect.not.objectContaining({
+      previewThumbnails: expect.anything(),
+    }))
+    expect(revokeObjectURL).not.toHaveBeenCalled()
+  })
+
+  it('opens the driver video picker when the non-playing video panel is clicked', () => {
+    const queryClient = new QueryClient()
+    const createObjectURL = vi.fn(() => 'blob:test-driver-video')
+    const revokeObjectURL = vi.fn()
+    vi.stubGlobal('URL', {
+      ...URL,
+      createObjectURL,
+      revokeObjectURL,
+    })
+    const inputClick = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => undefined)
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(screen.getByTestId('driver-video-panel'))
+    expect(inputClick).toHaveBeenCalledTimes(1)
+
+    const file = new File(['driver video'], 'driver.mp4', { type: 'video/mp4' })
+    fireEvent.change(screen.getByLabelText('운전자 영상 파일 선택'), {
+      target: { files: [file] },
+    })
+
+    fireEvent.click(screen.getByTestId('driver-video-player'))
+    expect(inputClick).toHaveBeenCalledTimes(1)
+    fireEvent.click(screen.getByTestId('driver-video-panel'))
+    expect(inputClick).toHaveBeenCalledTimes(1)
+
+    inputClick.mockRestore()
   })
 
   it('renders the Navi assistant orb with the internal VoiceOrb contract', () => {
@@ -312,7 +406,7 @@ describe('NavigationShell', () => {
       </QueryClientProvider>,
     )
 
-    expect(screen.getByTestId('navi-assistant-debug-bar')).toBeInTheDocument()
+    expect(screen.getByTestId('navi-assistant-debug-panel')).toBeInTheDocument()
     expect(screen.getByText('정상 주행')).toBeInTheDocument()
     expect(screen.getByText('1 / 8')).toBeInTheDocument()
     expect(screen.queryByTestId('navi-assistant-panel')).not.toBeInTheDocument()
