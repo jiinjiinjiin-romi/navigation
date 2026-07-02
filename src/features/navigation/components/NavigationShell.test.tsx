@@ -526,9 +526,9 @@ describe('NavigationShell', () => {
     expect(screen.queryByRole('button', { name: '민준 프로필 메뉴' })).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: /민준 프로필 선택/ }))
-    expect(screen.getByRole('button', { name: '민준으로 Navi 시작' })).not.toBeDisabled()
+    expect(screen.getByRole('button', { name: '민준(으)로 시작' })).not.toBeDisabled()
     expect(screen.getByRole('button', { name: '프로필 수정' })).not.toBeDisabled()
-    fireEvent.click(screen.getByRole('button', { name: '민준으로 Navi 시작' }))
+    fireEvent.click(screen.getByRole('button', { name: '민준(으)로 시작' }))
 
     await waitFor(() => {
       expect(mockedSelectProfile).toHaveBeenCalledWith('profile-1')
@@ -2088,7 +2088,7 @@ describe('NavigationShell', () => {
     )
 
     fireEvent.click(await screen.findByRole('button', { name: /민준 프로필 선택/ }))
-    fireEvent.click(screen.getByRole('button', { name: '민준으로 Navi 시작' }))
+    fireEvent.click(screen.getByRole('button', { name: '민준(으)로 시작' }))
     await openOriginEditor()
     fireEvent.click(screen.getByRole('button', { name: '출발지를 집으로 설정' }))
     await waitFor(() => {
@@ -2130,7 +2130,7 @@ describe('NavigationShell', () => {
     )
 
     fireEvent.click(await screen.findByRole('button', { name: /민준 프로필 선택/ }))
-    fireEvent.click(screen.getByRole('button', { name: '민준으로 Navi 시작' }))
+    fireEvent.click(screen.getByRole('button', { name: '민준(으)로 시작' }))
 
     const railButtons = within(await screen.findByTestId('right-rail-dock')).getAllByRole('button')
     expect(railButtons.map((button) => button.getAttribute('aria-label'))).toEqual([

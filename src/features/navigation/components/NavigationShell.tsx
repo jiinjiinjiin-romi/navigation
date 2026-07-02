@@ -1588,7 +1588,7 @@ function NavigationProfileSetup({
   onUpdateProfile: () => void
 }) {
   const canCreate = profiles.length < limit
-  const startLabel = selectedProfile ? `${selectedProfile.displayName}으로 Navi 시작` : 'Navi 시작'
+  const startLabel = selectedProfile ? `${selectedProfile.displayName}(으)로 시작` : 'Navi 시작'
   const formMode = profileSetupView === 'edit' ? 'edit' : 'create'
 
   return (
@@ -1652,7 +1652,7 @@ function NavigationProfileSetup({
                   >
                     {Array.from({ length: 3 }).map((_, index) => (
                       <span
-                        className="block h-[13rem] w-[13.75rem] shrink-0 animate-pulse rounded-lg bg-white/8"
+                        className="block h-[13.5rem] w-[11.75rem] shrink-0 animate-pulse rounded-lg bg-white/8"
                         key={index}
                       />
                     ))}
@@ -1671,7 +1671,7 @@ function NavigationProfileSetup({
                   return (
                     <motion.div
                       className={[
-                        'group relative flex w-[13.75rem] shrink-0 flex-col items-center rounded-lg p-3 text-center transition',
+                        'group relative flex w-[11.75rem] shrink-0 flex-col items-center rounded-lg p-4 text-center transition',
                         selected ? 'bg-white text-[var(--nav-ink)] shadow-[var(--nav-shadow-panel)]' : 'bg-white/72 text-[var(--nav-ink)] hover:bg-white',
                       ].join(' ')}
                       initial={{ opacity: 0, y: 14 }}
@@ -1692,7 +1692,7 @@ function NavigationProfileSetup({
                         <span
                           aria-hidden="true"
                           className={[
-                            'grid aspect-square w-full max-w-[9.25rem] place-items-center overflow-hidden rounded-lg transition',
+                            'grid aspect-square w-full place-items-center overflow-hidden rounded-lg transition',
                             selected
                               ? 'ring-4 ring-[var(--nav-primary)]'
                               : 'opacity-[0.86] group-hover:opacity-100',
@@ -1714,7 +1714,9 @@ function NavigationProfileSetup({
                             />
                           )}
                         </span>
-                        <span className="mt-4 text-xl font-bold tracking-normal">{profile.displayName}</span>
+                        <span className="mt-3 max-w-full truncate text-lg font-bold tracking-normal">
+                          {profile.displayName}
+                        </span>
                       </button>
                     </motion.div>
                   )
@@ -1723,7 +1725,7 @@ function NavigationProfileSetup({
                 {!loading && !profileError ? (
                   <motion.button
                     aria-label="프로필 추가"
-                    className="grid h-[13rem] w-[13.75rem] shrink-0 place-items-center rounded-lg border border-dashed border-[var(--nav-border)] bg-white/56 p-3 text-[var(--nav-primary)] transition hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--nav-primary)] disabled:cursor-not-allowed disabled:opacity-40"
+                    className="grid h-[13.5rem] w-[11.75rem] shrink-0 place-items-center rounded-lg border border-dashed border-[var(--nav-border)] bg-white/56 p-4 text-[var(--nav-primary)] transition hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--nav-primary)] disabled:cursor-not-allowed disabled:opacity-40"
                     disabled={!canCreate}
                     initial={{ opacity: 0, y: 14 }}
                     animate={{ opacity: 1, y: 0 }}
