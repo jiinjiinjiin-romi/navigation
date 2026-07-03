@@ -18,7 +18,7 @@ import {
   updateProfile,
 } from '../api/profileApi'
 import { createFavorite, deleteSavedPlace, listSavedPlaces, updateSavedPlace } from '../api/savedPlaceApi'
-import { createSearchHistory } from '../api/searchHistoryApi'
+import { createSearchHistory, listSearchHistories } from '../api/searchHistoryApi'
 import { getCurrentAddress, getRoadMatch, getRouteOptions, searchPlaces } from '../api/tmapApi'
 
 let routeOptionsOverlayReadyByDefault = true
@@ -57,6 +57,7 @@ vi.mock('../api/savedPlaceApi', () => ({
 
 vi.mock('../api/searchHistoryApi', () => ({
   createSearchHistory: vi.fn(),
+  listSearchHistories: vi.fn(),
 }))
 
 vi.mock('@/features/orb', () => ({
@@ -235,6 +236,7 @@ const mockedDeleteSavedPlace = vi.mocked(deleteSavedPlace)
 const mockedListSavedPlaces = vi.mocked(listSavedPlaces)
 const mockedUpdateSavedPlace = vi.mocked(updateSavedPlace)
 const mockedCreateSearchHistory = vi.mocked(createSearchHistory)
+const mockedListSearchHistories = vi.mocked(listSearchHistories)
 
 const mockProfiles = [
   {
@@ -330,6 +332,7 @@ describe('NavigationShell', () => {
     mockedListSavedPlaces.mockReset()
     mockedUpdateSavedPlace.mockReset()
     mockedCreateSearchHistory.mockReset()
+    mockedListSearchHistories.mockReset()
     mockedListProfiles.mockResolvedValue({
       profiles: mockProfiles,
       count: mockProfiles.length,
@@ -428,6 +431,25 @@ describe('NavigationShell', () => {
       latitude: 37.5547,
       longitude: 126.9706,
       searchedAt: '2026-07-03T00:00:00.000000Z',
+    })
+    mockedListSearchHistories.mockResolvedValue({
+      items: [
+        {
+          id: 11,
+          query: '서울역',
+          provider: 'TMAP',
+          providerPlaceId: 'poi-history-1',
+          placeName: '서울역',
+          address: '서울 중구 봉래동2가',
+          latitude: 37.5547,
+          longitude: 126.9706,
+          searchedAt: '2026-07-03T00:00:00.000000Z',
+        },
+      ],
+      page: 1,
+      size: 10,
+      total: 1,
+      totalPages: 1,
     })
     HTMLMediaElement.prototype.play = vi.fn(() => Promise.reject(new Error('test audio fallback')))
     HTMLMediaElement.prototype.pause = vi.fn()
@@ -2224,6 +2246,46 @@ describe('NavigationShell', () => {
       expect(mockedGetRouteOptions).toHaveBeenCalledWith(
         { lat: 37.5547, lng: 126.9706 },
         { lat: 37.5442, lng: 127.0557 },
+        undefined,
+        expect.objectContaining({ aborted: false }),
+      )
+    })
+  })
+
+  it('shows recent search histories when the active route search input is empty', async () => {
+    mockedGetRoute.mockResolvedValue({
+      coordinates: [
+        { lat: 37.5665, lng: 126.978 },
+        { lat: 37.5547, lng: 126.9706 },
+      ],
+      summary: {
+        distanceMeters: 2800,
+        durationSeconds: 540,
+      },
+    })
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
+      </QueryClientProvider>,
+    )
+
+    await openDestinationEditor()
+
+    await waitFor(() => {
+      expect(mockedListSearchHistories).toHaveBeenCalledWith('profile-1', { page: 1, size: 10 })
+    })
+    expect(screen.getByRole('listbox', { name: '최근 검색 기록' })).toBeInTheDocument()
+    fireEvent.click(await screen.findByRole('option', { name: /서울역/ }))
+
+    expect(mockedCreateSearchHistory).not.toHaveBeenCalled()
+    await waitFor(() => {
+      expect(mockedGetRouteOptions).toHaveBeenCalledWith(
+        { lat: 37.5665, lng: 126.978 },
+        { lat: 37.5547, lng: 126.9706 },
         undefined,
         expect.objectContaining({ aborted: false }),
       )

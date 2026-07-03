@@ -75,7 +75,12 @@ import {
   type SavedPlaceType,
   type SavedPlaceWriteRequest,
 } from '../api/savedPlaceApi'
-import { createSearchHistory, type SearchHistoryCreateRequest } from '../api/searchHistoryApi'
+import {
+  createSearchHistory,
+  listSearchHistories,
+  type SearchHistoryCreateRequest,
+  type SearchHistoryItem,
+} from '../api/searchHistoryApi'
 import { getCurrentAddress, getRoadMatch, getRouteOptions, searchPlaces } from '../api/tmapApi'
 import { createRoundedRoutePath } from '../map/routeGeometry'
 import { markRoutePerformance, measureRoutePerformance } from '../performance/routePerformance'
@@ -525,6 +530,16 @@ export function NavigationShell({
     enabled: profileSetupComplete && activeField === 'destination' && debouncedDestinationKeyword.length >= 2 && debouncedDestinationKeyword !== destination?.name,
     placeholderData: keepPreviousData,
   })
+  const activeRouteSearchKeyword = activeField === 'origin'
+    ? originKeyword.trim()
+    : activeField === 'destination'
+      ? destinationKeyword.trim()
+      : ''
+  const searchHistoriesQuery = useQuery({
+    queryKey: ['search-histories', selectedProfileId, 1, 10],
+    queryFn: () => listSearchHistories(selectedProfileId!, { page: 1, size: 10 }),
+    enabled: profileSetupComplete && Boolean(selectedProfileId && activeField && activeRouteSearchKeyword.length === 0),
+  })
 
   const routeOptionsQuery = useQuery({
     queryKey: [
@@ -710,6 +725,12 @@ export function NavigationShell({
     : activeField === 'destination'
       ? destinationSearch.data ?? []
       : []
+  const searchHistoryPlaces = useMemo(
+    () => createSearchHistoryPlaces(searchHistoriesQuery.data?.items ?? []),
+    [searchHistoriesQuery.data?.items],
+  )
+  const showSearchHistories = Boolean(activeField && activeRouteSearchKeyword.length === 0 && searchHistoryPlaces.length > 0)
+  const activeSelectablePlaces = showSearchHistories ? searchHistoryPlaces : activePlaces
   const activeLabel = activeField === 'origin' ? '출발지 검색 결과' : '도착지 검색 결과'
   const profiles = profilesQuery.data?.profiles ?? []
   const selectedProfile = profiles.find((profile) => profile.id === selectedProfileId)
@@ -1053,7 +1074,7 @@ export function NavigationShell({
   }
 
   const handleSearchKeyDown = (field: SearchFieldId, event: KeyboardEvent<HTMLInputElement>) => {
-    const places = field === activeField ? activePlaces : []
+    const places = field === activeField ? activeSelectablePlaces : []
 
     if (event.key === 'Escape') {
       setActiveField(null)
@@ -1081,7 +1102,9 @@ export function NavigationShell({
 
     if (event.key === 'Enter') {
       event.preventDefault()
-      selectPlace(field, places[highlightedIndex] ?? places[0])
+      selectPlace(field, places[highlightedIndex] ?? places[0], {
+        recordHistory: !showSearchHistories,
+      })
     }
   }
 
@@ -1307,6 +1330,8 @@ export function NavigationShell({
                       originKeyword={originKeyword}
                       places={activePlaces}
                       savedPlaces={routeSearchSavedPlaces}
+                      searchHistoryPlaces={searchHistoryPlaces}
+                      showSearchHistories={showSearchHistories}
                       showSuggestions={showSuggestions}
                       onChangeOrigin={(value) => {
                         setOriginKeyword(value)
@@ -1350,6 +1375,7 @@ export function NavigationShell({
                       }}
                       onKeyDown={(field, event) => handleSearchKeyDown(field, event)}
                       onSelectPlace={selectPlace}
+                      onSelectSearchHistory={selectSavedPlace}
                       onSelectSavedPlace={selectSavedPlace}
                       onFillOriginWithCurrentLocation={fillOriginWithCurrentLocation}
                     />
@@ -2149,6 +2175,24 @@ function createSearchHistoryPayload(query: string, place: Place): SearchHistoryC
     latitude: place.coordinate.lat,
     longitude: place.coordinate.lng,
   }
+}
+
+function createSearchHistoryPlaces(items: SearchHistoryItem[]): Place[] {
+  return items.flatMap((item) => {
+    if (item.latitude === null || item.longitude === null) {
+      return []
+    }
+
+    return [{
+      id: `search-history-${item.id}`,
+      name: item.placeName || item.query,
+      address: item.address || item.query,
+      coordinate: {
+        lat: item.latitude,
+        lng: item.longitude,
+      },
+    }]
+  })
 }
 
 function normalizeOptionalProfileText(value: string | null) {
@@ -4252,6 +4296,8 @@ function RouteSearchSheet({
   originKeyword,
   places,
   savedPlaces,
+  searchHistoryPlaces,
+  showSearchHistories,
   showSuggestions,
   onChangeOrigin,
   onChangeDestination,
@@ -4261,6 +4307,7 @@ function RouteSearchSheet({
   onFocusDestination,
   onKeyDown,
   onSelectPlace,
+  onSelectSearchHistory,
   onSelectSavedPlace,
   onFillOriginWithCurrentLocation,
 }: {
@@ -4272,6 +4319,8 @@ function RouteSearchSheet({
   originKeyword: string
   places: Place[]
   savedPlaces: RouteSearchSavedPlace[]
+  searchHistoryPlaces: Place[]
+  showSearchHistories: boolean
   showSuggestions: boolean
   onChangeOrigin: (value: string) => void
   onChangeDestination: (value: string) => void
@@ -4281,6 +4330,7 @@ function RouteSearchSheet({
   onFocusDestination: () => void
   onKeyDown: (field: SearchFieldId, event: KeyboardEvent<HTMLInputElement>) => void
   onSelectPlace: (field: SearchFieldId, place: Place) => void
+  onSelectSearchHistory: (field: SearchFieldId, place: Place) => void
   onSelectSavedPlace: (field: SearchFieldId, place: Place) => void
   onFillOriginWithCurrentLocation: () => void
 }) {
@@ -4328,11 +4378,12 @@ function RouteSearchSheet({
   }
   const renderSuggestions = (field: SearchFieldId) => {
     const showForField = showSuggestions && activeField === field
+    const showHistoryForField = !showForField && showSearchHistories && activeField === field
 
     return (
       <div
         className="mt-3 min-h-[10.5rem] overflow-hidden rounded-xl"
-        data-testid={showForField ? 'route-search-results' : 'route-search-results-empty'}
+        data-testid={showForField || showHistoryForField ? 'route-search-results' : 'route-search-results-empty'}
       >
         <AnimatePresence initial={false} mode="wait">
           {showForField ? (
@@ -4344,6 +4395,16 @@ function RouteSearchSheet({
               motionTiming={motionTiming}
               places={places}
               onSelect={(place) => onSelectPlace(field, place)}
+            />
+          ) : showHistoryForField ? (
+            <PlaceResults
+              activeIndex={activeIndex}
+              key={`${field}-history-results`}
+              label="최근 검색 기록"
+              listId={activeListId}
+              motionTiming={motionTiming}
+              places={searchHistoryPlaces}
+              onSelect={(place) => onSelectSearchHistory(field, place)}
             />
           ) : (
             <motion.div
@@ -4478,9 +4539,9 @@ function RouteSearchSheet({
                     >
                       <SearchField
                         active
-                        activeOptionId={showSuggestions ? `${activeListId}-option-${activeIndex}` : undefined}
+                        activeOptionId={showSuggestions || showSearchHistories ? `${activeListId}-option-${activeIndex}` : undefined}
                         autoFocus
-                        expanded={showSuggestions}
+                        expanded={showSuggestions || showSearchHistories}
                         controlsId={activeListId}
                         icon={<MapPin className="h-5 w-5" weight="bold" />}
                         label="출발 위치"
@@ -4514,9 +4575,9 @@ function RouteSearchSheet({
                     >
                       <SearchField
                         active
-                        activeOptionId={showSuggestions ? `${activeListId}-option-${activeIndex}` : undefined}
+                        activeOptionId={showSuggestions || showSearchHistories ? `${activeListId}-option-${activeIndex}` : undefined}
                         autoFocus
-                        expanded={showSuggestions}
+                        expanded={showSuggestions || showSearchHistories}
                         controlsId={activeListId}
                         icon={<MagnifyingGlass className="h-5 w-5" weight="bold" />}
                         label="목적지"

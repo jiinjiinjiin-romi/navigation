@@ -1,6 +1,7 @@
 import axios from 'axios'
 
 interface HttpClient {
+  get: typeof axios.get
   post: typeof axios.post
 }
 
@@ -24,6 +25,34 @@ export interface SearchHistoryCreateRequest {
   address: string | null
   latitude: number | null
   longitude: number | null
+}
+
+export interface SearchHistoryListResponse {
+  items: SearchHistoryItem[]
+  page: number
+  size: number
+  total: number
+  totalPages: number
+}
+
+export interface SearchHistoryListParams {
+  page?: number
+  size?: number
+}
+
+export async function listSearchHistories(
+  profileId: string,
+  params: SearchHistoryListParams = {},
+  client: Pick<HttpClient, 'get'> = axios,
+): Promise<SearchHistoryListResponse> {
+  const { data } = await client.get<SearchHistoryListResponse>(
+    `/api/v1/profiles/${profileId}/search-histories`,
+    {
+      params,
+    },
+  )
+
+  return data
 }
 
 export async function createSearchHistory(
