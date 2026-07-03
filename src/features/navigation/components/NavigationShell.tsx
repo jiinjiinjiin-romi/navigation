@@ -52,7 +52,7 @@ import {
   type NaviAssistantStep,
 } from '@/features/assistant-scenarios'
 import { VoiceWave } from '@/features/voice-wave'
-import { type CSSProperties, type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type CSSProperties, type KeyboardEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   createProfile,
   DEFAULT_PROFILE_CREATE_REQUEST,
@@ -123,11 +123,132 @@ type SavedPlaceQuickItem = Place & {
 type RouteSearchSavedPlace = Place & {
   targetField?: SearchFieldId
 }
+type MockReportBehaviorType = {
+  label: string
+  count: number
+  correctedCount: number
+  colorClassName: string
+}
+type MockReportSession = {
+  id: string
+  destination: string
+  dateLabel: string
+  durationLabel: string
+  distanceLabel: string
+  score: number
+  eventCount: number
+  statusLabel: string
+}
+type MockTimelineEvent = {
+  id: string
+  timeLabel: string
+  behaviorLabel: string
+  riskLabel: string
+  interventionLabel: string
+}
+type MockReportData = {
+  periodLabel: string
+  score: number
+  scoreChangeLabel: string
+  totalDrivingLabel: string
+  totalDistanceLabel: string
+  totalSessions: number
+  totalEvents: number
+  topBehaviorLabel: string
+  correctionRateLabel: string
+  averageResponseLabel: string
+  dailyScores: Array<{ day: string; score: number }>
+  hourlyEvents: Array<{ hour: string; count: number }>
+  behaviorTypes: MockReportBehaviorType[]
+  sessions: MockReportSession[]
+  timeline: MockTimelineEvent[]
+}
 
 const CURRENT_LOCATION_PLACE_ID = 'current-location'
 const PRODUCT_EASE: [number, number, number, number] = [0.22, 1, 0.36, 1]
 const WEATHER_STALE_TIME_MS = 10 * 60 * 1000
 const SEARCH_DEBOUNCE_MS = 250
+const MOCK_REPORT_DATA: MockReportData = {
+  periodLabel: '2026.06.27 - 2026.07.03',
+  score: 86,
+  scoreChangeLabel: '+4점',
+  totalDrivingLabel: '4시간 12분',
+  totalDistanceLabel: '82.4 km',
+  totalSessions: 7,
+  totalEvents: 9,
+  topBehaviorLabel: '졸음 주의',
+  correctionRateLabel: '78%',
+  averageResponseLabel: '1.8초',
+  dailyScores: [
+    { day: '금', score: 82 },
+    { day: '토', score: 88 },
+    { day: '일', score: 91 },
+    { day: '월', score: 84 },
+    { day: '화', score: 86 },
+    { day: '수', score: 89 },
+    { day: '목', score: 86 },
+  ],
+  hourlyEvents: [
+    { hour: '08', count: 1 },
+    { hour: '12', count: 0 },
+    { hour: '15', count: 2 },
+    { hour: '18', count: 4 },
+    { hour: '21', count: 2 },
+  ],
+  behaviorTypes: [
+    { label: '졸음', count: 4, correctedCount: 3, colorClassName: 'bg-[var(--nav-warning)]' },
+    { label: '주의산만', count: 3, correctedCount: 2, colorClassName: 'bg-[var(--nav-ai-primary)]' },
+    { label: '휴대폰', count: 2, correctedCount: 2, colorClassName: 'bg-[var(--nav-danger)]' },
+  ],
+  sessions: [
+    {
+      id: 'session-1',
+      destination: '서울역',
+      dateLabel: '오늘 08:42',
+      durationLabel: '38분',
+      distanceLabel: '12.8 km',
+      score: 91,
+      eventCount: 1,
+      statusLabel: '완료',
+    },
+    {
+      id: 'session-2',
+      destination: '성수 카페',
+      dateLabel: '어제 19:16',
+      durationLabel: '46분',
+      distanceLabel: '14.2 km',
+      score: 82,
+      eventCount: 3,
+      statusLabel: '완료',
+    },
+    {
+      id: 'session-3',
+      destination: '회사',
+      dateLabel: '수요일 09:04',
+      durationLabel: '31분',
+      distanceLabel: '9.6 km',
+      score: 88,
+      eventCount: 1,
+      statusLabel: '완료',
+    },
+  ],
+  timeline: [
+    {
+      id: 'event-1',
+      timeLabel: '08:58',
+      behaviorLabel: '졸음 징후',
+      riskLabel: '위험도 2',
+      interventionLabel: '창문 열기 제안 후 정상 주행 복귀',
+    },
+    {
+      id: 'event-2',
+      timeLabel: '19:31',
+      behaviorLabel: '주의산만',
+      riskLabel: '위험도 3',
+      interventionLabel: '음성 안내 강화 후 반응 확인',
+    },
+  ],
+}
 const ADDRESS_COORDINATE_PRECISION = 5
 const WEATHER_COORDINATE_PRECISION = 3
 const ROUTE_SEARCH_SUMMARY_FIELDS_HEIGHT = 140
@@ -393,6 +514,7 @@ export function NavigationShell({
   const [routeOptionsOverlayReady, setRouteOptionsOverlayReady] = useState(false)
   const [selectedRouteOptionId, setSelectedRouteOptionId] = useState<string>()
   const [activeSidePanel, setActiveSidePanel] = useState<SidePanelId | null>(null)
+  const [reportFullscreenOpen, setReportFullscreenOpen] = useState(false)
   const [musicModalOpen, setMusicModalOpen] = useState(false)
   const [musicPlaying, setMusicPlaying] = useState(false)
   const [musicTrackId, setMusicTrackId] = useState<(typeof MUSIC_LIBRARY)[number]['id']>(MUSIC_LIBRARY[0].id)
@@ -650,6 +772,11 @@ export function NavigationShell({
   useEffect(() => {
     routeSelectionModeRef.current = routeSelectionMode
   }, [routeSelectionMode])
+  useEffect(() => {
+    if (simulationRunning) {
+      setReportFullscreenOpen(false)
+    }
+  }, [simulationRunning])
   useEffect(() => {
     if (!routeSelectionMode || hasRouteSearchDraftMismatch) {
       setRouteOptionsSearchReady(false)
@@ -1477,8 +1604,16 @@ export function NavigationShell({
                 savedPlacesLoading={savedPlacesQuery.isFetching}
                 deletingLabelId={deleteSavedPlaceMutation.isPending ? deleteSavedPlaceMutation.variables : undefined}
                 updatingLabelId={updateSavedPlaceMutation.isPending ? updateSavedPlaceMutation.variables?.placeId : undefined}
+                fullReportAvailable={!simulationRunning}
                 onChangeCameraSettings={updateMapCameraSettings}
                 onClose={() => setActiveSidePanel(null)}
+                onOpenFullReport={() => {
+                  if (simulationRunning) {
+                    return
+                  }
+                  setActiveSidePanel(null)
+                  setReportFullscreenOpen(true)
+                }}
                 onRequestCurrentLocation={requestCurrentLocation}
                 onAddPlaceLabel={(field, place) => {
                   if (selectedProfileId) {
@@ -1487,6 +1622,17 @@ export function NavigationShell({
                 }}
                 onDeletePlaceLabel={(placeId) => deleteSavedPlaceMutation.mutate(placeId)}
                 onUpdatePlaceLabel={(placeId, label) => updateSavedPlaceMutation.mutate({ placeId, label })}
+              />
+            ) : null}
+          </AnimatePresence>
+        ) : null}
+        {profileSetupComplete ? (
+          <AnimatePresence initial={false}>
+            {reportFullscreenOpen ? (
+              <ReportFullscreenOverlay
+                motionTiming={motionTiming}
+                report={MOCK_REPORT_DATA}
+                onClose={() => setReportFullscreenOpen(false)}
               />
             ) : null}
           </AnimatePresence>
@@ -2943,8 +3089,10 @@ function SideDrawerPanel({
   savedPlacesLoading,
   deletingLabelId,
   updatingLabelId,
+  fullReportAvailable,
   onChangeCameraSettings,
   onClose,
+  onOpenFullReport,
   onRequestCurrentLocation,
   onAddPlaceLabel,
   onDeletePlaceLabel,
@@ -2960,8 +3108,10 @@ function SideDrawerPanel({
   savedPlacesLoading: boolean
   deletingLabelId: string | undefined
   updatingLabelId: string | undefined
+  fullReportAvailable: boolean
   onChangeCameraSettings: (settings: Partial<MapCameraSettings>) => void
   onClose: () => void
+  onOpenFullReport: () => void
   onRequestCurrentLocation: () => void
   onAddPlaceLabel: (field: SearchFieldId, place: Place) => void
   onDeletePlaceLabel: (placeId: string) => void
@@ -3030,7 +3180,12 @@ function SideDrawerPanel({
       onRequestCurrentLocation={onRequestCurrentLocation}
     />
   ) : panel === 'report' ? (
-    <ReportDrawerContent itemVariants={itemVariants} />
+    <ReportDrawerContent
+      fullReportAvailable={fullReportAvailable}
+      itemVariants={itemVariants}
+      report={MOCK_REPORT_DATA}
+      onOpenFullReport={onOpenFullReport}
+    />
   ) : (
     <ConnectDrawerContent itemVariants={itemVariants} />
   )
@@ -3830,52 +3985,342 @@ function SettingsDrawerContent({
 }
 
 function ReportDrawerContent({
+  fullReportAvailable,
   itemVariants,
+  report,
+  onOpenFullReport,
 }: {
+  fullReportAvailable: boolean
   itemVariants: {
     hidden: { opacity: number; y: number; scale: number; transition: MotionTiming }
     visible: { opacity: number; y: number; scale: number; transition: MotionTiming }
   }
+  report: MockReportData
+  onOpenFullReport: () => void
 }) {
+  const topBehavior = report.behaviorTypes[0]
+  const latestSession = report.sessions[0]
+
   return (
     <>
-      <motion.div className="rounded-2xl bg-[var(--nav-panel)] p-3" variants={itemVariants}>
-        <div className="flex items-center gap-2">
-          <Article className="size-4 text-[var(--nav-primary)]" weight="bold" />
-          <span className="text-sm font-bold">운행 리포트</span>
+      <motion.div className="rounded-2xl bg-[var(--nav-panel)] p-4" variants={itemVariants}>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2 text-sm font-bold">
+              <Article className="size-4 text-[var(--nav-primary)]" weight="bold" />
+              <span>이번 주 운행 리포트</span>
+            </div>
+            <p className="mt-1 text-xs font-semibold text-[var(--nav-muted)]">{report.periodLabel}</p>
+          </div>
+          <span className="rounded-full bg-[var(--nav-primary-soft)] px-2.5 py-1 text-xs font-bold text-[var(--nav-primary)]">
+            {report.scoreChangeLabel}
+          </span>
         </div>
-        <div className="mt-3 grid gap-2 text-sm">
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-[var(--nav-muted)]">안전 상태</span>
-            <span className="font-semibold text-[var(--nav-guidance)]">양호</span>
+        <div className="mt-4 flex items-end gap-3">
+          <div className="text-5xl font-bold leading-none tracking-normal text-[var(--nav-ink)]">{report.score}</div>
+          <div className="pb-1">
+            <div className="text-sm font-bold text-[var(--nav-guidance)]">안정적</div>
+            <div className="text-xs font-semibold text-[var(--nav-muted)]">평균 안전 점수</div>
           </div>
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-[var(--nav-muted)]">최근 감지</span>
-            <span className="font-semibold">급커브 1건</span>
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-[var(--nav-muted)]">오늘 운행</span>
-            <span className="font-semibold">42분 · 11.8 km</span>
-          </div>
+        </div>
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <ReportMiniMetric label="운행" value={report.totalDrivingLabel} />
+          <ReportMiniMetric label="거리" value={report.totalDistanceLabel} />
+          <ReportMiniMetric label="이벤트" value={`${report.totalEvents}건`} tone="warning" />
+          <ReportMiniMetric label="교정률" value={report.correctionRateLabel} tone="success" />
         </div>
       </motion.div>
-      <motion.div className="rounded-2xl bg-[var(--nav-panel)] p-3" variants={itemVariants}>
-        <div className="flex items-center gap-2">
-          <Warning className="size-4 text-[var(--nav-warning)]" weight="fill" />
-          <span className="text-sm font-bold">점검 메모</span>
+
+      <motion.div className="rounded-2xl bg-[var(--nav-panel)] p-4" variants={itemVariants}>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Warning className="size-4 text-[var(--nav-warning)]" weight="fill" />
+            <span className="text-sm font-bold">이상행동 요약</span>
+          </div>
+          <span className="text-xs font-bold text-[var(--nav-muted)]">{report.topBehaviorLabel}</span>
         </div>
-        <p className="mt-2 text-sm leading-5 text-[var(--nav-muted)]">
-          주행 중 감속 구간과 제한속도 알림이 정상적으로 기록되고 있습니다.
-        </p>
+        <div className="mt-3 grid gap-3">
+          {report.behaviorTypes.map((behavior) => (
+            <div className="grid gap-1.5" key={behavior.label}>
+              <div className="flex items-center justify-between gap-2 text-xs font-bold">
+                <span>{behavior.label}</span>
+                <span className="text-[var(--nav-muted)]">{behavior.count}건</span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-white">
+                <div
+                  className={['h-full rounded-full', behavior.colorClassName].join(' ')}
+                  style={{ width: `${Math.max(12, (behavior.count / Math.max(1, topBehavior?.count ?? 1)) * 100)}%` }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      </motion.div>
+
+      <motion.div className="rounded-2xl bg-[var(--nav-panel)] p-4" variants={itemVariants}>
+        <div className="flex items-center gap-2">
+          <ClipboardText className="size-4 text-[var(--nav-primary)]" weight="bold" />
+          <span className="text-sm font-bold">최근 운행</span>
+        </div>
+        {latestSession ? (
+          <div className="mt-3 rounded-xl bg-white p-3">
+            <div className="flex items-center justify-between gap-3">
+              <span className="truncate text-sm font-bold">{latestSession.destination}</span>
+              <span className="rounded-full bg-[var(--nav-primary-soft)] px-2 py-1 text-xs font-bold text-[var(--nav-primary)]">
+                {latestSession.score}점
+              </span>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs font-semibold text-[var(--nav-muted)]">
+              <span>{latestSession.dateLabel}</span>
+              <span>{latestSession.durationLabel}</span>
+              <span>{latestSession.distanceLabel}</span>
+            </div>
+          </div>
+        ) : null}
         <button
-          className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-xl bg-white px-3 text-[13px] font-semibold text-[var(--nav-primary)] transition hover:bg-[var(--nav-selection)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
+          className="mt-3 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[var(--nav-primary)] px-3 text-[13px] font-bold text-white transition hover:bg-[var(--nav-primary-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)] disabled:cursor-not-allowed disabled:bg-[var(--nav-disabled)] disabled:text-white"
+          disabled={!fullReportAvailable}
+          onClick={onOpenFullReport}
           type="button"
         >
           <ClipboardText className="size-4" weight="bold" />
-          리포트 확인
+          {fullReportAvailable ? '전체 보고서 보기' : '운행 종료 후 확인'}
         </button>
       </motion.div>
     </>
+  )
+}
+
+function ReportMiniMetric({
+  label,
+  tone = 'default',
+  value,
+}: {
+  label: string
+  tone?: 'default' | 'success' | 'warning'
+  value: string
+}) {
+  const valueClassName = tone === 'success'
+    ? 'text-[var(--nav-guidance)]'
+    : tone === 'warning'
+      ? 'text-[var(--nav-warning)]'
+      : 'text-[var(--nav-ink)]'
+
+  return (
+    <div className="rounded-xl bg-white px-3 py-2.5">
+      <div className="text-[11px] font-bold text-[var(--nav-muted)]">{label}</div>
+      <div className={['mt-1 truncate text-sm font-bold', valueClassName].join(' ')}>{value}</div>
+    </div>
+  )
+}
+
+function ReportFullscreenOverlay({
+  motionTiming,
+  report,
+  onClose,
+}: {
+  motionTiming: MotionTiming
+  report: MockReportData
+  onClose: () => void
+}) {
+  const maxDailyScore = Math.max(...report.dailyScores.map((item) => item.score), 100)
+  const maxHourlyEvents = Math.max(...report.hourlyEvents.map((item) => item.count), 1)
+
+  return (
+    <motion.div
+      aria-label="전체 운행 보고서"
+      aria-modal="true"
+      className="absolute inset-0 z-[80] flex min-h-0 flex-col bg-[var(--nav-frame)] text-[var(--nav-ink)]"
+      data-testid="report-fullscreen"
+      initial={{ opacity: 0, scale: 1.01 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 1.006 }}
+      transition={motionTiming}
+      role="dialog"
+    >
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <header className="flex items-center justify-between gap-4 border-b border-[var(--nav-border)] bg-white/92 px-6 py-4">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 text-sm font-bold text-[var(--nav-primary)]">
+              <Article className="size-4" weight="bold" />
+              <span>최근 7일 운전 분석</span>
+            </div>
+            <h2 className="mt-1 truncate text-2xl font-bold tracking-normal">전체 운행 보고서</h2>
+            <p className="mt-1 text-sm font-semibold text-[var(--nav-muted)]">{report.periodLabel}</p>
+          </div>
+          <button
+            aria-label="전체 운행 보고서 닫기"
+            className="grid size-11 shrink-0 place-items-center rounded-full text-[var(--nav-muted)] transition hover:bg-[var(--nav-panel)] hover:text-[var(--nav-ink)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
+            onClick={onClose}
+            type="button"
+          >
+            <X className="size-5" weight="bold" />
+          </button>
+        </header>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+          <div className="grid gap-4 lg:grid-cols-[1.1fr_1fr]">
+            <section className="rounded-2xl bg-white p-5 shadow-[0_10px_24px_rgb(15_23_42/0.08)]">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <div className="text-sm font-bold text-[var(--nav-muted)]">평균 안전 점수</div>
+                  <div className="mt-3 flex items-end gap-3">
+                    <span className="text-6xl font-bold leading-none tracking-normal">{report.score}</span>
+                    <span className="pb-2 text-base font-bold text-[var(--nav-guidance)]">{report.scoreChangeLabel}</span>
+                  </div>
+                </div>
+                <div className="grid min-w-[10rem] gap-2">
+                  <ReportSummaryPill label="운행" value={`${report.totalSessions}회`} />
+                  <ReportSummaryPill label="응답" value={report.averageResponseLabel} />
+                </div>
+              </div>
+              <div className="mt-5 grid grid-cols-3 gap-3 max-sm:grid-cols-1">
+                <ReportLargeMetric icon={<Timer className="size-4" weight="bold" />} label="총 운행 시간" value={report.totalDrivingLabel} />
+                <ReportLargeMetric icon={<CarSimple className="size-4" weight="bold" />} label="총 거리" value={report.totalDistanceLabel} />
+                <ReportLargeMetric icon={<Warning className="size-4" weight="fill" />} label="이벤트" value={`${report.totalEvents}건`} tone="warning" />
+              </div>
+            </section>
+
+            <section className="rounded-2xl bg-white p-5 shadow-[0_10px_24px_rgb(15_23_42/0.08)]">
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="text-base font-bold">일별 안전 점수</h3>
+                <span className="rounded-full bg-[var(--nav-primary-soft)] px-3 py-1 text-xs font-bold text-[var(--nav-primary)]">
+                  {report.correctionRateLabel} 교정
+                </span>
+              </div>
+              <div className="mt-5 flex h-34 items-end justify-between gap-3" data-testid="daily-safety-chart">
+                {report.dailyScores.map((item) => (
+                  <div className="flex min-w-0 flex-1 flex-col items-center gap-2" key={item.day}>
+                    <span className="text-[11px] font-bold text-[var(--nav-muted)]">{item.score}</span>
+                    <div className="flex h-24 w-5 items-end overflow-hidden rounded-md bg-[var(--nav-panel)]">
+                      <div
+                        className="w-full rounded-t-md bg-[var(--nav-primary)]"
+                        style={{ height: `${Math.max(18, (item.score / maxDailyScore) * 100)}%` }}
+                      />
+                    </div>
+                    <span className="text-xs font-bold text-[var(--nav-muted)]">{item.day}</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          </div>
+
+          <div className="mt-4 grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
+            <section className="rounded-2xl bg-white p-5 shadow-[0_10px_24px_rgb(15_23_42/0.08)]">
+              <h3 className="text-base font-bold">행동 유형별 분석</h3>
+              <div className="mt-4 grid gap-4">
+                {report.behaviorTypes.map((behavior) => (
+                  <div className="grid gap-2" key={behavior.label}>
+                    <div className="flex items-center justify-between gap-3 text-sm font-bold">
+                      <span>{behavior.label}</span>
+                      <span className="text-[var(--nav-muted)]">{behavior.count}건 · {behavior.correctedCount}건 교정</span>
+                    </div>
+                    <div className="h-3 overflow-hidden rounded-full bg-[var(--nav-panel)]">
+                      <div
+                        className={['h-full rounded-full', behavior.colorClassName].join(' ')}
+                        style={{ width: `${Math.max(10, (behavior.count / Math.max(1, report.totalEvents)) * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <h3 className="mt-6 text-base font-bold">시간대별 이벤트</h3>
+              <div className="mt-4 flex h-24 items-end gap-3">
+                {report.hourlyEvents.map((item) => (
+                  <div className="flex flex-1 flex-col items-center gap-2" key={item.hour}>
+                    <div
+                      className="w-full rounded-t-lg bg-[var(--nav-warning)]"
+                      style={{ height: `${Math.max(8, (item.count / maxHourlyEvents) * 100)}%` }}
+                    />
+                    <span className="text-xs font-bold text-[var(--nav-muted)]">{item.hour}</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section className="rounded-2xl bg-white p-5 shadow-[0_10px_24px_rgb(15_23_42/0.08)]">
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="text-base font-bold">최근 운행</h3>
+                <span className="text-xs font-bold text-[var(--nav-muted)]">리포트 세션</span>
+              </div>
+              <div className="mt-4 grid gap-2">
+                {report.sessions.map((session) => (
+                  <div className="rounded-xl bg-[var(--nav-panel)] p-3" key={session.id}>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-bold">{session.destination}</div>
+                        <div className="mt-1 text-xs font-semibold text-[var(--nav-muted)]">
+                          {session.dateLabel} · {session.durationLabel} · {session.distanceLabel}
+                        </div>
+                      </div>
+                      <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-xs font-bold text-[var(--nav-primary)]">
+                        {session.score}점
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <h3 className="mt-6 text-base font-bold">Navi 개입 타임라인</h3>
+              <div className="mt-4 grid gap-3">
+                {report.timeline.map((event) => (
+                  <div className="grid grid-cols-[3.5rem_1fr] gap-3" key={event.id}>
+                    <span className="pt-0.5 text-xs font-bold text-[var(--nav-muted)]">{event.timeLabel}</span>
+                    <div className="rounded-xl bg-[var(--nav-ai-soft)] p-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-bold text-[var(--nav-ai-primary)]">{event.behaviorLabel}</span>
+                        <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-bold text-[var(--nav-muted)]">
+                          {event.riskLabel}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs font-semibold leading-5 text-[var(--nav-muted)]">{event.interventionLabel}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  )
+}
+
+function ReportSummaryPill({
+  label,
+  value,
+}: {
+  label: string
+  value: string
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-xl bg-[var(--nav-panel)] px-3 py-2 text-sm">
+      <span className="font-bold text-[var(--nav-muted)]">{label}</span>
+      <span className="font-bold">{value}</span>
+    </div>
+  )
+}
+
+function ReportLargeMetric({
+  icon,
+  label,
+  tone = 'default',
+  value,
+}: {
+  icon: ReactNode
+  label: string
+  tone?: 'default' | 'warning'
+  value: string
+}) {
+  return (
+    <div className="rounded-xl bg-[var(--nav-panel)] p-3">
+      <div className={['flex items-center gap-2 text-xs font-bold', tone === 'warning' ? 'text-[var(--nav-warning)]' : 'text-[var(--nav-primary)]'].join(' ')}>
+        {icon}
+        <span>{label}</span>
+      </div>
+      <div className="mt-2 text-lg font-bold tracking-normal">{value}</div>
+    </div>
   )
 }
 

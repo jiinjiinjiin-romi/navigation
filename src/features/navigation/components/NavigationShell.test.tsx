@@ -1053,11 +1053,17 @@ describe('NavigationShell', () => {
     fireEvent.click(screen.getByRole('button', { name: '보고서' }))
     expect(await screen.findByRole('dialog', { name: '보고서' })).toBeInTheDocument()
     expect(screen.getByTestId('report-drawer')).toBeInTheDocument()
-    expect(screen.getByText('운행 리포트')).toBeInTheDocument()
+    expect(screen.getByText('이번 주 운행 리포트')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '보고서' })).toHaveAttribute('aria-expanded', 'true')
-    expect(screen.getByRole('button', { name: '리포트 확인' })).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: '보고서 닫기' }))
+    fireEvent.click(screen.getByRole('button', { name: '전체 보고서 보기' }))
+    expect(await screen.findByRole('dialog', { name: '전체 운행 보고서' })).toBeInTheDocument()
+    expect(screen.getByText('최근 7일 운전 분석')).toBeInTheDocument()
+    expect(screen.getByText('행동 유형별 분석')).toBeInTheDocument()
+    expect(screen.getByTestId('daily-safety-chart').querySelector('.w-5')).not.toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '전체 운행 보고서 닫기' }))
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: '전체 운행 보고서' })).not.toBeInTheDocument()
+    })
     expect(await screen.findByRole('button', { name: '연동 상태' })).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '연동 상태' }))
@@ -2501,6 +2507,10 @@ describe('NavigationShell', () => {
     fireEvent.click(screen.getByRole('button', { name: '시뮬레이션 시작' }))
 
     expect(screen.getByRole('button', { name: '시뮬레이션 중지' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '보고서' }))
+    expect(await screen.findByRole('dialog', { name: '보고서' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '운행 종료 후 확인' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: '보고서 닫기' }))
     expect(screen.getByTestId('primary-maneuver-card')).toBeInTheDocument()
     expect(screen.getByText('좌회전')).toBeInTheDocument()
     expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-route-points', '2')
