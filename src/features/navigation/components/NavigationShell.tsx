@@ -40,6 +40,21 @@ import {
   X,
 } from '@phosphor-icons/react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  LabelList,
+  Line,
+  LineChart,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
 import { VoiceOrb } from '@/features/orb'
 import type { OrbAssistantState, OrbColorTheme } from '@/features/orb'
 import {
@@ -123,131 +138,444 @@ type SavedPlaceQuickItem = Place & {
 type RouteSearchSavedPlace = Place & {
   targetField?: SearchFieldId
 }
-type MockReportBehaviorType = {
-  label: string
-  count: number
-  correctedCount: number
-  colorClassName: string
-}
+type ReportBehaviorType = 'DROWSINESS' | 'PHONE_USE' | 'FOOD_OR_DRINK' | 'GAZE_AWAY'
 type MockReportSession = {
-  id: string
-  destination: string
-  dateLabel: string
-  durationLabel: string
-  distanceLabel: string
-  score: number
-  eventCount: number
-  statusLabel: string
+  sessionId: string
+  startedAt: string
+  endedAt: string | null
+  destinationName: string | null
+  durationSeconds: number
+  distanceMeters: number
+  averageSpeedKph: number | null
+  safetyScore: number | null
+  behaviorEventCount: number
+  interventionCount: number
+  correctedBehaviorCount: number
+  behaviorCorrectionRate: number
 }
 type MockTimelineEvent = {
-  id: string
-  timeLabel: string
-  behaviorLabel: string
-  riskLabel: string
-  interventionLabel: string
+  eventId: string
+  startedAt: string
+  endedAt: string | null
+  durationMs: number | null
+  behaviorType: string
+  status: string
+  riskLevel: number
+  drivingState: string
+  speedKph: number | null
+  averageConfidence: number
+  maximumConfidence: number
+  resolutionReason: string | null
+  interventionText: string
+  corrected: boolean
+}
+type MockLocationSample = Coordinate & {
+  accuracyMeters: number | null
+  drivingState: string
+  recordedAt: string
+  source: 'GPS' | 'SIMULATION'
+  speedKph: number | null
 }
 type MockReportData = {
-  periodLabel: string
-  score: number
-  scoreChangeLabel: string
-  totalDrivingLabel: string
-  totalDistanceLabel: string
-  totalSessions: number
-  totalEvents: number
-  topBehaviorLabel: string
-  correctionRateLabel: string
-  averageResponseLabel: string
-  dailyScores: Array<{ day: string; score: number }>
-  hourlyEvents: Array<{ hour: string; count: number }>
-  behaviorTypes: MockReportBehaviorType[]
-  sessions: MockReportSession[]
-  timeline: MockTimelineEvent[]
+  summary: {
+    period: { start: string; end: string }
+    overview: {
+      totalSessions: number
+      totalDrivingSeconds: number
+      totalDistanceMeters: number
+      averageSafetyScore: number | null
+      behaviorEventCount: number
+      interventionCount: number
+      correctedBehaviorCount: number
+      behaviorCorrectionRate: number
+      averageResponseLatencyMs: number | null
+    }
+    behaviorCounts: Record<string, number>
+    riskLevelCounts: Record<string, number>
+    dailySafetyScores: Array<{ date: string; score: number }>
+    comparison: {
+      previousPeriodStart: string
+      previousPeriodEnd: string
+      previousAverageSafetyScore: number | null
+      scoreChange: number | null
+      phoneUseChangePercent: number | null
+    }
+  }
+  behaviorReport: {
+    totalEventCount: number
+    statistics: Array<{
+      behaviorType: string
+      eventCount: number
+      totalDurationMs: number
+      averageDurationMs: number | null
+      averageConfidence: number | null
+      maximumRiskLevel: number | null
+      correctedCount: number
+      correctionRate: number
+    }>
+    riskLevelCounts: Record<string, number>
+    hourlyCounts: Array<{ hour: number; count: number }>
+  }
+  reportSessions: {
+    items: MockReportSession[]
+    page: number
+    size: number
+    total: number
+    totalPages: number
+  }
+  sessionDetails: Record<string, {
+    id: string
+    status: string
+    endReason: string | null
+    startedAt: string
+    endedAt: string | null
+    startLocation: Coordinate
+    endLocation: Coordinate | null
+    destinationName: string | null
+    distanceMeters: number
+    durationSeconds: number
+    averageSpeedKph: number | null
+    safetyScore: number | null
+    summary: {
+      behaviorEventCount: number
+      interventionCount: number
+      correctedBehaviorCount: number
+      behaviorCorrectionRate: number
+      averageResponseLatencyMs: number | null
+    }
+  }>
+  timelines: Record<string, MockTimelineEvent[]>
+  locations: Record<string, MockLocationSample[]>
 }
 
 const CURRENT_LOCATION_PLACE_ID = 'current-location'
 const PRODUCT_EASE: [number, number, number, number] = [0.22, 1, 0.36, 1]
 const WEATHER_STALE_TIME_MS = 10 * 60 * 1000
 const SEARCH_DEBOUNCE_MS = 250
+const REPORT_BEHAVIOR_TYPES: ReportBehaviorType[] = ['DROWSINESS', 'PHONE_USE', 'FOOD_OR_DRINK', 'GAZE_AWAY']
+const REPORT_PERIOD_PRESETS = [
+  { id: 'today', label: '오늘' },
+  { id: 'last7', label: '최근 7일' },
+  { id: 'last30', label: '최근 30일' },
+  { id: 'month', label: '이번 달' },
+] as const
+const REPORT_CHART_COLORS = {
+  primary: '#1746a2',
+  primarySoft: '#e8eeff',
+  guidance: '#16a34a',
+  warning: '#f97316',
+  danger: '#e11d48',
+  ai: '#6d5df6',
+  panel: '#f9fafc',
+  border: '#e4e7ec',
+  muted: '#475467',
+  ink: '#101828',
+}
 const MOCK_REPORT_DATA: MockReportData = {
-  periodLabel: '2026.06.27 - 2026.07.03',
-  score: 86,
-  scoreChangeLabel: '+4점',
-  totalDrivingLabel: '4시간 12분',
-  totalDistanceLabel: '82.4 km',
-  totalSessions: 7,
-  totalEvents: 9,
-  topBehaviorLabel: '졸음 주의',
-  correctionRateLabel: '78%',
-  averageResponseLabel: '1.8초',
-  dailyScores: [
-    { day: '금', score: 82 },
-    { day: '토', score: 88 },
-    { day: '일', score: 91 },
-    { day: '월', score: 84 },
-    { day: '화', score: 86 },
-    { day: '수', score: 89 },
-    { day: '목', score: 86 },
-  ],
-  hourlyEvents: [
-    { hour: '08', count: 1 },
-    { hour: '12', count: 0 },
-    { hour: '15', count: 2 },
-    { hour: '18', count: 4 },
-    { hour: '21', count: 2 },
-  ],
-  behaviorTypes: [
-    { label: '졸음', count: 4, correctedCount: 3, colorClassName: 'bg-[var(--nav-warning)]' },
-    { label: '주의산만', count: 3, correctedCount: 2, colorClassName: 'bg-[var(--nav-ai-primary)]' },
-    { label: '휴대폰', count: 2, correctedCount: 2, colorClassName: 'bg-[var(--nav-danger)]' },
-  ],
-  sessions: [
-    {
+  summary: {
+    period: { start: '2026-06-27', end: '2026-07-03' },
+    overview: {
+      totalSessions: 7,
+      totalDrivingSeconds: 15_120,
+      totalDistanceMeters: 82_400,
+      averageSafetyScore: 86,
+      behaviorEventCount: 9,
+      interventionCount: 8,
+      correctedBehaviorCount: 7,
+      behaviorCorrectionRate: 87.5,
+      averageResponseLatencyMs: 1_800,
+    },
+    behaviorCounts: {
+      DROWSINESS: 4,
+      PHONE_USE: 2,
+      FOOD_OR_DRINK: 1,
+      GAZE_AWAY: 2,
+    },
+    riskLevelCounts: {
+      '0': 1,
+      '1': 2,
+      '2': 4,
+      '3': 3,
+    },
+    dailySafetyScores: [
+      { date: '2026-06-27', score: 82 },
+      { date: '2026-06-28', score: 88 },
+      { date: '2026-06-29', score: 91 },
+      { date: '2026-06-30', score: 84 },
+      { date: '2026-07-01', score: 86 },
+      { date: '2026-07-02', score: 89 },
+      { date: '2026-07-03', score: 86 },
+    ],
+    comparison: {
+      previousPeriodStart: '2026-06-20',
+      previousPeriodEnd: '2026-06-26',
+      previousAverageSafetyScore: 82,
+      scoreChange: 4,
+      phoneUseChangePercent: -18,
+    },
+  },
+  behaviorReport: {
+    totalEventCount: 9,
+    statistics: [
+      {
+        behaviorType: 'DROWSINESS',
+        eventCount: 4,
+        totalDurationMs: 128_000,
+        averageDurationMs: 32_000,
+        averageConfidence: 0.82,
+        maximumRiskLevel: 3,
+        correctedCount: 3,
+        correctionRate: 75,
+      },
+      {
+        behaviorType: 'PHONE_USE',
+        eventCount: 2,
+        totalDurationMs: 42_000,
+        averageDurationMs: 21_000,
+        averageConfidence: 0.88,
+        maximumRiskLevel: 2,
+        correctedCount: 2,
+        correctionRate: 100,
+      },
+      {
+        behaviorType: 'FOOD_OR_DRINK',
+        eventCount: 1,
+        totalDurationMs: 18_000,
+        averageDurationMs: 18_000,
+        averageConfidence: 0.7,
+        maximumRiskLevel: 1,
+        correctedCount: 1,
+        correctionRate: 100,
+      },
+      {
+        behaviorType: 'GAZE_AWAY',
+        eventCount: 2,
+        totalDurationMs: 73_000,
+        averageDurationMs: 36_500,
+        averageConfidence: 0.74,
+        maximumRiskLevel: 3,
+        correctedCount: 1,
+        correctionRate: 50,
+      },
+    ],
+    riskLevelCounts: {
+      '0': 1,
+      '1': 2,
+      '2': 4,
+      '3': 3,
+    },
+    hourlyCounts: [
+      { hour: 8, count: 1 },
+      { hour: 12, count: 0 },
+      { hour: 15, count: 2 },
+      { hour: 18, count: 4 },
+      { hour: 21, count: 2 },
+    ],
+  },
+  reportSessions: {
+    items: [
+      {
+        sessionId: 'session-1',
+        startedAt: '2026-07-03T08:42:00.000000Z',
+        endedAt: '2026-07-03T09:20:00.000000Z',
+        destinationName: '서울역',
+        durationSeconds: 2_280,
+        distanceMeters: 12_800,
+        averageSpeedKph: 28.6,
+        safetyScore: 91,
+        behaviorEventCount: 1,
+        interventionCount: 1,
+        correctedBehaviorCount: 1,
+        behaviorCorrectionRate: 100,
+      },
+      {
+        sessionId: 'session-2',
+        startedAt: '2026-07-02T19:16:00.000000Z',
+        endedAt: '2026-07-02T20:02:00.000000Z',
+        destinationName: '성수 카페',
+        durationSeconds: 2_760,
+        distanceMeters: 14_200,
+        averageSpeedKph: 24.1,
+        safetyScore: 82,
+        behaviorEventCount: 3,
+        interventionCount: 3,
+        correctedBehaviorCount: 2,
+        behaviorCorrectionRate: 66.7,
+      },
+      {
+        sessionId: 'session-3',
+        startedAt: '2026-07-01T09:04:00.000000Z',
+        endedAt: '2026-07-01T09:35:00.000000Z',
+        destinationName: '회사',
+        durationSeconds: 1_860,
+        distanceMeters: 9_600,
+        averageSpeedKph: 30.9,
+        safetyScore: 88,
+        behaviorEventCount: 1,
+        interventionCount: 1,
+        correctedBehaviorCount: 1,
+        behaviorCorrectionRate: 100,
+      },
+    ],
+    page: 1,
+    size: 20,
+    total: 3,
+    totalPages: 1,
+  },
+  sessionDetails: {
+    'session-1': {
       id: 'session-1',
-      destination: '서울역',
-      dateLabel: '오늘 08:42',
-      durationLabel: '38분',
-      distanceLabel: '12.8 km',
-      score: 91,
-      eventCount: 1,
-      statusLabel: '완료',
+      status: 'COMPLETED',
+      endReason: 'USER_REQUEST',
+      startedAt: '2026-07-03T08:42:00.000000Z',
+      endedAt: '2026-07-03T09:20:00.000000Z',
+      startLocation: { lat: 37.5665, lng: 126.978 },
+      endLocation: { lat: 37.5547, lng: 126.9706 },
+      destinationName: '서울역',
+      distanceMeters: 12_800,
+      durationSeconds: 2_280,
+      averageSpeedKph: 28.6,
+      safetyScore: 91,
+      summary: {
+        behaviorEventCount: 1,
+        interventionCount: 1,
+        correctedBehaviorCount: 1,
+        behaviorCorrectionRate: 100,
+        averageResponseLatencyMs: 1_200,
+      },
     },
-    {
+    'session-2': {
       id: 'session-2',
-      destination: '성수 카페',
-      dateLabel: '어제 19:16',
-      durationLabel: '46분',
-      distanceLabel: '14.2 km',
-      score: 82,
-      eventCount: 3,
-      statusLabel: '완료',
+      status: 'ABORTED',
+      endReason: 'CONNECTION_LOST',
+      startedAt: '2026-07-02T19:16:00.000000Z',
+      endedAt: '2026-07-02T20:02:00.000000Z',
+      startLocation: { lat: 37.5445, lng: 127.0557 },
+      endLocation: { lat: 37.5458, lng: 127.0494 },
+      destinationName: '성수 카페',
+      distanceMeters: 14_200,
+      durationSeconds: 2_760,
+      averageSpeedKph: 24.1,
+      safetyScore: 82,
+      summary: {
+        behaviorEventCount: 3,
+        interventionCount: 3,
+        correctedBehaviorCount: 2,
+        behaviorCorrectionRate: 66.7,
+        averageResponseLatencyMs: 2_400,
+      },
     },
-    {
+    'session-3': {
       id: 'session-3',
-      destination: '회사',
-      dateLabel: '수요일 09:04',
-      durationLabel: '31분',
-      distanceLabel: '9.6 km',
-      score: 88,
-      eventCount: 1,
-      statusLabel: '완료',
+      status: 'COMPLETED',
+      endReason: 'USER_REQUEST',
+      startedAt: '2026-07-01T09:04:00.000000Z',
+      endedAt: '2026-07-01T09:35:00.000000Z',
+      startLocation: { lat: 37.5502, lng: 127.073 },
+      endLocation: { lat: 37.5073, lng: 127.0587 },
+      destinationName: '회사',
+      distanceMeters: 9_600,
+      durationSeconds: 1_860,
+      averageSpeedKph: 30.9,
+      safetyScore: 88,
+      summary: {
+        behaviorEventCount: 1,
+        interventionCount: 1,
+        correctedBehaviorCount: 1,
+        behaviorCorrectionRate: 100,
+        averageResponseLatencyMs: 900,
+      },
     },
-  ],
-  timeline: [
-    {
-      id: 'event-1',
-      timeLabel: '08:58',
-      behaviorLabel: '졸음 징후',
-      riskLabel: '위험도 2',
-      interventionLabel: '창문 열기 제안 후 정상 주행 복귀',
-    },
-    {
-      id: 'event-2',
-      timeLabel: '19:31',
-      behaviorLabel: '주의산만',
-      riskLabel: '위험도 3',
-      interventionLabel: '음성 안내 강화 후 반응 확인',
-    },
-  ],
+  },
+  timelines: {
+    'session-1': [
+      {
+        eventId: 'event-1',
+        startedAt: '2026-07-03T08:58:00.000000Z',
+        endedAt: '2026-07-03T08:58:28.000000Z',
+        durationMs: 28_000,
+        behaviorType: 'DROWSINESS',
+        status: 'RESOLVED',
+        riskLevel: 2,
+        drivingState: 'MOVING',
+        speedKph: 28,
+        averageConfidence: 0.82,
+        maximumConfidence: 0.91,
+        resolutionReason: 'BEHAVIOR_CORRECTED',
+        interventionText: '창문 열기 제안 후 정상 주행 복귀',
+        corrected: true,
+      },
+    ],
+    'session-2': [
+      {
+        eventId: 'event-2',
+        startedAt: '2026-07-02T19:31:00.000000Z',
+        endedAt: '2026-07-02T19:31:44.000000Z',
+        durationMs: 44_000,
+        behaviorType: 'GAZE_AWAY',
+        status: 'RESOLVED',
+        riskLevel: 3,
+        drivingState: 'MOVING',
+        speedKph: 34,
+        averageConfidence: 0.76,
+        maximumConfidence: 0.9,
+        resolutionReason: 'BEHAVIOR_CORRECTED',
+        interventionText: '음성 안내 강화 후 반응 확인',
+        corrected: true,
+      },
+      {
+        eventId: 'event-3',
+        startedAt: '2026-07-02T19:44:00.000000Z',
+        endedAt: '2026-07-02T19:44:21.000000Z',
+        durationMs: 21_000,
+        behaviorType: 'PHONE_USE',
+        status: 'RESOLVED',
+        riskLevel: 2,
+        drivingState: 'SLOW_TRAFFIC',
+        speedKph: 12,
+        averageConfidence: 0.88,
+        maximumConfidence: 0.93,
+        resolutionReason: 'BEHAVIOR_REPEATED',
+        interventionText: '휴대폰 사용 경고 후 반복 여부 추적',
+        corrected: false,
+      },
+    ],
+    'session-3': [
+      {
+        eventId: 'event-4',
+        startedAt: '2026-07-01T09:18:00.000000Z',
+        endedAt: '2026-07-01T09:18:18.000000Z',
+        durationMs: 18_000,
+        behaviorType: 'FOOD_OR_DRINK',
+        status: 'RESOLVED',
+        riskLevel: 1,
+        drivingState: 'MOVING',
+        speedKph: 26,
+        averageConfidence: 0.7,
+        maximumConfidence: 0.81,
+        resolutionReason: 'BEHAVIOR_CORRECTED',
+        interventionText: '섭취 행동 감지 후 전방 주시 안내',
+        corrected: true,
+      },
+    ],
+  },
+  locations: {
+    'session-1': [
+      { lat: 37.5665, lng: 126.978, speedKph: 18, drivingState: 'MOVING', accuracyMeters: 6, source: 'GPS', recordedAt: '2026-07-03T08:42:00.000000Z' },
+      { lat: 37.5601, lng: 126.9822, speedKph: 31, drivingState: 'MOVING', accuracyMeters: 8, source: 'GPS', recordedAt: '2026-07-03T08:52:00.000000Z' },
+      { lat: 37.5547, lng: 126.9706, speedKph: 0, drivingState: 'STOPPED', accuracyMeters: 5, source: 'GPS', recordedAt: '2026-07-03T09:20:00.000000Z' },
+    ],
+    'session-2': [
+      { lat: 37.5445, lng: 127.0557, speedKph: 22, drivingState: 'MOVING', accuracyMeters: 7, source: 'SIMULATION', recordedAt: '2026-07-02T19:16:00.000000Z' },
+      { lat: 37.5474, lng: 127.052, speedKph: 34, drivingState: 'MOVING', accuracyMeters: 9, source: 'SIMULATION', recordedAt: '2026-07-02T19:28:00.000000Z' },
+      { lat: 37.5482, lng: 127.0511, speedKph: 12, drivingState: 'SLOW_TRAFFIC', accuracyMeters: 8, source: 'SIMULATION', recordedAt: '2026-07-02T19:44:00.000000Z' },
+      { lat: 37.5458, lng: 127.0494, speedKph: 0, drivingState: 'STOPPED', accuracyMeters: 10, source: 'SIMULATION', recordedAt: '2026-07-02T20:02:00.000000Z' },
+    ],
+    'session-3': [
+      { lat: 37.5502, lng: 127.073, speedKph: 24, drivingState: 'MOVING', accuracyMeters: 6, source: 'GPS', recordedAt: '2026-07-01T09:04:00.000000Z' },
+      { lat: 37.5073, lng: 127.0587, speedKph: 0, drivingState: 'STOPPED', accuracyMeters: 5, source: 'GPS', recordedAt: '2026-07-01T09:35:00.000000Z' },
+    ],
+  },
 }
 const ADDRESS_COORDINATE_PRECISION = 5
 const WEATHER_COORDINATE_PRECISION = 3
@@ -3193,7 +3521,7 @@ function SideDrawerPanel({
   return (
     <motion.aside
       aria-label={drawerMeta.label}
-      className="pointer-events-auto absolute bottom-0 right-0 top-0 z-20 w-[320px] overflow-hidden bg-white text-[var(--nav-ink)] shadow-[0_14px_36px_rgb(15_23_42/0.12)] max-sm:w-[min(20rem,calc(100vw-4rem))]"
+      className="pointer-events-auto absolute bottom-[43px] right-0 top-0 z-20 w-[320px] overflow-hidden bg-white text-[var(--nav-ink)] shadow-[0_14px_36px_rgb(15_23_42/0.12)] max-sm:bottom-[37px] max-sm:w-[min(20rem,calc(100vw-4rem))]"
       id={`${panel}-drawer`}
       data-testid={`${panel}-drawer`}
       exit={{ opacity: 1, x: drawerOffset }}
@@ -3998,8 +4326,16 @@ function ReportDrawerContent({
   report: MockReportData
   onOpenFullReport: () => void
 }) {
-  const topBehavior = report.behaviorTypes[0]
-  const latestSession = report.sessions[0]
+  const overview = report.summary.overview
+  const behaviorStats = report.behaviorReport.statistics
+  const topBehavior = behaviorStats[0]
+  const latestSession = report.reportSessions.items[0]
+  const drawerBehaviorChartData = behaviorStats.map((behavior) => ({
+    behaviorType: behavior.behaviorType,
+    label: getBehaviorLabel(behavior.behaviorType),
+    count: behavior.eventCount,
+    fill: getBehaviorChartColor(behavior.behaviorType),
+  }))
 
   return (
     <>
@@ -4010,24 +4346,24 @@ function ReportDrawerContent({
               <Article className="size-4 text-[var(--nav-primary)]" weight="bold" />
               <span>이번 주 운행 리포트</span>
             </div>
-            <p className="mt-1 text-xs font-semibold text-[var(--nav-muted)]">{report.periodLabel}</p>
+            <p className="mt-1 text-xs font-semibold text-[var(--nav-muted)]">{formatReportPeriod(report.summary.period)}</p>
           </div>
           <span className="rounded-full bg-[var(--nav-primary-soft)] px-2.5 py-1 text-xs font-bold text-[var(--nav-primary)]">
-            {report.scoreChangeLabel}
+            {formatScoreChange(report.summary.comparison.scoreChange)}
           </span>
         </div>
         <div className="mt-4 flex items-end gap-3">
-          <div className="text-5xl font-bold leading-none tracking-normal text-[var(--nav-ink)]">{report.score}</div>
+          <div className="text-5xl font-bold leading-none tracking-normal text-[var(--nav-ink)]">{Math.round(overview.averageSafetyScore ?? 0)}</div>
           <div className="pb-1">
             <div className="text-sm font-bold text-[var(--nav-guidance)]">안정적</div>
             <div className="text-xs font-semibold text-[var(--nav-muted)]">평균 안전 점수</div>
           </div>
         </div>
         <div className="mt-4 grid grid-cols-2 gap-2">
-          <ReportMiniMetric label="운행" value={report.totalDrivingLabel} />
-          <ReportMiniMetric label="거리" value={report.totalDistanceLabel} />
-          <ReportMiniMetric label="이벤트" value={`${report.totalEvents}건`} tone="warning" />
-          <ReportMiniMetric label="교정률" value={report.correctionRateLabel} tone="success" />
+          <ReportMiniMetric label="운행" value={formatReportDuration(overview.totalDrivingSeconds)} />
+          <ReportMiniMetric label="거리" value={formatReportDistance(overview.totalDistanceMeters)} />
+          <ReportMiniMetric label="이벤트" value={`${overview.behaviorEventCount}건`} tone="warning" />
+          <ReportMiniMetric label="교정률" value={formatReportPercent(overview.behaviorCorrectionRate)} tone="success" />
         </div>
       </motion.div>
 
@@ -4037,23 +4373,29 @@ function ReportDrawerContent({
             <Warning className="size-4 text-[var(--nav-warning)]" weight="fill" />
             <span className="text-sm font-bold">이상행동 요약</span>
           </div>
-          <span className="text-xs font-bold text-[var(--nav-muted)]">{report.topBehaviorLabel}</span>
+          <span className="text-xs font-bold text-[var(--nav-muted)]">{topBehavior ? getBehaviorLabel(topBehavior.behaviorType) : '기록 없음'}</span>
         </div>
-        <div className="mt-3 grid gap-3">
-          {report.behaviorTypes.map((behavior) => (
-            <div className="grid gap-1.5" key={behavior.label}>
-              <div className="flex items-center justify-between gap-2 text-xs font-bold">
-                <span>{behavior.label}</span>
-                <span className="text-[var(--nav-muted)]">{behavior.count}건</span>
-              </div>
-              <div className="h-2 overflow-hidden rounded-full bg-white">
-                <div
-                  className={['h-full rounded-full', behavior.colorClassName].join(' ')}
-                  style={{ width: `${Math.max(12, (behavior.count / Math.max(1, topBehavior?.count ?? 1)) * 100)}%` }}
-                />
-              </div>
-            </div>
-          ))}
+        <div className="mt-3 h-34" data-chart-library="recharts" data-testid="report-drawer-behavior-chart">
+          <ResponsiveContainer height="100%" width="100%">
+            <BarChart data={drawerBehaviorChartData} layout="vertical" margin={{ top: 0, right: 24, bottom: 0, left: 2 }}>
+              <XAxis axisLine={false} tick={false} tickLine={false} type="number" />
+              <YAxis
+                axisLine={false}
+                dataKey="label"
+                tick={{ fill: REPORT_CHART_COLORS.ink, fontSize: 11, fontWeight: 700 }}
+                tickLine={false}
+                type="category"
+                width={62}
+              />
+              <Tooltip content={<ReportChartTooltip valueSuffix="건" />} cursor={{ fill: '#ffffff' }} />
+              <Bar dataKey="count" name="이벤트" radius={[0, 8, 8, 0]}>
+                <LabelList dataKey="count" formatter={formatReportChartCountLabel} position="right" />
+                {drawerBehaviorChartData.map((entry) => (
+                  <Cell fill={entry.fill} key={entry.behaviorType} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
         </div>
       </motion.div>
 
@@ -4065,15 +4407,15 @@ function ReportDrawerContent({
         {latestSession ? (
           <div className="mt-3 rounded-xl bg-white p-3">
             <div className="flex items-center justify-between gap-3">
-              <span className="truncate text-sm font-bold">{latestSession.destination}</span>
+              <span className="truncate text-sm font-bold">{latestSession.destinationName ?? '목적지 없음'}</span>
               <span className="rounded-full bg-[var(--nav-primary-soft)] px-2 py-1 text-xs font-bold text-[var(--nav-primary)]">
-                {latestSession.score}점
+                {latestSession.safetyScore ?? '-'}점
               </span>
             </div>
             <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs font-semibold text-[var(--nav-muted)]">
-              <span>{latestSession.dateLabel}</span>
-              <span>{latestSession.durationLabel}</span>
-              <span>{latestSession.distanceLabel}</span>
+              <span>{formatReportDateTime(latestSession.startedAt)}</span>
+              <span>{formatReportDuration(latestSession.durationSeconds)}</span>
+              <span>{formatReportDistance(latestSession.distanceMeters)}</span>
             </div>
           </div>
         ) : null}
@@ -4114,6 +4456,85 @@ function ReportMiniMetric({
   )
 }
 
+function ReportDashboardStatCard({
+  caption,
+  delta,
+  icon,
+  label,
+  tone = 'default',
+  value,
+}: {
+  caption?: string
+  delta?: string
+  icon: ReactNode
+  label: string
+  tone?: 'default' | 'success' | 'warning'
+  value: string
+}) {
+  const toneClassName = tone === 'success'
+    ? 'text-[var(--nav-guidance)]'
+    : tone === 'warning'
+      ? 'text-[var(--nav-warning)]'
+      : 'text-[var(--nav-primary)]'
+
+  return (
+    <section className="min-w-0 rounded-[1.15rem] bg-white p-4 shadow-[0_10px_24px_rgb(15_23_42/0.07)] ring-1 ring-[var(--nav-border)]">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="truncate text-sm font-bold text-[var(--nav-ink)]">{label}</div>
+          <div className="mt-3 truncate text-3xl font-bold leading-none tracking-normal">{value}</div>
+        </div>
+        <span className={['grid size-9 shrink-0 place-items-center rounded-full bg-[var(--nav-panel)]', toneClassName].join(' ')}>
+          {icon}
+        </span>
+      </div>
+      <div className="mt-3 flex min-h-5 items-center gap-2 text-xs font-bold">
+        {delta ? <ReportMetricBadge value={delta} tone="success" /> : null}
+        {caption ? <span className="min-w-0 truncate text-[var(--nav-muted)]">{caption}</span> : null}
+      </div>
+    </section>
+  )
+}
+
+function ReportMetricBadge({
+  tone = 'default',
+  value,
+}: {
+  tone?: 'default' | 'success' | 'warning'
+  value: string
+}) {
+  const className = tone === 'success'
+    ? 'bg-[rgb(220_252_231)] text-[var(--nav-guidance-strong)]'
+    : tone === 'warning'
+      ? 'bg-[rgb(255_237_213)] text-[var(--nav-warning)]'
+      : 'bg-[var(--nav-primary-soft)] text-[var(--nav-primary)]'
+
+  return (
+    <span className={['inline-flex min-h-6 shrink-0 items-center rounded-full px-2.5 text-xs font-bold', className].join(' ')}>
+      {value}
+    </span>
+  )
+}
+
+function ReportSmallDelta({
+  label,
+  tone = 'default',
+  value,
+}: {
+  label: string
+  tone?: 'default' | 'success'
+  value: string
+}) {
+  return (
+    <div className="rounded-xl bg-[var(--nav-panel)] px-3 py-2">
+      <div className="text-[11px] font-bold text-[var(--nav-muted)]">{label}</div>
+      <div className={['mt-1 truncate text-sm font-bold', tone === 'success' ? 'text-[var(--nav-guidance)]' : 'text-[var(--nav-ink)]'].join(' ')}>
+        {value}
+      </div>
+    </div>
+  )
+}
+
 function ReportFullscreenOverlay({
   motionTiming,
   report,
@@ -4123,8 +4544,69 @@ function ReportFullscreenOverlay({
   report: MockReportData
   onClose: () => void
 }) {
-  const maxDailyScore = Math.max(...report.dailyScores.map((item) => item.score), 100)
-  const maxHourlyEvents = Math.max(...report.hourlyEvents.map((item) => item.count), 1)
+  const sessions = report.reportSessions.items
+  const [selectedSessionId, setSelectedSessionId] = useState(sessions[0]?.sessionId ?? '')
+  const [selectedPresetId, setSelectedPresetId] = useState('last7')
+  const [reportPeriod, setReportPeriod] = useState(report.summary.period)
+  const [selectedBehaviorTypes, setSelectedBehaviorTypes] = useState<ReportBehaviorType[]>([])
+  const selectedSession = sessions.find((session) => session.sessionId === selectedSessionId) ?? sessions[0]
+  const selectedSessionDetail = selectedSession ? report.sessionDetails[selectedSession.sessionId] : undefined
+  const selectedTimeline = selectedSession ? report.timelines[selectedSession.sessionId] ?? [] : []
+  const selectedLocations = selectedSession ? report.locations[selectedSession.sessionId] ?? [] : []
+  const overview = report.summary.overview
+  const behaviorStats = selectedBehaviorTypes.length > 0
+    ? report.behaviorReport.statistics.filter((behavior) => selectedBehaviorTypes.includes(behavior.behaviorType as ReportBehaviorType))
+    : report.behaviorReport.statistics
+  const behaviorEventCount = behaviorStats.reduce((total, behavior) => total + behavior.eventCount, 0)
+  const dailyScores = report.summary.dailySafetyScores
+  const hourlyCounts = report.behaviorReport.hourlyCounts
+  const dailyScoreChartData = dailyScores.map((item) => ({
+    date: formatReportDate(item.date),
+    score: item.score,
+  }))
+  const behaviorChartData = behaviorStats.map((behavior) => ({
+    behaviorType: behavior.behaviorType,
+    label: getBehaviorLabel(behavior.behaviorType),
+    count: behavior.eventCount,
+    correctedCount: behavior.correctedCount,
+    fill: getBehaviorChartColor(behavior.behaviorType),
+  }))
+  const hourlyChartData = hourlyCounts.map((item) => ({
+    hour: `${item.hour}시`,
+    count: item.count,
+  }))
+  const correctedRate = overview.behaviorCorrectionRate ?? 0
+  const correctionChartData = [
+    { name: '교정', count: correctedRate, fill: REPORT_CHART_COLORS.primary },
+    { name: '미교정', count: Math.max(0, 100 - correctedRate), fill: REPORT_CHART_COLORS.primarySoft },
+  ]
+  const topBehavior = behaviorStats[0]
+  const selectedPeriodLabel = selectedPresetId === 'custom'
+    ? formatReportPeriod(reportPeriod)
+    : REPORT_PERIOD_PRESETS.find((preset) => preset.id === selectedPresetId)?.label ?? '선택 기간'
+  const selectedBehaviorSummaryLabel = selectedBehaviorTypes.length === 0
+    ? '전체 행동'
+    : selectedBehaviorTypes.length === 1
+      ? getBehaviorLabel(selectedBehaviorTypes[0])
+      : `${selectedBehaviorTypes.length}개 행동`
+
+  const selectPeriodPreset = (presetId: string) => {
+    setSelectedPresetId(presetId)
+    setReportPeriod(getReportPresetPeriod(presetId, report.summary.period.end))
+  }
+
+  const updateReportPeriod = (field: keyof MockReportData['summary']['period'], value: string) => {
+    setSelectedPresetId('custom')
+    setReportPeriod((current) => ({ ...current, [field]: value }))
+  }
+
+  const toggleBehaviorType = (behaviorType: ReportBehaviorType) => {
+    setSelectedBehaviorTypes((current) => (
+      current.includes(behaviorType)
+        ? current.filter((item) => item !== behaviorType)
+        : [...current, behaviorType]
+    ))
+  }
 
   return (
     <motion.div
@@ -4139,151 +4621,460 @@ function ReportFullscreenOverlay({
       role="dialog"
     >
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <header className="flex items-center justify-between gap-4 border-b border-[var(--nav-border)] bg-white/92 px-6 py-4">
+        <header className="flex items-center justify-between gap-4 px-6 py-5">
           <div className="min-w-0">
-            <div className="flex items-center gap-2 text-sm font-bold text-[var(--nav-primary)]">
-              <Article className="size-4" weight="bold" />
-              <span>최근 7일 운전 분석</span>
-            </div>
-            <h2 className="mt-1 truncate text-2xl font-bold tracking-normal">전체 운행 보고서</h2>
-            <p className="mt-1 text-sm font-semibold text-[var(--nav-muted)]">{report.periodLabel}</p>
+            <h2 className="truncate text-2xl font-bold tracking-normal">운행 리포트</h2>
+            <p className="mt-1 text-sm font-semibold text-[var(--nav-muted)]">
+              {selectedPeriodLabel} · {selectedBehaviorSummaryLabel} · {report.reportSessions.total}회 운행
+            </p>
           </div>
-          <button
-            aria-label="전체 운행 보고서 닫기"
-            className="grid size-11 shrink-0 place-items-center rounded-full text-[var(--nav-muted)] transition hover:bg-[var(--nav-panel)] hover:text-[var(--nav-ink)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
-            onClick={onClose}
-            type="button"
-          >
-            <X className="size-5" weight="bold" />
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              className="inline-flex min-h-10 items-center gap-2 rounded-full bg-white px-4 text-sm font-bold text-[var(--nav-ink)] shadow-[0_8px_18px_rgb(15_23_42/0.08)] ring-1 ring-[var(--nav-border)] transition hover:bg-[var(--nav-panel)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
+              type="button"
+            >
+              <UploadSimple className="size-4" weight="bold" />
+              보고서 내보내기
+            </button>
+            <button
+              aria-label="전체 운행 보고서 닫기"
+              className="grid size-10 shrink-0 place-items-center rounded-full bg-white text-[var(--nav-muted)] shadow-[0_8px_18px_rgb(15_23_42/0.08)] ring-1 ring-[var(--nav-border)] transition hover:bg-[var(--nav-panel)] hover:text-[var(--nav-ink)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
+              onClick={onClose}
+              type="button"
+            >
+              <X className="size-5" weight="bold" />
+            </button>
+          </div>
         </header>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
-          <div className="grid gap-4 lg:grid-cols-[1.1fr_1fr]">
-            <section className="rounded-2xl bg-white p-5 shadow-[0_10px_24px_rgb(15_23_42/0.08)]">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div>
-                  <div className="text-sm font-bold text-[var(--nav-muted)]">평균 안전 점수</div>
-                  <div className="mt-3 flex items-end gap-3">
-                    <span className="text-6xl font-bold leading-none tracking-normal">{report.score}</span>
-                    <span className="pb-2 text-base font-bold text-[var(--nav-guidance)]">{report.scoreChangeLabel}</span>
-                  </div>
-                </div>
-                <div className="grid min-w-[10rem] gap-2">
-                  <ReportSummaryPill label="운행" value={`${report.totalSessions}회`} />
-                  <ReportSummaryPill label="응답" value={report.averageResponseLabel} />
-                </div>
-              </div>
-              <div className="mt-5 grid grid-cols-3 gap-3 max-sm:grid-cols-1">
-                <ReportLargeMetric icon={<Timer className="size-4" weight="bold" />} label="총 운행 시간" value={report.totalDrivingLabel} />
-                <ReportLargeMetric icon={<CarSimple className="size-4" weight="bold" />} label="총 거리" value={report.totalDistanceLabel} />
-                <ReportLargeMetric icon={<Warning className="size-4" weight="fill" />} label="이벤트" value={`${report.totalEvents}건`} tone="warning" />
-              </div>
-            </section>
-
-            <section className="rounded-2xl bg-white p-5 shadow-[0_10px_24px_rgb(15_23_42/0.08)]">
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="text-base font-bold">일별 안전 점수</h3>
-                <span className="rounded-full bg-[var(--nav-primary-soft)] px-3 py-1 text-xs font-bold text-[var(--nav-primary)]">
-                  {report.correctionRateLabel} 교정
-                </span>
-              </div>
-              <div className="mt-5 flex h-34 items-end justify-between gap-3" data-testid="daily-safety-chart">
-                {report.dailyScores.map((item) => (
-                  <div className="flex min-w-0 flex-1 flex-col items-center gap-2" key={item.day}>
-                    <span className="text-[11px] font-bold text-[var(--nav-muted)]">{item.score}</span>
-                    <div className="flex h-24 w-5 items-end overflow-hidden rounded-md bg-[var(--nav-panel)]">
-                      <div
-                        className="w-full rounded-t-md bg-[var(--nav-primary)]"
-                        style={{ height: `${Math.max(18, (item.score / maxDailyScore) * 100)}%` }}
-                      />
-                    </div>
-                    <span className="text-xs font-bold text-[var(--nav-muted)]">{item.day}</span>
-                  </div>
-                ))}
-              </div>
-            </section>
+        <div className="mx-6 rounded-[1.15rem] bg-white px-4 py-3 shadow-[0_10px_24px_rgb(15_23_42/0.06)] ring-1 ring-[var(--nav-border)]">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap gap-2">
+              {REPORT_PERIOD_PRESETS.map((preset) => (
+                <ReportFilterButton
+                  active={selectedPresetId === preset.id}
+                  key={preset.id}
+                  onClick={() => selectPeriodPreset(preset.id)}
+                >
+                  {preset.label}
+                </ReportFilterButton>
+              ))}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="sr-only" htmlFor="report-period-start">조회 시작일</label>
+              <input
+                aria-label="조회 시작일"
+                className="h-10 rounded-full border border-[var(--nav-border)] bg-white px-3 text-sm font-bold text-[var(--nav-ink)] outline-none focus:border-[var(--nav-primary)] focus:shadow-[0_0_0_3px_var(--nav-focus-ring)]"
+                id="report-period-start"
+                max={reportPeriod.end}
+                onChange={(event) => updateReportPeriod('start', event.target.value)}
+                type="date"
+                value={reportPeriod.start}
+              />
+              <label className="sr-only" htmlFor="report-period-end">조회 종료일</label>
+              <input
+                aria-label="조회 종료일"
+                className="h-10 rounded-full border border-[var(--nav-border)] bg-white px-3 text-sm font-bold text-[var(--nav-ink)] outline-none focus:border-[var(--nav-primary)] focus:shadow-[0_0_0_3px_var(--nav-focus-ring)]"
+                id="report-period-end"
+                min={reportPeriod.start}
+                onChange={(event) => updateReportPeriod('end', event.target.value)}
+                type="date"
+                value={reportPeriod.end}
+              />
+            </div>
           </div>
 
-          <div className="mt-4 grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
-            <section className="rounded-2xl bg-white p-5 shadow-[0_10px_24px_rgb(15_23_42/0.08)]">
-              <h3 className="text-base font-bold">행동 유형별 분석</h3>
-              <div className="mt-4 grid gap-4">
-                {report.behaviorTypes.map((behavior) => (
-                  <div className="grid gap-2" key={behavior.label}>
-                    <div className="flex items-center justify-between gap-3 text-sm font-bold">
-                      <span>{behavior.label}</span>
-                      <span className="text-[var(--nav-muted)]">{behavior.count}건 · {behavior.correctedCount}건 교정</span>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {REPORT_BEHAVIOR_TYPES.map((behaviorType) => (
+              <ReportFilterButton
+                active={selectedBehaviorTypes.includes(behaviorType)}
+                key={behaviorType}
+                onClick={() => toggleBehaviorType(behaviorType)}
+              >
+                {getBehaviorLabel(behaviorType)}
+              </ReportFilterButton>
+            ))}
+            {selectedBehaviorTypes.length > 0 ? (
+              <button
+                className="inline-flex min-h-9 items-center rounded-full px-3 text-xs font-bold text-[var(--nav-muted)] transition hover:bg-[var(--nav-panel)] hover:text-[var(--nav-ink)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
+                onClick={() => setSelectedBehaviorTypes([])}
+                type="button"
+              >
+                전체 보기
+              </button>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-hidden px-6 py-5">
+          <div className="grid h-full min-h-0 gap-4 overflow-y-auto pr-1 xl:grid-cols-[1.08fr_0.92fr]">
+            <div className="grid content-start gap-4">
+              <div className="grid gap-3 md:grid-cols-4">
+                <ReportDashboardStatCard icon={<Article className="size-4" weight="bold" />} label="평균 안전 점수" value={`${formatNullableReportMetric(overview.averageSafetyScore)}점`} delta={formatScoreChange(report.summary.comparison.scoreChange)} />
+                <ReportDashboardStatCard icon={<CarSimple className="size-4" weight="bold" />} label="총 운행 거리" value={formatReportDistance(overview.totalDistanceMeters)} caption={formatReportDuration(overview.totalDrivingSeconds)} />
+                <ReportDashboardStatCard icon={<Warning className="size-4" weight="fill" />} label="이상행동" value={`${behaviorEventCount}건`} caption={topBehavior ? `${getBehaviorLabel(topBehavior.behaviorType)} 최다` : '기록 없음'} tone="warning" />
+                <ReportDashboardStatCard icon={<Check className="size-4" weight="bold" />} label="교정률" value={formatReportPercent(overview.behaviorCorrectionRate)} caption={`${overview.correctedBehaviorCount}/${overview.behaviorEventCount}건 교정`} tone="success" />
+              </div>
+
+              <section className="rounded-[1.15rem] bg-white p-5 shadow-[0_10px_24px_rgb(15_23_42/0.08)] ring-1 ring-[var(--nav-border)]">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div>
+                    <h3 className="text-xl font-bold tracking-normal">안전 점수 추이</h3>
+                    <div className="mt-3 flex items-end gap-3">
+                      <span className="text-5xl font-bold leading-none tracking-normal">{formatNullableReportMetric(overview.averageSafetyScore)}</span>
+                      <ReportMetricBadge value={formatScoreChange(report.summary.comparison.scoreChange)} tone="success" />
                     </div>
-                    <div className="h-3 overflow-hidden rounded-full bg-[var(--nav-panel)]">
-                      <div
-                        className={['h-full rounded-full', behavior.colorClassName].join(' ')}
-                        style={{ width: `${Math.max(10, (behavior.count / Math.max(1, report.totalEvents)) * 100)}%` }}
+                  </div>
+                  <div className="grid min-w-[11rem] gap-2 text-sm font-bold">
+                    <ReportSummaryPill label="운행" value={`${overview.totalSessions}회`} />
+                    <ReportSummaryPill label="평균 응답" value={formatReportLatency(overview.averageResponseLatencyMs)} />
+                  </div>
+                </div>
+                <div
+                  className="mt-5 h-58"
+                  data-chart-library="recharts"
+                  data-testid="daily-safety-chart"
+                >
+                  <ResponsiveContainer height="100%" width="100%">
+                    <LineChart data={dailyScoreChartData} margin={{ top: 14, right: 10, bottom: 0, left: -18 }}>
+                      <CartesianGrid stroke={REPORT_CHART_COLORS.border} strokeDasharray="3 3" vertical={false} />
+                      <XAxis
+                        axisLine={false}
+                        dataKey="date"
+                        tick={{ fill: REPORT_CHART_COLORS.muted, fontSize: 12, fontWeight: 700 }}
+                        tickLine={false}
                       />
-                    </div>
-                  </div>
-                ))}
-              </div>
+                      <YAxis
+                        axisLine={false}
+                        domain={[60, 100]}
+                        tick={{ fill: REPORT_CHART_COLORS.muted, fontSize: 11, fontWeight: 700 }}
+                        tickLine={false}
+                        width={34}
+                      />
+                      <Tooltip content={<ReportChartTooltip valueSuffix="점" />} cursor={{ stroke: REPORT_CHART_COLORS.primarySoft, strokeWidth: 2 }} />
+                      <Line
+                        activeDot={{ r: 5, stroke: REPORT_CHART_COLORS.primary, strokeWidth: 2 }}
+                        dataKey="score"
+                        dot={{ r: 3, stroke: REPORT_CHART_COLORS.primary, strokeWidth: 2 }}
+                        name="안전 점수"
+                        stroke={REPORT_CHART_COLORS.primary}
+                        strokeWidth={3}
+                        type="monotone"
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </section>
 
-              <h3 className="mt-6 text-base font-bold">시간대별 이벤트</h3>
-              <div className="mt-4 flex h-24 items-end gap-3">
-                {report.hourlyEvents.map((item) => (
-                  <div className="flex flex-1 flex-col items-center gap-2" key={item.hour}>
+              <div
+                className="grid h-[26rem] min-h-0 gap-4 lg:grid-cols-[0.82fr_1.18fr]"
+                data-testid="report-sessions-layout"
+              >
+                <section
+                  className="flex min-h-0 flex-col overflow-hidden rounded-2xl bg-white p-5 shadow-[0_10px_24px_rgb(15_23_42/0.08)]"
+                  data-testid="report-session-list-panel"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="text-base font-bold">최근 운행 세션</h3>
+                    <span className="text-xs font-bold text-[var(--nav-muted)]">{report.reportSessions.total}회</span>
+                  </div>
+                  {sessions.length > 0 ? (
                     <div
-                      className="w-full rounded-t-lg bg-[var(--nav-warning)]"
-                      style={{ height: `${Math.max(8, (item.count / maxHourlyEvents) * 100)}%` }}
-                    />
-                    <span className="text-xs font-bold text-[var(--nav-muted)]">{item.hour}</span>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            <section className="rounded-2xl bg-white p-5 shadow-[0_10px_24px_rgb(15_23_42/0.08)]">
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="text-base font-bold">최근 운행</h3>
-                <span className="text-xs font-bold text-[var(--nav-muted)]">리포트 세션</span>
-              </div>
-              <div className="mt-4 grid gap-2">
-                {report.sessions.map((session) => (
-                  <div className="rounded-xl bg-[var(--nav-panel)] p-3" key={session.id}>
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-bold">{session.destination}</div>
-                        <div className="mt-1 text-xs font-semibold text-[var(--nav-muted)]">
-                          {session.dateLabel} · {session.durationLabel} · {session.distanceLabel}
-                        </div>
-                      </div>
-                      <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-xs font-bold text-[var(--nav-primary)]">
-                        {session.score}점
-                      </span>
+                      className="mt-4 grid min-h-0 flex-1 gap-2 overflow-y-auto pr-1"
+                      data-testid="report-session-list-scroll"
+                    >
+                      {sessions.map((session) => (
+                        <button
+                          aria-pressed={selectedSession?.sessionId === session.sessionId}
+                          className={[
+                            'rounded-xl p-3 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]',
+                            selectedSession?.sessionId === session.sessionId
+                              ? 'bg-[var(--nav-primary-soft)]'
+                              : 'bg-[var(--nav-panel)] hover:bg-[var(--nav-selection)]',
+                          ].join(' ')}
+                          key={session.sessionId}
+                          onClick={() => setSelectedSessionId(session.sessionId)}
+                          type="button"
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="truncate text-sm font-bold">{session.destinationName ?? '목적지 없음'}</div>
+                              <div className="mt-1 text-xs font-semibold text-[var(--nav-muted)]">
+                                {formatReportDateTime(session.startedAt)} · {formatReportDuration(session.durationSeconds)}
+                              </div>
+                            </div>
+                            <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-xs font-bold text-[var(--nav-primary)]">
+                              {formatNullableReportMetric(session.safetyScore)}점
+                            </span>
+                          </div>
+                        </button>
+                      ))}
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ) : (
+                    <ReportEmptyState title="운행 기록 없음" description="선택한 기간에 완료된 운행이 없습니다." />
+                  )}
+                </section>
 
-              <h3 className="mt-6 text-base font-bold">Navi 개입 타임라인</h3>
-              <div className="mt-4 grid gap-3">
-                {report.timeline.map((event) => (
-                  <div className="grid grid-cols-[3.5rem_1fr] gap-3" key={event.id}>
-                    <span className="pt-0.5 text-xs font-bold text-[var(--nav-muted)]">{event.timeLabel}</span>
-                    <div className="rounded-xl bg-[var(--nav-ai-soft)] p-3">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-sm font-bold text-[var(--nav-ai-primary)]">{event.behaviorLabel}</span>
-                        <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-bold text-[var(--nav-muted)]">
-                          {event.riskLabel}
+                <section
+                  className="flex min-h-0 flex-col overflow-hidden rounded-2xl bg-white p-5 shadow-[0_10px_24px_rgb(15_23_42/0.08)]"
+                  data-testid="report-session-detail-panel"
+                >
+                  {selectedSession ? (
+                    <>
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <h3 className="text-base font-bold">세션 상세</h3>
+                          <p className="mt-1 text-sm font-semibold text-[var(--nav-muted)]">
+                            {selectedSession.destinationName ?? '목적지 없음'} · {formatReportDateTime(selectedSession.startedAt)}
+                          </p>
+                        </div>
+                        <span className="rounded-full bg-[var(--nav-primary-soft)] px-3 py-1 text-xs font-bold text-[var(--nav-primary)]">
+                          {formatNullableReportMetric(selectedSession.safetyScore)}점
                         </span>
                       </div>
-                      <p className="mt-1 text-xs font-semibold leading-5 text-[var(--nav-muted)]">{event.interventionLabel}</p>
-                    </div>
-                  </div>
-                ))}
+
+                      <div
+                        className="mt-4 min-h-0 flex-1 overflow-y-auto pr-1"
+                        data-testid="report-session-detail-scroll"
+                      >
+                        <div className="grid gap-3 md:grid-cols-3">
+                          <ReportLargeMetric icon={<Timer className="size-4" weight="bold" />} label="운행 시간" value={formatReportDuration(selectedSession.durationSeconds)} />
+                          <ReportLargeMetric icon={<CarSimple className="size-4" weight="bold" />} label="운행 거리" value={formatReportDistance(selectedSession.distanceMeters)} />
+                          <ReportLargeMetric icon={<Warning className="size-4" weight="fill" />} label="이벤트" value={`${selectedSession.behaviorEventCount}건`} tone="warning" />
+                        </div>
+
+                        <div className="mt-6 grid gap-4 md:grid-cols-2">
+                          <div>
+                            <h4 className="text-sm font-bold">경로 요약</h4>
+                            <div className="mt-3 grid gap-2 text-sm font-semibold text-[var(--nav-muted)]">
+                              <span>위치 기록 {selectedLocations.length}개</span>
+                              <span>평균 속도 {formatNullableReportMetric(selectedSession.averageSpeedKph, 'km/h')}</span>
+                              <span>종료 상태 {selectedSessionDetail?.status ?? '-'}</span>
+                              <span>종료 사유 {selectedSessionDetail?.endReason ?? '-'}</span>
+                            </div>
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-bold">교정 요약</h4>
+                            <div className="mt-3 grid gap-2 text-sm font-semibold text-[var(--nav-muted)]">
+                              <span>개입 {selectedSession.interventionCount}건</span>
+                              <span>교정 {selectedSession.correctedBehaviorCount}건</span>
+                              <span>교정률 {formatReportPercent(selectedSession.behaviorCorrectionRate)}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <h4 className="mt-6 text-sm font-bold">Navi 개입 타임라인</h4>
+                        <div className="mt-4 grid gap-3">
+                          {selectedTimeline.length > 0 ? selectedTimeline.map((event) => (
+                            <div className="grid grid-cols-[3.5rem_1fr] gap-3" key={event.eventId}>
+                              <span className="pt-0.5 text-xs font-bold text-[var(--nav-muted)]">{formatReportTime(event.startedAt)}</span>
+                              <div className="rounded-xl bg-[var(--nav-ai-soft)] p-3">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="text-sm font-bold text-[var(--nav-ai-primary)]">{getBehaviorLabel(event.behaviorType)}</span>
+                                  <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-bold text-[var(--nav-muted)]">
+                                    위험도 {event.riskLevel}
+                                  </span>
+                                  <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-bold text-[var(--nav-muted)]">
+                                    {formatReportMilliseconds(event.durationMs)}
+                                  </span>
+                                  {event.corrected ? (
+                                    <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-bold text-[var(--nav-guidance)]">교정됨</span>
+                                  ) : null}
+                                </div>
+                                <p className="mt-1 text-xs font-semibold leading-5 text-[var(--nav-muted)]">
+                                  {event.interventionText} · {event.drivingState} · {formatNullableReportMetric(event.speedKph, 'km/h')}
+                                </p>
+                              </div>
+                            </div>
+                          )) : (
+                            <ReportEmptyState title="개입 기록 없음" description="이 운행에는 Navi 개입 타임라인이 없습니다." />
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <ReportEmptyState title="선택된 운행 없음" description="상세를 볼 운행 기록을 선택해주세요." />
+                  )}
+                </section>
               </div>
-            </section>
+            </div>
+
+            <div className="grid content-start gap-4">
+              <section className="rounded-[1.15rem] bg-white p-5 shadow-[0_10px_24px_rgb(15_23_42/0.08)] ring-1 ring-[var(--nav-border)]">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-xl font-bold tracking-normal">교정 성공률</h3>
+                    <p className="mt-1 text-sm font-semibold text-[var(--nav-muted)]">Navi 개입 후 정상 주행 복귀</p>
+                  </div>
+                  <ReportMetricBadge value={formatReportPercent(overview.behaviorCorrectionRate)} tone="success" />
+                </div>
+                <div
+                  className="relative mt-4 h-54"
+                  data-chart-library="recharts"
+                  data-testid="correction-rate-chart"
+                >
+                  <ResponsiveContainer height="100%" width="100%">
+                    <PieChart>
+                      <Tooltip content={<ReportChartTooltip valueSuffix="%" />} />
+                      <Pie
+                        cx="50%"
+                        cy="56%"
+                        data={correctionChartData}
+                        dataKey="count"
+                        endAngle={-180}
+                        innerRadius={70}
+                        nameKey="name"
+                        outerRadius={94}
+                        paddingAngle={2}
+                        startAngle={180}
+                      >
+                        {correctionChartData.map((entry) => (
+                          <Cell fill={entry.fill} key={entry.name} />
+                        ))}
+                      </Pie>
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="pointer-events-none absolute inset-x-0 top-[46%] text-center">
+                    <div className="text-4xl font-bold leading-none tracking-normal">{formatReportPercent(overview.behaviorCorrectionRate)}</div>
+                    <div className="mt-1 text-xs font-bold text-[var(--nav-muted)]">Correction Rate</div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <ReportSmallDelta label="개입" value={`${overview.interventionCount}건`} />
+                  <ReportSmallDelta label="교정" value={`${overview.correctedBehaviorCount}건`} tone="success" />
+                  <ReportSmallDelta label="응답" value={formatReportLatency(overview.averageResponseLatencyMs)} />
+                </div>
+              </section>
+
+              <section className="rounded-[1.15rem] bg-white p-5 shadow-[0_10px_24px_rgb(15_23_42/0.08)] ring-1 ring-[var(--nav-border)]">
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="text-base font-bold">행동 유형별 분석</h3>
+                  <span className="text-xs font-bold text-[var(--nav-muted)]">{behaviorEventCount}건</span>
+                </div>
+                {behaviorStats.length > 0 ? (
+                  <div
+                    className="mt-4 h-48"
+                    data-chart-library="recharts"
+                    data-testid="behavior-type-chart"
+                  >
+                    <ResponsiveContainer height="100%" width="100%">
+                      <BarChart
+                        data={behaviorChartData}
+                        layout="vertical"
+                        margin={{ top: 4, right: 28, bottom: 4, left: 12 }}
+                      >
+                        <CartesianGrid horizontal={false} stroke={REPORT_CHART_COLORS.border} strokeDasharray="3 3" />
+                        <XAxis axisLine={false} tick={false} tickLine={false} type="number" />
+                        <YAxis
+                          axisLine={false}
+                          dataKey="label"
+                          tick={{ fill: REPORT_CHART_COLORS.ink, fontSize: 12, fontWeight: 700 }}
+                          tickLine={false}
+                          type="category"
+                          width={74}
+                        />
+                        <Tooltip content={<ReportChartTooltip valueSuffix="건" />} cursor={{ fill: REPORT_CHART_COLORS.panel }} />
+                        <Bar dataKey="count" name="이벤트" radius={[0, 8, 8, 0]}>
+                          <LabelList dataKey="count" formatter={formatReportChartCountLabel} position="right" />
+                          {behaviorChartData.map((entry) => (
+                            <Cell fill={entry.fill} key={entry.behaviorType} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                ) : (
+                  <ReportEmptyState title="이상행동 기록 없음" description="선택한 기간에는 보고할 이상행동이 없습니다." />
+                )}
+              </section>
+
+              <section className="rounded-[1.15rem] bg-white p-5 shadow-[0_10px_24px_rgb(15_23_42/0.08)] ring-1 ring-[var(--nav-border)]">
+                <h3 className="text-base font-bold">시간대별 이벤트</h3>
+                <div
+                  className="mt-4"
+                  data-chart-library="recharts"
+                  data-testid="hourly-event-grid"
+                >
+                  <div className="h-38">
+                    <ResponsiveContainer height="100%" width="100%">
+                      <BarChart data={hourlyChartData} margin={{ top: 10, right: 6, bottom: 0, left: -22 }}>
+                        <CartesianGrid stroke={REPORT_CHART_COLORS.border} strokeDasharray="3 3" vertical={false} />
+                        <XAxis
+                          axisLine={false}
+                          dataKey="hour"
+                          tick={{ fill: REPORT_CHART_COLORS.muted, fontSize: 12, fontWeight: 700 }}
+                          tickLine={false}
+                        />
+                        <YAxis
+                          allowDecimals={false}
+                          axisLine={false}
+                          tick={{ fill: REPORT_CHART_COLORS.muted, fontSize: 11, fontWeight: 700 }}
+                          tickLine={false}
+                          width={32}
+                        />
+                        <Tooltip content={<ReportChartTooltip valueSuffix="건" />} cursor={{ fill: REPORT_CHART_COLORS.panel }} />
+                        <Bar dataKey="count" fill={REPORT_CHART_COLORS.warning} name="이벤트" radius={[8, 8, 0, 0]}>
+                          <LabelList dataKey="count" formatter={formatReportChartCountLabel} position="top" />
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="mt-3 grid gap-2 md:grid-cols-2">
+                    {hourlyChartData.map((item) => (
+                      <div className="flex items-center justify-between rounded-xl bg-[var(--nav-panel)] px-3 py-2 text-xs font-bold" key={item.hour}>
+                        <span className="text-[var(--nav-muted)]">{item.hour}</span>
+                        <span className="text-[var(--nav-ink)]">{item.count}건</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </section>
+            </div>
           </div>
         </div>
       </div>
     </motion.div>
+  )
+}
+
+function ReportFilterButton({
+  active,
+  children,
+  onClick,
+}: {
+  active: boolean
+  children: ReactNode
+  onClick: () => void
+}) {
+  return (
+    <button
+      aria-pressed={active}
+      className={[
+        'inline-flex min-h-9 items-center rounded-xl px-3 text-xs font-bold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]',
+        active
+          ? 'bg-[var(--nav-primary)] text-white'
+          : 'bg-[var(--nav-panel)] text-[var(--nav-muted)] hover:bg-[var(--nav-selection)] hover:text-[var(--nav-ink)]',
+      ].join(' ')}
+      onClick={onClick}
+      type="button"
+    >
+      {children}
+    </button>
+  )
+}
+
+function ReportEmptyState({
+  description,
+  title,
+}: {
+  description: string
+  title: string
+}) {
+  return (
+    <div className="rounded-xl bg-[var(--nav-panel)] px-4 py-6 text-center">
+      <div className="text-sm font-bold text-[var(--nav-ink)]">{title}</div>
+      <p className="mt-1 text-xs font-semibold leading-5 text-[var(--nav-muted)]">{description}</p>
+    </div>
   )
 }
 
@@ -4322,6 +5113,171 @@ function ReportLargeMetric({
       <div className="mt-2 text-lg font-bold tracking-normal">{value}</div>
     </div>
   )
+}
+
+const REPORT_BEHAVIOR_META: Record<string, { label: string; color: string }> = {
+  DROWSINESS: { label: '졸음', color: REPORT_CHART_COLORS.warning },
+  PHONE_USE: { label: '휴대폰 사용', color: REPORT_CHART_COLORS.danger },
+  FOOD_OR_DRINK: { label: '음식/음료', color: REPORT_CHART_COLORS.guidance },
+  GAZE_AWAY: { label: '시선 이탈', color: REPORT_CHART_COLORS.ai },
+}
+
+function getBehaviorLabel(behaviorType: string) {
+  return REPORT_BEHAVIOR_META[behaviorType]?.label ?? behaviorType
+}
+
+function getBehaviorChartColor(behaviorType: string) {
+  return REPORT_BEHAVIOR_META[behaviorType]?.color ?? REPORT_CHART_COLORS.primary
+}
+
+function formatReportChartCountLabel(value: unknown) {
+  return `${value ?? 0}건`
+}
+
+function ReportChartTooltip({
+  active,
+  label,
+  payload,
+  valueSuffix = '',
+}: {
+  active?: boolean
+  label?: string | number
+  payload?: Array<{ name?: string | number; value?: string | number; payload?: { label?: string; name?: string } }>
+  valueSuffix?: string
+}) {
+  if (!active || !payload?.length) {
+    return null
+  }
+
+  const firstPayload = payload[0]
+  const title = firstPayload.payload?.label ?? firstPayload.payload?.name ?? label
+
+  return (
+    <div className="rounded-xl bg-white px-3 py-2 text-xs font-bold text-[var(--nav-ink)] shadow-[0_8px_18px_rgb(15_23_42/0.14)] ring-1 ring-[var(--nav-border)]">
+      {title ? <div>{title}</div> : null}
+      {payload.map((item) => (
+        <div className="mt-1 text-[var(--nav-muted)]" key={`${item.name ?? 'value'}-${item.value}`}>
+          {item.name}: {item.value}{valueSuffix}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function formatReportPeriod(period: { start: string; end: string }) {
+  return `${formatReportDate(period.start)} - ${formatReportDate(period.end)}`
+}
+
+function getReportPresetPeriod(presetId: string, baseDate: string) {
+  switch (presetId) {
+    case 'today':
+      return { start: baseDate, end: baseDate }
+    case 'last30':
+      return { start: shiftReportDate(baseDate, -29), end: baseDate }
+    case 'month':
+      return { start: `${baseDate.slice(0, 8)}01`, end: baseDate }
+    case 'last7':
+    default:
+      return { start: shiftReportDate(baseDate, -6), end: baseDate }
+  }
+}
+
+function shiftReportDate(value: string, dayOffset: number) {
+  const date = new Date(`${value}T00:00:00Z`)
+  date.setUTCDate(date.getUTCDate() + dayOffset)
+  return date.toISOString().slice(0, 10)
+}
+
+function formatReportDate(value: string) {
+  const datePart = value.split('T')[0]
+  const [, month, day] = datePart.split('-')
+
+  if (!month || !day) {
+    return value
+  }
+
+  return `${Number(month)}.${Number(day)}`
+}
+
+function formatReportDateTime(value: string) {
+  const [datePart, timePart = ''] = value.split('T')
+  const [, month, day] = datePart.split('-')
+  const [hour = '', minute = ''] = timePart.split(':')
+
+  if (!month || !day || !hour || !minute) {
+    return value
+  }
+
+  return `${Number(month)}.${Number(day)} ${hour}:${minute}`
+}
+
+function formatReportTime(value: string) {
+  const timePart = value.split('T')[1] ?? ''
+  const [hour = '', minute = ''] = timePart.split(':')
+
+  return hour && minute ? `${hour}:${minute}` : value
+}
+
+function formatReportDuration(seconds: number) {
+  const totalMinutes = Math.max(0, Math.round(seconds / 60))
+  const hours = Math.floor(totalMinutes / 60)
+  const minutes = totalMinutes % 60
+
+  return hours > 0 ? `${hours}시간 ${minutes}분` : `${minutes}분`
+}
+
+function formatReportDistance(meters: number) {
+  if (meters < 1000) {
+    return `${Math.round(meters)} m`
+  }
+
+  return `${(meters / 1000).toFixed(1)} km`
+}
+
+function formatReportPercent(value: number | null) {
+  if (value === null) {
+    return '-'
+  }
+
+  return `${Number.isInteger(value) ? value : value.toFixed(1)}%`
+}
+
+function formatScoreChange(value: number | null) {
+  if (value === null) {
+    return '비교 없음'
+  }
+
+  if (value === 0) {
+    return '변화 없음'
+  }
+
+  return value > 0 ? `+${value}점` : `${value}점`
+}
+
+function formatReportLatency(value: number | null) {
+  if (value === null) {
+    return '-'
+  }
+
+  return value >= 1000 ? `${(value / 1000).toFixed(1)}초` : `${value}ms`
+}
+
+function formatReportMilliseconds(value: number | null) {
+  if (value === null) {
+    return '-'
+  }
+
+  return value >= 1000 ? `${Math.round(value / 1000)}초` : `${value}ms`
+}
+
+function formatNullableReportMetric(value: number | null, suffix = '') {
+  if (value === null) {
+    return '-'
+  }
+
+  const formattedValue = Number.isInteger(value) ? `${value}` : value.toFixed(1)
+
+  return suffix ? `${formattedValue} ${suffix}` : formattedValue
 }
 
 function ConnectDrawerContent({
