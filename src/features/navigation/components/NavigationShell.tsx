@@ -138,7 +138,14 @@ type SavedPlaceQuickItem = Place & {
 type RouteSearchSavedPlace = Place & {
   targetField?: SearchFieldId
 }
-type ReportBehaviorType = 'DROWSINESS' | 'PHONE_USE' | 'FOOD_OR_DRINK' | 'GAZE_AWAY'
+type ReportBehaviorType =
+  | 'DROWSINESS'
+  | 'PHONE_USE'
+  | 'FOOD_OR_DRINK'
+  | 'GAZE_AWAY'
+  | 'SECONDARY_TASK'
+  | 'REACHING_BEHIND'
+  | 'SMOKING'
 type MockReportSession = {
   sessionId: string
   startedAt: string
@@ -252,7 +259,15 @@ const CURRENT_LOCATION_PLACE_ID = 'current-location'
 const PRODUCT_EASE: [number, number, number, number] = [0.22, 1, 0.36, 1]
 const WEATHER_STALE_TIME_MS = 10 * 60 * 1000
 const SEARCH_DEBOUNCE_MS = 250
-const REPORT_BEHAVIOR_TYPES: ReportBehaviorType[] = ['DROWSINESS', 'PHONE_USE', 'FOOD_OR_DRINK', 'GAZE_AWAY']
+const REPORT_BEHAVIOR_TYPES: ReportBehaviorType[] = [
+  'DROWSINESS',
+  'PHONE_USE',
+  'FOOD_OR_DRINK',
+  'GAZE_AWAY',
+  'SECONDARY_TASK',
+  'REACHING_BEHIND',
+  'SMOKING',
+]
 const REPORT_PERIOD_PRESETS = [
   { id: 'today', label: '오늘' },
   { id: 'last7', label: '최근 7일' },
@@ -356,6 +371,36 @@ const MOCK_REPORT_DATA: MockReportData = {
         maximumRiskLevel: 3,
         correctedCount: 1,
         correctionRate: 50,
+      },
+      {
+        behaviorType: 'SECONDARY_TASK',
+        eventCount: 0,
+        totalDurationMs: 0,
+        averageDurationMs: null,
+        averageConfidence: null,
+        maximumRiskLevel: null,
+        correctedCount: 0,
+        correctionRate: 0,
+      },
+      {
+        behaviorType: 'REACHING_BEHIND',
+        eventCount: 0,
+        totalDurationMs: 0,
+        averageDurationMs: null,
+        averageConfidence: null,
+        maximumRiskLevel: null,
+        correctedCount: 0,
+        correctionRate: 0,
+      },
+      {
+        behaviorType: 'SMOKING',
+        eventCount: 0,
+        totalDurationMs: 0,
+        averageDurationMs: null,
+        averageConfidence: null,
+        maximumRiskLevel: null,
+        correctedCount: 0,
+        correctionRate: 0,
       },
     ],
     riskLevelCounts: {
@@ -4480,9 +4525,9 @@ function ReportDashboardStatCard({
   return (
     <section className="min-w-0 rounded-[1.15rem] bg-white p-4 shadow-[0_10px_24px_rgb(15_23_42/0.07)] ring-1 ring-[var(--nav-border)]">
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-bold text-[var(--nav-ink)]">{label}</div>
-          <div className="mt-3 truncate text-3xl font-bold leading-none tracking-normal">{value}</div>
+          <div className="mt-3 max-w-full whitespace-nowrap text-2xl font-bold leading-none tracking-normal">{value}</div>
         </div>
         <span className={['grid size-9 shrink-0 place-items-center rounded-full bg-[var(--nav-panel)]', toneClassName].join(' ')}>
           {icon}
@@ -5118,8 +5163,11 @@ function ReportLargeMetric({
 const REPORT_BEHAVIOR_META: Record<string, { label: string; color: string }> = {
   DROWSINESS: { label: '졸음', color: REPORT_CHART_COLORS.warning },
   PHONE_USE: { label: '휴대폰 사용', color: REPORT_CHART_COLORS.danger },
-  FOOD_OR_DRINK: { label: '음식/음료', color: REPORT_CHART_COLORS.guidance },
+  FOOD_OR_DRINK: { label: '음식/음료 섭취', color: REPORT_CHART_COLORS.guidance },
   GAZE_AWAY: { label: '시선 이탈', color: REPORT_CHART_COLORS.ai },
+  SECONDARY_TASK: { label: '부주의 행동', color: REPORT_CHART_COLORS.primary },
+  REACHING_BEHIND: { label: '뒤쪽 확인/손 뻗기', color: REPORT_CHART_COLORS.warning },
+  SMOKING: { label: '흡연', color: REPORT_CHART_COLORS.danger },
 }
 
 function getBehaviorLabel(behaviorType: string) {
