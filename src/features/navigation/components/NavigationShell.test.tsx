@@ -12,11 +12,12 @@ import {
 } from './NavigationShell'
 import {
   createProfile,
+  DEFAULT_BEHAVIOR_WARNING_SENSITIVITY,
   deleteProfile,
-  listProfiles,
   selectProfile,
   updateProfile,
 } from '../api/profileApi'
+import { getBootstrap } from '../api/bootstrapApi'
 import { createFavorite, deleteSavedPlace, listSavedPlaces, updateSavedPlace } from '../api/savedPlaceApi'
 import { createSearchHistory, listSearchHistories } from '../api/searchHistoryApi'
 import { getCurrentAddress, getRoadMatch, getRouteOptions, searchPlaces } from '../api/tmapApi'
@@ -40,7 +41,6 @@ vi.mock('../api/profileApi', async () => {
 
   return {
     ...actual,
-    listProfiles: vi.fn(),
     createProfile: vi.fn(),
     deleteProfile: vi.fn(),
     selectProfile: vi.fn(),
@@ -53,6 +53,10 @@ vi.mock('../api/savedPlaceApi', () => ({
   deleteSavedPlace: vi.fn(),
   listSavedPlaces: vi.fn(),
   updateSavedPlace: vi.fn(),
+}))
+
+vi.mock('../api/bootstrapApi', () => ({
+  getBootstrap: vi.fn(),
 }))
 
 vi.mock('../api/searchHistoryApi', () => ({
@@ -226,7 +230,7 @@ const mockedGetRouteOptions = vi.mocked(getRouteOptions)
 const mockedGetRoute = vi.fn()
 const mockedGetRoadMatch = vi.mocked(getRoadMatch)
 const mockedGetCurrentAddress = vi.mocked(getCurrentAddress)
-const mockedListProfiles = vi.mocked(listProfiles)
+const mockedGetBootstrap = vi.mocked(getBootstrap)
 const mockedCreateProfile = vi.mocked(createProfile)
 const mockedDeleteProfile = vi.mocked(deleteProfile)
 const mockedSelectProfile = vi.mocked(selectProfile)
@@ -247,6 +251,7 @@ const mockProfiles = [
     reportEmail: null,
     agentPersonality: 'FRIENDLY' as const,
     warningSensitivity: 'MEDIUM' as const,
+    behaviorWarningSensitivity: DEFAULT_BEHAVIOR_WARNING_SENSITIVITY,
     ttsVoiceId: null,
     ttsSpeed: 1,
     guidanceVolume: 70,
@@ -263,6 +268,10 @@ const mockProfiles = [
     reportEmail: 'seoyun@example.com',
     agentPersonality: 'WARM' as const,
     warningSensitivity: 'HIGH' as const,
+    behaviorWarningSensitivity: {
+      ...DEFAULT_BEHAVIOR_WARNING_SENSITIVITY,
+      FOOD_OR_DRINK: 'LOW' as const,
+    },
     ttsVoiceId: null,
     ttsSpeed: 1.2,
     guidanceVolume: 80,
@@ -322,7 +331,7 @@ describe('NavigationShell', () => {
     ])
     mockedGetRoadMatch.mockReset()
     mockedGetCurrentAddress.mockReset()
-    mockedListProfiles.mockReset()
+    mockedGetBootstrap.mockReset()
     mockedCreateProfile.mockReset()
     mockedDeleteProfile.mockReset()
     mockedSelectProfile.mockReset()
@@ -333,10 +342,21 @@ describe('NavigationShell', () => {
     mockedUpdateSavedPlace.mockReset()
     mockedCreateSearchHistory.mockReset()
     mockedListSearchHistories.mockReset()
-    mockedListProfiles.mockResolvedValue({
+    mockedGetBootstrap.mockResolvedValue({
+      account: {
+        id: 'account-1',
+        displayName: '안정현',
+        email: 'admin@example.com',
+      },
       profiles: mockProfiles,
-      count: mockProfiles.length,
-      limit: 5,
+      selectedProfileId: null,
+      profileLimit: 5,
+      capabilities: {
+        vitModelAvailable: true,
+        geminiAvailable: false,
+        emailAvailable: true,
+        demoMode: true,
+      },
     })
     mockedCreateProfile.mockImplementation(async (payload) => ({
       ...mockProfiles[0],
@@ -345,11 +365,10 @@ describe('NavigationShell', () => {
       agentCallName: payload.agentCallName,
       reportEmail: payload.reportEmail,
       agentPersonality: payload.agentPersonality,
-      warningSensitivity: payload.warningSensitivity,
+      behaviorWarningSensitivity: payload.behaviorWarningSensitivity,
       ttsVoiceId: payload.ttsVoiceId,
       ttsSpeed: payload.ttsSpeed,
       guidanceVolume: payload.guidanceVolume,
-      theme: payload.theme,
     }))
     mockedDeleteProfile.mockResolvedValue(undefined)
     mockedSelectProfile.mockResolvedValue({
@@ -560,7 +579,12 @@ describe('NavigationShell', () => {
   })
 
   it('keeps profile cards on one horizontal scroll row', async () => {
-    mockedListProfiles.mockResolvedValueOnce({
+    mockedGetBootstrap.mockResolvedValueOnce({
+      account: {
+        id: 'account-1',
+        displayName: '안정현',
+        email: 'admin@example.com',
+      },
       profiles: [
         ...mockProfiles,
         {
@@ -576,8 +600,14 @@ describe('NavigationShell', () => {
           profileImageUrl: '/storage/profile-images/default-family/mother.svg',
         },
       ],
-      count: 4,
-      limit: 5,
+      selectedProfileId: null,
+      profileLimit: 5,
+      capabilities: {
+        vitModelAvailable: true,
+        geminiAvailable: false,
+        emailAvailable: true,
+        demoMode: true,
+      },
     })
     const queryClient = new QueryClient()
 
@@ -608,6 +638,8 @@ describe('NavigationShell', () => {
 
     expect(screen.getByRole('heading', { name: '프로필 설정' })).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: '오늘은 누가 운전할까요?' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '기본 정보' })).toHaveAttribute('aria-current', 'step')
+    expect(screen.queryByLabelText('Agent 성격')).not.toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('프로필 이름'), {
       target: { value: '도현' },
     })
@@ -617,11 +649,10 @@ describe('NavigationShell', () => {
     fireEvent.change(screen.getByLabelText('리포트 이메일'), {
       target: { value: 'dohyun@example.com' },
     })
+    fireEvent.click(screen.getByRole('button', { name: '다음' }))
+    expect(screen.getByRole('button', { name: '안내 설정' })).toHaveAttribute('aria-current', 'step')
     fireEvent.change(screen.getByLabelText('Agent 성격'), {
       target: { value: 'WITTY' },
-    })
-    fireEvent.change(screen.getByLabelText('경고 민감도'), {
-      target: { value: 'HIGH' },
     })
     fireEvent.change(screen.getByLabelText('TTS 속도'), {
       target: { value: '1.4' },
@@ -629,8 +660,14 @@ describe('NavigationShell', () => {
     fireEvent.change(screen.getByLabelText('안내 음량'), {
       target: { value: '82' },
     })
-    expect(screen.getByLabelText('테마')).toBeDisabled()
-    expect(screen.getByLabelText('테마')).toHaveValue('LIGHT')
+    fireEvent.click(screen.getByRole('button', { name: '다음' }))
+    expect(screen.getByRole('button', { name: '행동 민감도' })).toHaveAttribute('aria-current', 'step')
+    expect(screen.queryByLabelText('경고 민감도')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('테마')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '음식/음료 섭취 민감도 낮음' }))
+    fireEvent.click(screen.getByRole('button', { name: '이전' }))
+    expect(screen.getByRole('button', { name: '안내 설정' })).toHaveAttribute('aria-current', 'step')
+    fireEvent.click(screen.getByRole('button', { name: '다음' }))
     fireEvent.click(screen.getByRole('button', { name: '프로필 저장' }))
 
     await waitFor(() => {
@@ -639,11 +676,13 @@ describe('NavigationShell', () => {
         agentCallName: '도현아',
         reportEmail: 'dohyun@example.com',
         agentPersonality: 'WITTY',
-        warningSensitivity: 'HIGH',
+        behaviorWarningSensitivity: {
+          ...DEFAULT_BEHAVIOR_WARNING_SENSITIVITY,
+          FOOD_OR_DRINK: 'LOW',
+        },
         ttsVoiceId: null,
         ttsSpeed: 1.4,
         guidanceVolume: 82,
-        theme: 'LIGHT',
       })
     })
   })
@@ -681,6 +720,7 @@ describe('NavigationShell', () => {
     expect(screen.getByRole('heading', { name: '프로필 설정' })).toBeInTheDocument()
     expect(screen.getByLabelText('프로필 이름')).toHaveValue('민준')
     expect(screen.getByLabelText('호출 이름')).toHaveValue('나비')
+    expect(screen.queryByLabelText('Agent 성격')).not.toBeInTheDocument()
 
     fireEvent.change(screen.getByLabelText('프로필 이름'), {
       target: { value: '민준 수정' },
@@ -693,11 +733,10 @@ describe('NavigationShell', () => {
         agentCallName: '나비',
         reportEmail: null,
         agentPersonality: 'FRIENDLY',
-        warningSensitivity: 'MEDIUM',
+        behaviorWarningSensitivity: DEFAULT_BEHAVIOR_WARNING_SENSITIVITY,
         ttsVoiceId: null,
         ttsSpeed: 1,
         guidanceVolume: 70,
-        theme: 'LIGHT',
       })
     })
   })
@@ -949,7 +988,23 @@ describe('NavigationShell', () => {
     expect(await screen.findByText('서울특별시 중구 세종대로 110')).toBeInTheDocument()
   })
 
-  it('opens the connected settings drawer for map mode, zoom, pitch, signed-in account, and location retry', async () => {
+  it('opens the connected settings drawer for map mode, zoom, pitch, selected profile, and location retry', async () => {
+    mockedGetBootstrap.mockResolvedValueOnce({
+      account: {
+        id: 'account-1',
+        displayName: '백엔드 사용자',
+        email: 'driver@example.com',
+      },
+      profiles: mockProfiles,
+      selectedProfileId: 'profile-1',
+      profileLimit: 5,
+      capabilities: {
+        vitModelAvailable: true,
+        geminiAvailable: false,
+        emailAvailable: true,
+        demoMode: true,
+      },
+    })
     const queryClient = new QueryClient()
 
     render(
@@ -964,7 +1019,8 @@ describe('NavigationShell', () => {
     expect(screen.getByTestId('settings-drawer')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Navi 호출' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: '설정' })).toHaveAttribute('aria-expanded', 'true')
-    expect(screen.getByText('안정현')).toBeInTheDocument()
+    expect(await screen.findByText('민준')).toBeInTheDocument()
+    expect(screen.queryByText('백엔드 사용자')).not.toBeInTheDocument()
     expect(screen.getByText('로그인됨')).toBeInTheDocument()
     expect(screen.queryByText('내 계정으로 길안내 설정을 저장합니다')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: '현재 위치 다시 받기' })).toBeInTheDocument()

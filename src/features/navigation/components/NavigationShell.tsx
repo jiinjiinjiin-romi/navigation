@@ -70,17 +70,18 @@ import { VoiceWave } from '@/features/voice-wave'
 import { type CSSProperties, type KeyboardEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   createProfile,
+  DEFAULT_BEHAVIOR_WARNING_SENSITIVITY,
   DEFAULT_PROFILE_CREATE_REQUEST,
   deleteProfile,
-  listProfiles,
   selectProfile,
   updateProfile,
   type AgentPersonality,
   type Profile,
+  type ProfileBehaviorType,
   type ProfileCreateRequest,
-  type ProfileTheme,
   type WarningSensitivity,
 } from '../api/profileApi'
+import { getBootstrap } from '../api/bootstrapApi'
 import {
   createFavorite,
   deleteSavedPlace,
@@ -122,6 +123,7 @@ type SearchFieldId = 'origin' | 'destination'
 type LocationStatus = 'checking' | 'granted' | 'denied' | 'unsupported'
 type SidePanelId = 'labels' | 'settings' | 'report' | 'connect'
 type ProfileSetupView = 'list' | 'create' | 'edit'
+type ProfileSettingsPageId = 'basic' | 'guidance' | 'behavior'
 type DriverVideoSource = {
   name: string
   type: string
@@ -138,14 +140,7 @@ type SavedPlaceQuickItem = Place & {
 type RouteSearchSavedPlace = Place & {
   targetField?: SearchFieldId
 }
-type ReportBehaviorType =
-  | 'DROWSINESS'
-  | 'PHONE_USE'
-  | 'FOOD_OR_DRINK'
-  | 'GAZE_AWAY'
-  | 'SECONDARY_TASK'
-  | 'REACHING_BEHIND'
-  | 'SMOKING'
+type ReportBehaviorType = ProfileBehaviorType
 type MockReportSession = {
   sessionId: string
   startedAt: string
@@ -274,6 +269,11 @@ const REPORT_PERIOD_PRESETS = [
   { id: 'last30', label: '최근 30일' },
   { id: 'month', label: '이번 달' },
 ] as const
+const PROFILE_SETTINGS_PAGES: Array<{ id: ProfileSettingsPageId; label: string }> = [
+  { id: 'basic', label: '기본 정보' },
+  { id: 'guidance', label: '안내 설정' },
+  { id: 'behavior', label: '행동 민감도' },
+]
 const REPORT_CHART_COLORS = {
   primary: '#1746a2',
   primarySoft: '#e8eeff',
@@ -937,9 +937,9 @@ export function NavigationShell({
     [currentPosition],
   )
 
-  const profilesQuery = useQuery({
-    queryKey: ['profiles'],
-    queryFn: ({ signal }) => listProfiles(undefined, signal),
+  const bootstrapQuery = useQuery({
+    queryKey: ['bootstrap'],
+    queryFn: ({ signal }) => getBootstrap(undefined, signal),
   })
   const savedPlacesQuery = useQuery({
     queryKey: ['saved-places', selectedProfileId],
@@ -983,7 +983,7 @@ export function NavigationShell({
       setProfileSetupView('list')
       setEditingProfileId(undefined)
       setProfileForm(DEFAULT_PROFILE_CREATE_REQUEST)
-      await queryClient.invalidateQueries({ queryKey: ['profiles'] })
+      await queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
     },
   })
   const updateProfileMutation = useMutation({
@@ -993,7 +993,7 @@ export function NavigationShell({
       setProfileSetupView('list')
       setEditingProfileId(undefined)
       setProfileForm(DEFAULT_PROFILE_CREATE_REQUEST)
-      await queryClient.invalidateQueries({ queryKey: ['profiles'] })
+      await queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
     },
   })
   const deleteProfileMutation = useMutation({
@@ -1002,7 +1002,7 @@ export function NavigationShell({
       if (selectedProfileId === profileId) {
         setSelectedProfileId(undefined)
       }
-      await queryClient.invalidateQueries({ queryKey: ['profiles'] })
+      await queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
     },
   })
   const selectProfileMutation = useMutation({
@@ -1035,6 +1035,12 @@ export function NavigationShell({
     queryFn: () => listSearchHistories(selectedProfileId!, { page: 1, size: 10 }),
     enabled: profileSetupComplete && Boolean(selectedProfileId && activeField && activeRouteSearchKeyword.length === 0),
   })
+
+  useEffect(() => {
+    if (!selectedProfileId && bootstrapQuery.data?.selectedProfileId) {
+      setSelectedProfileId(bootstrapQuery.data.selectedProfileId)
+    }
+  }, [bootstrapQuery.data?.selectedProfileId, selectedProfileId])
 
   const routeOptionsQuery = useQuery({
     queryKey: [
@@ -1232,7 +1238,7 @@ export function NavigationShell({
   const showSearchHistories = Boolean(activeField && activeRouteSearchKeyword.length === 0 && searchHistoryPlaces.length > 0)
   const activeSelectablePlaces = showSearchHistories ? searchHistoryPlaces : activePlaces
   const activeLabel = activeField === 'origin' ? '출발지 검색 결과' : '도착지 검색 결과'
-  const profiles = profilesQuery.data?.profiles ?? []
+  const profiles = bootstrapQuery.data?.profiles ?? []
   const selectedProfile = profiles.find((profile) => profile.id === selectedProfileId)
   const savedPlaceQuickItems = useMemo(
     () => createSavedPlaceQuickItems(savedPlacesQuery.data),
@@ -1972,6 +1978,7 @@ export function NavigationShell({
                 locationStatus={locationStatus}
                 motionTiming={motionTiming}
                 panel={activeSidePanel}
+                selectedProfile={selectedProfile}
                 savedPlaces={savedPlaceQuickItems}
                 savedPlacesError={savedPlacesQuery.isError}
                 savedPlacesLoading={savedPlacesQuery.isFetching}
@@ -2019,10 +2026,10 @@ export function NavigationShell({
               deletingProfileId={deleteProfileMutation.variables}
               editing={updateProfileMutation.isPending}
               form={profileForm}
-              limit={profilesQuery.data?.limit ?? 5}
-              loading={profilesQuery.isLoading}
+              limit={bootstrapQuery.data?.profileLimit ?? 5}
+              loading={bootstrapQuery.isLoading}
               motionTiming={motionTiming}
-              profileError={profilesQuery.isError}
+              profileError={bootstrapQuery.isError}
               profileSetupView={profileSetupView}
               profiles={profiles}
               selectError={selectProfileMutation.isError}
@@ -2359,6 +2366,11 @@ function ProfileSettingsForm({
   onDeleteProfile?: () => void
   onSaveProfile: () => void
 }) {
+  const [activePageId, setActivePageId] = useState<ProfileSettingsPageId>('basic')
+  const activePageIndex = PROFILE_SETTINGS_PAGES.findIndex((page) => page.id === activePageId)
+  const activePage = PROFILE_SETTINGS_PAGES[activePageIndex] ?? PROFILE_SETTINGS_PAGES[0]
+  const previousPage = activePageIndex > 0 ? PROFILE_SETTINGS_PAGES[activePageIndex - 1] : undefined
+  const nextPage = activePageIndex < PROFILE_SETTINGS_PAGES.length - 1 ? PROFILE_SETTINGS_PAGES[activePageIndex + 1] : undefined
   const updateForm = <Key extends keyof ProfileCreateRequest>(
     key: Key,
     value: ProfileCreateRequest[Key],
@@ -2377,21 +2389,21 @@ function ProfileSettingsForm({
       }}
       transition={motionTiming}
     >
-      <div className="min-h-0 overflow-y-auto px-8 py-7 max-sm:px-5">
-        <div className="flex items-center gap-5 border-b border-[var(--nav-border)] pb-6 max-sm:flex-col max-sm:items-start">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-8 py-7 max-sm:px-5">
+        <div className="flex shrink-0 items-center gap-5 pb-2 max-sm:flex-col max-sm:items-start">
           <span
             aria-hidden="true"
-            className="grid size-24 shrink-0 place-items-center overflow-hidden rounded-2xl bg-[var(--nav-panel)] ring-1 ring-[var(--nav-border)]"
+            className="grid size-20 shrink-0 place-items-center overflow-hidden rounded-2xl bg-[var(--nav-panel)] ring-1 ring-[var(--nav-border)]"
           >
             <Avatar
               colors={NAVIGATION_PROFILE_AVATAR_COLORS}
               name={form.displayName || form.agentCallName || '새 운전자'}
-              size={96}
+              size={80}
               square
               variant="beam"
             />
           </span>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <h2 className="text-2xl font-bold tracking-normal text-[var(--nav-ink)]">프로필 설정</h2>
             <div className="mt-3 flex min-w-0 flex-wrap gap-2">
               <span className="rounded-full bg-[var(--nav-primary-soft)] px-3 py-1 text-sm font-bold text-[var(--nav-primary)]">
@@ -2404,74 +2416,88 @@ function ProfileSettingsForm({
           </div>
         </div>
 
-        <div className="mt-7 grid grid-cols-2 gap-5 max-sm:grid-cols-1">
-          <ProfileTextField
-            label="프로필 이름"
-            value={form.displayName}
-            onChange={(value) => updateForm('displayName', value)}
-          />
-          <ProfileTextField
-            label="호출 이름"
-            value={form.agentCallName}
-            onChange={(value) => updateForm('agentCallName', value)}
-          />
-          <ProfileTextField
-            className="col-span-full max-sm:col-span-1"
-            label="리포트 이메일"
-            type="email"
-            value={form.reportEmail ?? ''}
-            onChange={(value) => updateForm('reportEmail', value)}
-          />
+        <div className="mt-2 grid shrink-0 grid-cols-3 gap-2 rounded-2xl bg-[var(--nav-panel)] p-1">
+          {PROFILE_SETTINGS_PAGES.map((page) => {
+            const selected = page.id === activePage.id
+
+            return (
+              <button
+                key={page.id}
+                aria-current={selected ? 'step' : undefined}
+                className={[
+                  'min-h-10 rounded-xl px-3 text-sm font-bold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]',
+                  selected
+                    ? 'bg-white text-[var(--nav-primary)] shadow-[var(--nav-shadow-control)]'
+                    : 'text-[var(--nav-muted)] hover:bg-white hover:text-[var(--nav-ink)]',
+                ].join(' ')}
+                type="button"
+                onClick={() => setActivePageId(page.id)}
+              >
+                {page.label}
+              </button>
+            )
+          })}
         </div>
 
-        <div className="mt-8 grid grid-cols-2 gap-5 border-t border-[var(--nav-border)] pt-7 max-sm:grid-cols-1">
-          <ProfileSelectField<AgentPersonality>
-            label="Agent 성격"
-            options={[
-              ['FRIENDLY', '친근함'],
-              ['FORMAL', '정중함'],
-              ['WARM', '따뜻함'],
-              ['WITTY', '위트'],
-            ]}
-            value={form.agentPersonality}
-            onChange={(value) => updateForm('agentPersonality', value)}
-          />
-          <ProfileSelectField<WarningSensitivity>
-            label="경고 민감도"
-            options={[
-              ['LOW', '낮음'],
-              ['MEDIUM', '보통'],
-              ['HIGH', '높음'],
-            ]}
-            value={form.warningSensitivity}
-            onChange={(value) => updateForm('warningSensitivity', value)}
-          />
-          <ProfileNumberField
-            label="TTS 속도"
-            max={2}
-            min={0.5}
-            step={0.1}
-            value={form.ttsSpeed}
-            onChange={(value) => updateForm('ttsSpeed', value)}
-          />
-          <ProfileNumberField
-            label="안내 음량"
-            max={100}
-            min={0}
-            step={1}
-            value={form.guidanceVolume}
-            onChange={(value) => updateForm('guidanceVolume', value)}
-          />
-          <ProfileSelectField<ProfileTheme>
-            className="col-span-full max-sm:col-span-1"
-            disabled
-            label="테마"
-            options={[
-              ['LIGHT', '라이트'],
-            ]}
-            value="LIGHT"
-            onChange={() => updateForm('theme', 'LIGHT')}
-          />
+        <div className="mt-5 min-h-0 flex-1 overflow-hidden">
+          {activePage.id === 'basic' ? (
+            <div className="grid h-full content-start grid-cols-2 gap-5 max-sm:grid-cols-1">
+              <ProfileTextField
+                label="프로필 이름"
+                value={form.displayName}
+                onChange={(value) => updateForm('displayName', value)}
+              />
+              <ProfileTextField
+                label="호출 이름"
+                value={form.agentCallName}
+                onChange={(value) => updateForm('agentCallName', value)}
+              />
+              <ProfileTextField
+                className="col-span-full max-sm:col-span-1"
+                label="리포트 이메일"
+                type="email"
+                value={form.reportEmail ?? ''}
+                onChange={(value) => updateForm('reportEmail', value)}
+              />
+            </div>
+          ) : null}
+          {activePage.id === 'guidance' ? (
+            <div className="grid h-full content-start grid-cols-2 gap-5 max-sm:grid-cols-1">
+              <ProfileSelectField<AgentPersonality>
+                label="Agent 성격"
+                options={[
+                  ['FRIENDLY', '친근함'],
+                  ['FORMAL', '정중함'],
+                  ['WARM', '따뜻함'],
+                  ['WITTY', '위트'],
+                ]}
+                value={form.agentPersonality}
+                onChange={(value) => updateForm('agentPersonality', value)}
+              />
+              <ProfileNumberField
+                label="TTS 속도"
+                max={2}
+                min={0.5}
+                step={0.1}
+                value={form.ttsSpeed}
+                onChange={(value) => updateForm('ttsSpeed', value)}
+              />
+              <ProfileNumberField
+                label="안내 음량"
+                max={100}
+                min={0}
+                step={1}
+                value={form.guidanceVolume}
+                onChange={(value) => updateForm('guidanceVolume', value)}
+              />
+            </div>
+          ) : null}
+          {activePage.id === 'behavior' ? (
+            <ProfileBehaviorSensitivityField
+              value={form.behaviorWarningSensitivity}
+              onChange={(value) => updateForm('behaviorWarningSensitivity', value)}
+            />
+          ) : null}
         </div>
 
         {saveError ? (
@@ -2482,10 +2508,10 @@ function ProfileSettingsForm({
         ) : null}
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--nav-border)] bg-[var(--nav-surface-raised)] px-8 py-5 max-sm:px-5">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-[var(--nav-border)] bg-[var(--nav-surface-raised)] px-8 py-3.5 max-sm:px-5">
         {mode === 'edit' && onDeleteProfile ? (
           <button
-            className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-white px-5 text-sm font-bold text-[var(--nav-danger)] ring-1 ring-[rgb(225_29_72/0.14)] transition hover:bg-[rgb(255_241_242)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-danger)] disabled:cursor-not-allowed disabled:opacity-45"
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full bg-white px-5 text-sm font-bold text-[var(--nav-danger)] ring-1 ring-[rgb(225_29_72/0.14)] transition hover:bg-[rgb(255_241_242)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-danger)] disabled:cursor-not-allowed disabled:opacity-45"
             disabled={deleting}
             onClick={onDeleteProfile}
             type="button"
@@ -2498,14 +2524,30 @@ function ProfileSettingsForm({
         )}
         <div className="flex flex-wrap justify-end gap-3">
         <button
-          className="inline-flex min-h-12 items-center justify-center rounded-full bg-[var(--nav-panel)] px-5 text-sm font-bold text-[var(--nav-muted)] transition hover:bg-[var(--nav-selection)] hover:text-[var(--nav-ink)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
+          className="inline-flex min-h-10 items-center justify-center rounded-full bg-[var(--nav-panel)] px-5 text-sm font-bold text-[var(--nav-muted)] transition hover:bg-[var(--nav-selection)] hover:text-[var(--nav-ink)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
           onClick={onBackToList}
           type="button"
         >
           목록으로 돌아가기
         </button>
         <button
-          className="inline-flex min-h-12 items-center justify-center rounded-full bg-[var(--nav-primary)] px-6 text-sm font-bold text-white shadow-[var(--nav-shadow-control)] transition hover:bg-[var(--nav-primary-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)] disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex min-h-10 items-center justify-center rounded-full bg-white px-5 text-sm font-bold text-[var(--nav-muted)] ring-1 ring-[var(--nav-border)] transition hover:bg-[var(--nav-panel)] hover:text-[var(--nav-ink)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)] disabled:cursor-not-allowed disabled:opacity-40"
+          disabled={!previousPage}
+          onClick={() => previousPage && setActivePageId(previousPage.id)}
+          type="button"
+        >
+          이전
+        </button>
+        <button
+          className="inline-flex min-h-10 items-center justify-center rounded-full bg-white px-5 text-sm font-bold text-[var(--nav-primary)] ring-1 ring-[rgb(23_70_162/0.18)] transition hover:bg-[var(--nav-primary-soft)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)] disabled:cursor-not-allowed disabled:opacity-40"
+          disabled={!nextPage}
+          onClick={() => nextPage && setActivePageId(nextPage.id)}
+          type="button"
+        >
+          다음
+        </button>
+        <button
+          className="inline-flex min-h-10 items-center justify-center rounded-full bg-[var(--nav-primary)] px-6 text-sm font-bold text-white shadow-[var(--nav-shadow-control)] transition hover:bg-[var(--nav-primary-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)] disabled:cursor-not-allowed disabled:opacity-50"
           disabled={saving || !form.displayName.trim() || !form.agentCallName.trim()}
           type="submit"
         >
@@ -2606,10 +2648,76 @@ function ProfileSelectField<Value extends string>({
   )
 }
 
+const PROFILE_WARNING_SENSITIVITY_OPTIONS: Array<[WarningSensitivity, string]> = [
+  ['LOW', '낮음'],
+  ['MEDIUM', '보통'],
+  ['HIGH', '높음'],
+]
+
+function ProfileBehaviorSensitivityField({
+  className,
+  value,
+  onChange,
+}: {
+  className?: string
+  value: ProfileCreateRequest['behaviorWarningSensitivity']
+  onChange: (value: ProfileCreateRequest['behaviorWarningSensitivity']) => void
+}) {
+  return (
+    <section className={['min-w-0', className].filter(Boolean).join(' ')} aria-labelledby="profile-behavior-sensitivity-title">
+      <div className="mb-3 flex min-w-0 items-center justify-between gap-3">
+        <h3 id="profile-behavior-sensitivity-title" className="text-sm font-bold text-[var(--nav-muted)]">
+          행동별 경고 민감도
+        </h3>
+        <span className="text-xs font-semibold text-[var(--nav-subtle)]">클래스별 설정</span>
+      </div>
+      <div className="grid grid-cols-2 gap-2 rounded-2xl border border-[var(--nav-border)] bg-[var(--nav-panel)] p-3 max-sm:grid-cols-1">
+        {REPORT_BEHAVIOR_TYPES.map((behaviorType) => {
+          const label = getBehaviorLabel(behaviorType)
+          const selectedValue = value[behaviorType] ?? DEFAULT_BEHAVIOR_WARNING_SENSITIVITY[behaviorType]
+
+          return (
+            <div
+              key={behaviorType}
+              className="grid min-w-0 grid-cols-[minmax(4.8rem,1fr)_auto] items-center gap-2 rounded-xl bg-white px-3 py-2 ring-1 ring-[rgb(16_24_40/0.05)]"
+            >
+              <span className="min-w-0 truncate text-sm font-bold text-[var(--nav-ink)]" title={label}>{label}</span>
+              <div className="grid grid-cols-3 overflow-hidden rounded-full bg-[var(--nav-surface-raised)] p-1 ring-1 ring-[var(--nav-border)]">
+                {PROFILE_WARNING_SENSITIVITY_OPTIONS.map(([optionValue, optionLabel]) => {
+                  const selected = selectedValue === optionValue
+
+                  return (
+                    <button
+                      key={optionValue}
+                      aria-pressed={selected}
+                      aria-label={`${label} 민감도 ${optionLabel}`}
+                      className={[
+                        'min-h-8 min-w-10 rounded-full px-2 text-xs font-bold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]',
+                        selected
+                          ? 'bg-[var(--nav-primary)] text-white shadow-[var(--nav-shadow-control)]'
+                          : 'text-[var(--nav-muted)] hover:bg-white hover:text-[var(--nav-ink)]',
+                      ].join(' ')}
+                      type="button"
+                      onClick={() => onChange({ ...value, [behaviorType]: optionValue })}
+                    >
+                      {optionLabel}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
 function normalizeProfileForm(form: ProfileCreateRequest): ProfileCreateRequest {
   return {
     ...form,
     agentCallName: form.agentCallName.trim(),
+    behaviorWarningSensitivity: normalizeBehaviorWarningSensitivity(form.behaviorWarningSensitivity),
     displayName: form.displayName.trim(),
     guidanceVolume: Number(form.guidanceVolume),
     reportEmail: normalizeOptionalProfileText(form.reportEmail),
@@ -2624,12 +2732,23 @@ function createProfileFormFromProfile(profile: Profile): ProfileCreateRequest {
     agentCallName: profile.agentCallName,
     reportEmail: profile.reportEmail,
     agentPersonality: profile.agentPersonality,
-    warningSensitivity: profile.warningSensitivity,
+    behaviorWarningSensitivity: normalizeBehaviorWarningSensitivity(profile.behaviorWarningSensitivity),
     ttsVoiceId: profile.ttsVoiceId,
     ttsSpeed: profile.ttsSpeed,
     guidanceVolume: profile.guidanceVolume,
-    theme: 'LIGHT',
   }
+}
+
+function normalizeBehaviorWarningSensitivity(
+  value: Partial<ProfileCreateRequest['behaviorWarningSensitivity']> | undefined,
+): ProfileCreateRequest['behaviorWarningSensitivity'] {
+  return REPORT_BEHAVIOR_TYPES.reduce<ProfileCreateRequest['behaviorWarningSensitivity']>(
+    (result, behaviorType) => ({
+      ...result,
+      [behaviorType]: value?.[behaviorType] ?? DEFAULT_BEHAVIOR_WARNING_SENSITIVITY[behaviorType],
+    }),
+    { ...DEFAULT_BEHAVIOR_WARNING_SENSITIVITY },
+  )
 }
 
 function createSavedPlaceQuickItems(data: Awaited<ReturnType<typeof listSavedPlaces>> | undefined): SavedPlaceQuickItem[] {
@@ -3457,6 +3576,7 @@ function SideDrawerPanel({
   locationStatus,
   motionTiming,
   panel,
+  selectedProfile,
   savedPlaces,
   savedPlacesError,
   savedPlacesLoading,
@@ -3476,6 +3596,7 @@ function SideDrawerPanel({
   locationStatus: LocationStatus
   motionTiming: MotionTiming
   panel: SidePanelId
+  selectedProfile?: Profile
   savedPlaces: SavedPlaceQuickItem[]
   savedPlacesError: boolean
   savedPlacesLoading: boolean
@@ -3549,6 +3670,7 @@ function SideDrawerPanel({
       currentLocationLabel={currentLocationLabel}
       itemVariants={itemVariants}
       locationStatus={locationStatus}
+      selectedProfile={selectedProfile}
       onChangeCameraSettings={onChangeCameraSettings}
       onRequestCurrentLocation={onRequestCurrentLocation}
     />
@@ -4209,6 +4331,7 @@ function SettingsDrawerContent({
   currentLocationLabel,
   itemVariants,
   locationStatus,
+  selectedProfile,
   onChangeCameraSettings,
   onRequestCurrentLocation,
 }: {
@@ -4219,6 +4342,7 @@ function SettingsDrawerContent({
     visible: { opacity: number; y: number; scale: number; transition: MotionTiming }
   }
   locationStatus: LocationStatus
+  selectedProfile?: Profile
   onChangeCameraSettings: (settings: Partial<MapCameraSettings>) => void
   onRequestCurrentLocation: () => void
 }) {
@@ -4253,6 +4377,7 @@ function SettingsDrawerContent({
   const updateMode = (mode: MapCameraSettings['mode']) => {
     onChangeCameraSettings({ mode })
   }
+  const profileDisplayName = selectedProfile?.displayName?.trim() || '운전자'
 
   return (
     <>
@@ -4321,7 +4446,7 @@ function SettingsDrawerContent({
         <div className="flex min-w-0 items-center gap-2.5">
           <UserCircle className="size-7 shrink-0 text-[var(--nav-muted)]" weight="fill" />
           <div className="min-w-0">
-            <div className="truncate text-sm font-bold text-[var(--nav-ink)]">안정현</div>
+            <div className="truncate text-sm font-bold text-[var(--nav-ink)]">{profileDisplayName}</div>
             <div className="mt-0.5 truncate text-xs font-semibold text-[var(--nav-muted)]">로그인됨</div>
           </div>
         </div>

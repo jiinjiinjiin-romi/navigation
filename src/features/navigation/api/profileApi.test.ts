@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import {
   createProfile,
+  DEFAULT_BEHAVIOR_WARNING_SENSITIVITY,
   deleteProfile,
   listProfiles,
   selectProfile,
@@ -17,6 +18,7 @@ const profile = {
   reportEmail: null,
   agentPersonality: 'FRIENDLY',
   warningSensitivity: 'MEDIUM',
+  behaviorWarningSensitivity: DEFAULT_BEHAVIOR_WARNING_SENSITIVITY,
   ttsVoiceId: null,
   ttsSpeed: 1,
   guidanceVolume: 70,
@@ -31,11 +33,10 @@ const createPayload: ProfileCreateRequest = {
   agentCallName: '나비',
   reportEmail: null,
   agentPersonality: 'FRIENDLY',
-  warningSensitivity: 'MEDIUM',
+  behaviorWarningSensitivity: DEFAULT_BEHAVIOR_WARNING_SENSITIVITY,
   ttsVoiceId: null,
   ttsSpeed: 1,
   guidanceVolume: 70,
-  theme: 'SYSTEM',
 }
 
 describe('profileApi', () => {

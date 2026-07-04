@@ -10,6 +10,25 @@ interface HttpClient {
 export type AgentPersonality = 'FRIENDLY' | 'FORMAL' | 'WARM' | 'WITTY'
 export type WarningSensitivity = 'LOW' | 'MEDIUM' | 'HIGH'
 export type ProfileTheme = 'LIGHT' | 'DARK' | 'SYSTEM'
+export type ProfileBehaviorType =
+  | 'DROWSINESS'
+  | 'PHONE_USE'
+  | 'FOOD_OR_DRINK'
+  | 'GAZE_AWAY'
+  | 'SECONDARY_TASK'
+  | 'REACHING_BEHIND'
+  | 'SMOKING'
+export type BehaviorWarningSensitivity = Record<ProfileBehaviorType, WarningSensitivity>
+
+export const DEFAULT_BEHAVIOR_WARNING_SENSITIVITY: BehaviorWarningSensitivity = {
+  DROWSINESS: 'HIGH',
+  PHONE_USE: 'HIGH',
+  FOOD_OR_DRINK: 'MEDIUM',
+  GAZE_AWAY: 'HIGH',
+  SECONDARY_TASK: 'MEDIUM',
+  REACHING_BEHIND: 'MEDIUM',
+  SMOKING: 'MEDIUM',
+}
 
 export interface Profile {
   id: string
@@ -18,11 +37,12 @@ export interface Profile {
   profileImageUrl: string | null
   reportEmail: string | null
   agentPersonality: AgentPersonality
-  warningSensitivity: WarningSensitivity
+  warningSensitivity?: WarningSensitivity
+  behaviorWarningSensitivity: BehaviorWarningSensitivity
   ttsVoiceId: string | null
   ttsSpeed: number
   guidanceVolume: number
-  theme: ProfileTheme
+  theme?: ProfileTheme
   lastUsedAt: string | null
   createdAt: string
   updatedAt: string
@@ -39,11 +59,10 @@ export interface ProfileCreateRequest {
   agentCallName: string
   reportEmail: string | null
   agentPersonality: AgentPersonality
-  warningSensitivity: WarningSensitivity
+  behaviorWarningSensitivity: BehaviorWarningSensitivity
   ttsVoiceId: string | null
   ttsSpeed: number
   guidanceVolume: number
-  theme: ProfileTheme
 }
 
 export type ProfileUpdateRequest = Partial<ProfileCreateRequest>
@@ -58,11 +77,10 @@ export const DEFAULT_PROFILE_CREATE_REQUEST: ProfileCreateRequest = {
   agentCallName: '나비',
   reportEmail: null,
   agentPersonality: 'FRIENDLY',
-  warningSensitivity: 'MEDIUM',
+  behaviorWarningSensitivity: DEFAULT_BEHAVIOR_WARNING_SENSITIVITY,
   ttsVoiceId: null,
   ttsSpeed: 1,
   guidanceVolume: 70,
-  theme: 'LIGHT',
 }
 
 export async function listProfiles(
