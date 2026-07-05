@@ -16,6 +16,7 @@ import {
   deleteProfile,
   selectProfile,
   updateProfile,
+  type Profile,
 } from '../api/profileApi'
 import { getBootstrap } from '../api/bootstrapApi'
 import { createFavorite, deleteSavedPlace, listSavedPlaces, updateSavedPlace } from '../api/savedPlaceApi'
@@ -242,7 +243,7 @@ const mockedUpdateSavedPlace = vi.mocked(updateSavedPlace)
 const mockedCreateSearchHistory = vi.mocked(createSearchHistory)
 const mockedListSearchHistories = vi.mocked(listSearchHistories)
 
-const mockProfiles = [
+const mockProfiles: Profile[] = [
   {
     id: 'profile-1',
     displayName: '민준',
@@ -270,7 +271,7 @@ const mockProfiles = [
     warningSensitivity: 'HIGH' as const,
     behaviorWarningSensitivity: {
       ...DEFAULT_BEHAVIOR_WARNING_SENSITIVITY,
-      FOOD_OR_DRINK: 'LOW' as const,
+      FOOD_OR_DRINK: 4,
     },
     ttsVoiceId: null,
     ttsSpeed: 1.2,
@@ -664,7 +665,10 @@ describe('NavigationShell', () => {
     expect(screen.getByRole('button', { name: '행동 민감도' })).toHaveAttribute('aria-current', 'step')
     expect(screen.queryByLabelText('경고 민감도')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('테마')).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: '음식/음료 섭취 민감도 낮음' }))
+    fireEvent.click(screen.getByRole('button', { name: '음식/음료 섭취 민감도 낮추기' }))
+    fireEvent.click(screen.getByRole('button', { name: '음식/음료 섭취 민감도 낮추기' }))
+    fireEvent.click(screen.getByRole('button', { name: '음식/음료 섭취 민감도 낮추기' }))
+    expect(screen.getByText((content) => content.includes("'음식/음료 섭취' 감지 민감도를 4 이하로 설정하면"))).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '이전' }))
     expect(screen.getByRole('button', { name: '안내 설정' })).toHaveAttribute('aria-current', 'step')
     fireEvent.click(screen.getByRole('button', { name: '다음' }))
@@ -678,7 +682,7 @@ describe('NavigationShell', () => {
         agentPersonality: 'WITTY',
         behaviorWarningSensitivity: {
           ...DEFAULT_BEHAVIOR_WARNING_SENSITIVITY,
-          FOOD_OR_DRINK: 'LOW',
+          FOOD_OR_DRINK: 4,
         },
         ttsVoiceId: null,
         ttsSpeed: 1.4,

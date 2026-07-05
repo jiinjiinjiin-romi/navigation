@@ -6,9 +6,14 @@ React, Vite, and Tailwind frontend for the JIIN driver-assistance navigation pro
 
 - Loads TMAP vector map SDK v3 through the backend proxy.
 - Keeps the TMAP app key out of frontend code.
+- Loads `/api/v1/bootstrap` on app start for account metadata, profiles, selected profile, profile limit, and backend capabilities.
 - Searches origin and destination with TMAP POI search.
+- Shows recent search histories when the route search input is empty, and writes selected/searched places through profile-scoped search-history APIs.
 - Falls back to Sejong University as the current location when browser location is denied or unavailable.
 - Opens destination search directly from the root `어디로 갈까요?` control.
+- Provides profile selection, profile create/edit/delete, and selected-profile display for the in-car navigation session.
+- Edits profile behavior warning sensitivity per backend behavior class instead of using one global warning sensitivity.
+- Manages profile-specific saved-place labels from the right rail label settings panel.
 - Requests multiple TMAP car route candidates with `trafficInfo=Y` by `searchOption`: recommended, fastest, shortest, and highway-priority.
 - Renders route-option overview in forced 2D so origin, destination, and all candidate routes can be compared before guidance starts.
 - Renders route lines with congestion-aware segment colors when TMAP returns traffic data.
@@ -17,7 +22,8 @@ React, Vite, and Tailwind frontend for the JIIN driver-assistance navigation pro
 - Rotates and pans the vector map under the arrow marker so the driving direction stays upward.
 - Clips the remaining route-line head in the same animation frame as marker movement, while keeping text and instruction updates throttled.
 - Updates next guidance, remaining distance/time, ETA, current address, and road status.
-- Provides a floating settings panel for map mode, zoom, 3D pitch, and signed-in user display; settings are locked during route selection.
+- Provides a floating settings panel for map mode, zoom, 3D pitch, and selected driver profile display; settings are locked during route selection.
+- Provides a mock driving report dashboard using Recharts while the report UI is being designed before full backend report wiring.
 - Uses local Pretendard as the default UI font.
 
 ## Project Layout
@@ -96,6 +102,20 @@ Vite proxies `/api` to `http://localhost:8000`.
 The frontend calls local endpoints only. During development, Vite forwards these requests to the FastAPI backend:
 
 ```text
+GET  /api/v1/bootstrap
+GET  /api/v1/profiles
+POST /api/v1/profiles
+PATCH /api/v1/profiles/{profileId}
+DELETE /api/v1/profiles/{profileId}
+POST /api/v1/profiles/{profileId}/select
+GET  /api/v1/profiles/{profileId}/saved-places
+PUT  /api/v1/profiles/{profileId}/saved-places/{placeType}
+POST /api/v1/profiles/{profileId}/favorites
+PATCH /api/v1/saved-places/{placeId}
+DELETE /api/v1/saved-places/{placeId}
+GET  /api/v1/profiles/{profileId}/search-histories
+POST /api/v1/profiles/{profileId}/search-histories
+DELETE /api/v1/profiles/{profileId}/search-histories
 GET  /api/tmap/sdk.js
 GET  /api/tmap/vendor/{asset_path:path}
 GET  /api/tmap/pois?keyword=...
@@ -106,6 +126,8 @@ GET  /api/tmap/reverse-geocode?lat=...&lng=...
 
 The backend sends `appKey` in request headers and normalizes SDK asset loading so the browser does not call TMAP with the key directly. `/api/tmap/routes` validates finite origin/destination coordinates before proxying the request.
 
+`bootstrap.account` is available for future account-level UI, but the current settings drawer intentionally displays the selected driver profile name. Profile create/update uses numeric `behaviorWarningSensitivity` values from 3 to 10 with the backend behavior keys `DROWSINESS`, `PHONE_USE`, `FOOD_OR_DRINK`, `GAZE_AWAY`, `SECONDARY_TASK`, `REACHING_BEHIND`, and `SMOKING`; values 4 and below show a safety warning in the profile editor.
+
 `navigation-backend` no longer needs to run for this frontend in the migrated development flow.
 
 ## Verification
@@ -113,7 +135,7 @@ The backend sends `appKey` in request headers and normalizes SDK asset loading s
 Run from `/Users/anjeonghyeon/web/jiin/navigation`:
 
 ```bash
-npm test -- src/features/navigation/api/tmapApi.test.ts
+npm test -- src/features/navigation/api/tmapApi.test.ts src/features/navigation/api/bootstrapApi.test.ts src/features/navigation/api/profileApi.test.ts src/features/navigation/components/NavigationShell.test.tsx
 npm run build
 ```
 

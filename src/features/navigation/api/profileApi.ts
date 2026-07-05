@@ -10,6 +10,7 @@ interface HttpClient {
 export type AgentPersonality = 'FRIENDLY' | 'FORMAL' | 'WARM' | 'WITTY'
 export type WarningSensitivity = 'LOW' | 'MEDIUM' | 'HIGH'
 export type ProfileTheme = 'LIGHT' | 'DARK' | 'SYSTEM'
+export type BehaviorWarningSensitivityValue = 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
 export type ProfileBehaviorType =
   | 'DROWSINESS'
   | 'PHONE_USE'
@@ -18,16 +19,16 @@ export type ProfileBehaviorType =
   | 'SECONDARY_TASK'
   | 'REACHING_BEHIND'
   | 'SMOKING'
-export type BehaviorWarningSensitivity = Record<ProfileBehaviorType, WarningSensitivity>
+export type BehaviorWarningSensitivity = Record<ProfileBehaviorType, BehaviorWarningSensitivityValue>
 
 export const DEFAULT_BEHAVIOR_WARNING_SENSITIVITY: BehaviorWarningSensitivity = {
-  DROWSINESS: 'HIGH',
-  PHONE_USE: 'HIGH',
-  FOOD_OR_DRINK: 'MEDIUM',
-  GAZE_AWAY: 'HIGH',
-  SECONDARY_TASK: 'MEDIUM',
-  REACHING_BEHIND: 'MEDIUM',
-  SMOKING: 'MEDIUM',
+  DROWSINESS: 9,
+  PHONE_USE: 9,
+  FOOD_OR_DRINK: 7,
+  GAZE_AWAY: 9,
+  SECONDARY_TASK: 7,
+  REACHING_BEHIND: 7,
+  SMOKING: 7,
 }
 
 export interface Profile {

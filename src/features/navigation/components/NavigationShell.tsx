@@ -76,10 +76,10 @@ import {
   selectProfile,
   updateProfile,
   type AgentPersonality,
+  type BehaviorWarningSensitivityValue,
   type Profile,
   type ProfileBehaviorType,
   type ProfileCreateRequest,
-  type WarningSensitivity,
 } from '../api/profileApi'
 import { getBootstrap } from '../api/bootstrapApi'
 import {
@@ -2648,12 +2648,6 @@ function ProfileSelectField<Value extends string>({
   )
 }
 
-const PROFILE_WARNING_SENSITIVITY_OPTIONS: Array<[WarningSensitivity, string]> = [
-  ['LOW', '낮음'],
-  ['MEDIUM', '보통'],
-  ['HIGH', '높음'],
-]
-
 function ProfileBehaviorSensitivityField({
   className,
   value,
@@ -2663,14 +2657,37 @@ function ProfileBehaviorSensitivityField({
   value: ProfileCreateRequest['behaviorWarningSensitivity']
   onChange: (value: ProfileCreateRequest['behaviorWarningSensitivity']) => void
 }) {
+  const lowSensitivityLabels = REPORT_BEHAVIOR_TYPES
+    .filter((behaviorType) => (value[behaviorType] ?? DEFAULT_BEHAVIOR_WARNING_SENSITIVITY[behaviorType]) <= 4)
+    .map(getBehaviorLabel)
+  const warningMessage =
+    lowSensitivityLabels.length === 1
+      ? `'${lowSensitivityLabels[0]}' 감지 민감도를 4 이하로 설정하면 안전운전에 큰 위험이 될 수 있어요.`
+      : lowSensitivityLabels.length > 1
+        ? `${lowSensitivityLabels.join(', ')} 감지 민감도가 낮게 설정되어 있어요. 주요 위험행동은 별도의 주의가 필요합니다.`
+        : null
+
+  const setSensitivity = (behaviorType: ProfileBehaviorType, nextValue: number) => {
+    onChange({
+      ...value,
+      [behaviorType]: clampBehaviorWarningSensitivity(nextValue),
+    })
+  }
+
   return (
     <section className={['min-w-0', className].filter(Boolean).join(' ')} aria-labelledby="profile-behavior-sensitivity-title">
       <div className="mb-3 flex min-w-0 items-center justify-between gap-3">
         <h3 id="profile-behavior-sensitivity-title" className="text-sm font-bold text-[var(--nav-muted)]">
           행동별 경고 민감도
         </h3>
-        <span className="text-xs font-semibold text-[var(--nav-subtle)]">클래스별 설정</span>
+        <span className="text-xs font-semibold text-[var(--nav-subtle)]">3-10</span>
       </div>
+      {warningMessage ? (
+        <div className="mb-3 flex min-w-0 items-start gap-2 rounded-2xl border border-[#fed7aa] bg-[#fff7ed] px-3 py-2 text-sm font-semibold text-[#9a3412]">
+          <Warning className="mt-0.5 shrink-0" size={18} weight="fill" />
+          <span className="min-w-0 leading-relaxed">{warningMessage}</span>
+        </div>
+      ) : null}
       <div className="grid grid-cols-2 gap-2 rounded-2xl border border-[var(--nav-border)] bg-[var(--nav-panel)] p-3 max-sm:grid-cols-1">
         {REPORT_BEHAVIOR_TYPES.map((behaviorType) => {
           const label = getBehaviorLabel(behaviorType)
@@ -2679,31 +2696,37 @@ function ProfileBehaviorSensitivityField({
           return (
             <div
               key={behaviorType}
-              className="grid min-w-0 grid-cols-[minmax(4.8rem,1fr)_auto] items-center gap-2 rounded-xl bg-white px-3 py-2 ring-1 ring-[rgb(16_24_40/0.05)]"
+              className="grid min-w-0 grid-cols-[minmax(5.6rem,1fr)_auto] items-center gap-2 rounded-xl bg-white px-3 py-2 ring-1 ring-[rgb(16_24_40/0.05)]"
             >
               <span className="min-w-0 truncate text-sm font-bold text-[var(--nav-ink)]" title={label}>{label}</span>
-              <div className="grid grid-cols-3 overflow-hidden rounded-full bg-[var(--nav-surface-raised)] p-1 ring-1 ring-[var(--nav-border)]">
-                {PROFILE_WARNING_SENSITIVITY_OPTIONS.map(([optionValue, optionLabel]) => {
-                  const selected = selectedValue === optionValue
-
-                  return (
-                    <button
-                      key={optionValue}
-                      aria-pressed={selected}
-                      aria-label={`${label} 민감도 ${optionLabel}`}
-                      className={[
-                        'min-h-8 min-w-10 rounded-full px-2 text-xs font-bold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]',
-                        selected
-                          ? 'bg-[var(--nav-primary)] text-white shadow-[var(--nav-shadow-control)]'
-                          : 'text-[var(--nav-muted)] hover:bg-white hover:text-[var(--nav-ink)]',
-                      ].join(' ')}
-                      type="button"
-                      onClick={() => onChange({ ...value, [behaviorType]: optionValue })}
-                    >
-                      {optionLabel}
-                    </button>
-                  )
-                })}
+              <div className="grid grid-cols-[2rem_2.25rem_2rem] items-center overflow-hidden rounded-full bg-[var(--nav-surface-raised)] p-1 ring-1 ring-[var(--nav-border)]">
+                <button
+                  aria-label={`${label} 민감도 낮추기`}
+                  className="grid min-h-8 place-items-center rounded-full text-[var(--nav-muted)] transition hover:bg-white hover:text-[var(--nav-ink)] disabled:opacity-35"
+                  disabled={selectedValue <= 3}
+                  type="button"
+                  onClick={() => setSensitivity(behaviorType, selectedValue - 1)}
+                >
+                  <Minus size={14} weight="bold" />
+                </button>
+                <output
+                  aria-label={`${label} 민감도 값`}
+                  className={[
+                    'grid min-h-8 place-items-center rounded-full text-sm font-bold',
+                    selectedValue <= 4 ? 'bg-[#fff7ed] text-[#c2410c]' : 'bg-white text-[var(--nav-primary)]',
+                  ].join(' ')}
+                >
+                  {selectedValue}
+                </output>
+                <button
+                  aria-label={`${label} 민감도 높이기`}
+                  className="grid min-h-8 place-items-center rounded-full text-[var(--nav-muted)] transition hover:bg-white hover:text-[var(--nav-ink)] disabled:opacity-35"
+                  disabled={selectedValue >= 10}
+                  type="button"
+                  onClick={() => setSensitivity(behaviorType, selectedValue + 1)}
+                >
+                  <Plus size={14} weight="bold" />
+                </button>
               </div>
             </div>
           )
@@ -2711,6 +2734,10 @@ function ProfileBehaviorSensitivityField({
       </div>
     </section>
   )
+}
+
+function clampBehaviorWarningSensitivity(value: number): BehaviorWarningSensitivityValue {
+  return Math.min(10, Math.max(3, Math.round(value))) as BehaviorWarningSensitivityValue
 }
 
 function normalizeProfileForm(form: ProfileCreateRequest): ProfileCreateRequest {
@@ -2740,15 +2767,32 @@ function createProfileFormFromProfile(profile: Profile): ProfileCreateRequest {
 }
 
 function normalizeBehaviorWarningSensitivity(
-  value: Partial<ProfileCreateRequest['behaviorWarningSensitivity']> | undefined,
+  value: Partial<ProfileCreateRequest['behaviorWarningSensitivity']> | Record<string, unknown> | undefined,
 ): ProfileCreateRequest['behaviorWarningSensitivity'] {
   return REPORT_BEHAVIOR_TYPES.reduce<ProfileCreateRequest['behaviorWarningSensitivity']>(
     (result, behaviorType) => ({
       ...result,
-      [behaviorType]: value?.[behaviorType] ?? DEFAULT_BEHAVIOR_WARNING_SENSITIVITY[behaviorType],
+      [behaviorType]: normalizeBehaviorWarningSensitivityValue(
+        value?.[behaviorType] ?? DEFAULT_BEHAVIOR_WARNING_SENSITIVITY[behaviorType],
+      ),
     }),
     { ...DEFAULT_BEHAVIOR_WARNING_SENSITIVITY },
   )
+}
+
+function normalizeBehaviorWarningSensitivityValue(value: unknown): BehaviorWarningSensitivityValue {
+  if (value === 'LOW') {
+    return 4
+  }
+  if (value === 'MEDIUM') {
+    return 7
+  }
+  if (value === 'HIGH') {
+    return 9
+  }
+  return typeof value === 'number'
+    ? clampBehaviorWarningSensitivity(value)
+    : 7
 }
 
 function createSavedPlaceQuickItems(data: Awaited<ReturnType<typeof listSavedPlaces>> | undefined): SavedPlaceQuickItem[] {
