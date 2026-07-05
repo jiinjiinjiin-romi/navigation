@@ -1,12 +1,8 @@
 import { AIAI_SCENARIO_IDS, debugScenarios } from './debugScenarios'
-import { ttsAudioManifest, type TtsAudioKey } from './ttsAudioManifest'
 import type {
-  AiaiScenarioId,
   AiaiScenarioStep,
   NaviAssistantScenario,
   NaviAssistantStep,
-  ScenarioSpeech,
-  SpeechRole,
 } from './types'
 
 export { AIAI_SCENARIO_IDS }
@@ -16,7 +12,7 @@ export function createNaviAssistantScenarios(): NaviAssistantScenario[] {
     id: scenario.id,
     title: createVisibleScenarioTitle(scenario.title),
     steps: getVisibleScenarioSteps(scenario.steps).map(({ step, sourceIndex }) => (
-      createNaviAssistantStep(scenario.id, step, sourceIndex)
+      createNaviAssistantStep(step, sourceIndex)
     )),
   }))
 }
@@ -26,38 +22,6 @@ function createVisibleScenarioTitle(title: string) {
     .replace(/^졸음 감지\s*→\s*/, '')
     .replace(/^휴대폰 사용 감지\s*→\s*/, '')
     .replace(/^주의 분산 감지\s*→\s*/, '')
-}
-
-export function getScenarioSpeech(scenarioId: AiaiScenarioId, stepIndex: number): ScenarioSpeech | null {
-  const scenario = debugScenarios.find((item) => item.id === scenarioId)
-  const visibleStep = scenario ? getVisibleScenarioSteps(scenario.steps)[stepIndex] : undefined
-
-  if (!visibleStep) {
-    return null
-  }
-
-  return createScenarioSpeech(scenarioId, visibleStep.step, stepIndex, visibleStep.sourceIndex)
-}
-
-function createScenarioSpeech(
-  scenarioId: AiaiScenarioId,
-  step: AiaiScenarioStep,
-  playbackIndex: number,
-  audioIndex: number,
-): ScenarioSpeech | null {
-  const role: SpeechRole | undefined = step.userSpeech ? 'user' : step.agentSpeech ? 'agent' : undefined
-  const text = step.userSpeech ?? step.agentSpeech ?? ''
-
-  if (!role || !text) {
-    return null
-  }
-
-  return {
-    key: `${scenarioId}-${playbackIndex}-${role}:${text}`,
-    role,
-    text,
-    audioSrc: getScenarioTtsAudioSrc(scenarioId, audioIndex, role),
-  }
 }
 
 function getVisibleScenarioSteps(steps: AiaiScenarioStep[]) {
@@ -71,14 +35,12 @@ function isDetectionOnlyStep(step: AiaiScenarioStep) {
 }
 
 function createNaviAssistantStep(
-  scenarioId: AiaiScenarioId,
   step: AiaiScenarioStep,
   index: number,
 ): NaviAssistantStep {
   const successKeywords = ['완료', '재생', '전송 완료', '경로 시작', '차량 제어', '음성 안내 강화']
   const successText = `${step.title} ${step.actionLabel ?? ''}`
   const isSuccessStep = successKeywords.some((keyword) => successText.includes(keyword))
-  const speech = createScenarioSpeech(scenarioId, step, index, index)
 
   if (index === 0 && !step.agentSpeech && !step.userSpeech && !step.actionLabel && !step.detectionEvent) {
     return {
@@ -99,8 +61,6 @@ function createNaviAssistantStep(
       energy: 0.72,
       statusLabel: '듣는 중...',
       userText: step.userSpeech,
-      audioSrc: speech?.audioSrc,
-      speechRole: 'user',
     }
   }
 
@@ -112,8 +72,6 @@ function createNaviAssistantStep(
       orbState: step.agentSpeech ? 'speaking' : isSuccessStep ? 'success' : 'speaking',
       energy: isSuccessStep ? 0.7 : 0.58,
       text: step.agentSpeech,
-      audioSrc: speech?.audioSrc,
-      speechRole: speech?.role,
       recommendations: [
         {
           type: step.actionLabel.includes('음악') ? 'music' : step.actionLabel.includes('장소') || step.actionLabel.includes('경로') ? 'place' : 'action',
@@ -133,12 +91,5 @@ function createNaviAssistantStep(
     orbState: step.agentSpeech ? 'speaking' : isSuccessStep ? 'success' : 'speaking',
     energy: isSuccessStep ? 0.7 : 0.6,
     text: step.agentSpeech ?? step.description,
-    audioSrc: speech?.audioSrc,
-    speechRole: speech?.role,
   }
-}
-
-function getScenarioTtsAudioSrc(scenarioId: AiaiScenarioId, stepIndex: number, role: SpeechRole): string | undefined {
-  const key = `${scenarioId}-${stepIndex}-${role}` as TtsAudioKey
-  return ttsAudioManifest[key]
 }

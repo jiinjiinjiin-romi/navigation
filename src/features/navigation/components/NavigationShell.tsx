@@ -59,8 +59,6 @@ import { VoiceOrb } from '@/features/orb'
 import type { OrbAssistantState, OrbColorTheme } from '@/features/orb'
 import {
   createNaviAssistantScenarios,
-  getScenarioSpeech,
-  startScenarioSpeech,
   type AiaiScenarioId,
   type NaviAssistantRecommendation,
   type NaviAssistantScenario,
@@ -699,10 +697,6 @@ const DRIVER_VIDEO_MIME_TYPES = new Set([
   'video/object',
 ])
 
-export function isAssistantPlaybackReady(playbackKey: string, expectedPlaybackKey: string) {
-  return Boolean(playbackKey) && playbackKey === expectedPlaybackKey
-}
-
 function getDriverVideoMimeType(file: File) {
   if (DRIVER_VIDEO_MIME_TYPES.has(file.type)) {
     return file.type
@@ -734,21 +728,15 @@ export function getAssistantSpeechCharacterDelaySeconds(index: number) {
 }
 
 export function getAssistantVisibleOrbState(
-  assistantStep: Pick<NaviAssistantStep, 'orbState' | 'speechRole'>,
-  playbackKey: string,
+  assistantStep: Pick<NaviAssistantStep, 'orbState'>,
 ): OrbAssistantState {
-  if (assistantStep.orbState === 'speaking' && assistantStep.speechRole === 'agent' && !playbackKey) {
-    return 'thinking'
-  }
-
   return assistantStep.orbState
 }
 
 export function isAssistantVoiceWaveVisible(
-  assistantStep: Pick<NaviAssistantStep, 'orbState' | 'speechRole' | 'statusLabel'>,
-  playbackKey: string,
+  assistantStep: Pick<NaviAssistantStep, 'orbState' | 'statusLabel'>,
 ) {
-  return getAssistantVisibleOrbState(assistantStep, playbackKey) === 'speaking' && !assistantStep.statusLabel
+  return getAssistantVisibleOrbState(assistantStep) === 'speaking' && !assistantStep.statusLabel
 }
 
 const DEBUG_DRIVING_ASSIST_SEQUENCE = ([
@@ -902,7 +890,6 @@ export function NavigationShell({
   const [assistantStepIndex, setAssistantStepIndex] = useState(0)
   const [driverVideo, setDriverVideo] = useState<DriverVideoSource | null>(null)
   const [driverVideoError, setDriverVideoError] = useState(false)
-  const [speechPlaybackKey, setSpeechPlaybackKey] = useState('')
   const [showLocationFallbackToast, setShowLocationFallbackToast] = useState(false)
   const [mapCameraSettings, setMapCameraSettings] = useState<MapCameraSettings>(DEFAULT_MAP_CAMERA_SETTINGS)
   const updateMapCameraSettings = useCallback((settings: Partial<MapCameraSettings>) => {
@@ -1259,15 +1246,6 @@ export function NavigationShell({
   const assistantStep = assistantScenario.steps[
     Math.min(assistantStepIndex, assistantScenario.steps.length - 1)
   ]
-  const clampedAssistantStepIndex = Math.min(assistantStepIndex, assistantScenario.steps.length - 1)
-  const assistantSpeech = useMemo(
-    () => getScenarioSpeech(assistantScenario.id, clampedAssistantStepIndex),
-    [assistantScenario.id, clampedAssistantStepIndex],
-  )
-  const expectedSpeechPlaybackKey = assistantSpeech?.key ?? `${assistantScenario.id}-${clampedAssistantStepIndex}-visual`
-  const activeSpeechPlaybackKey = isAssistantPlaybackReady(speechPlaybackKey, expectedSpeechPlaybackKey)
-    ? speechPlaybackKey
-    : ''
   const motionTiming = shouldReduceMotion
     ? { duration: 0 }
     : { duration: 0.22, ease: PRODUCT_EASE }
@@ -1357,24 +1335,6 @@ export function NavigationShell({
   const resetAssistantScenario = useCallback(() => {
     setAssistantStepIndex(0)
   }, [])
-
-  useEffect(() => {
-    setSpeechPlaybackKey('')
-
-    if (!profileSetupComplete) {
-      return
-    }
-
-    if (!assistantSpeech) {
-      setSpeechPlaybackKey(expectedSpeechPlaybackKey)
-      return
-    }
-
-    return startScenarioSpeech({
-      ...assistantSpeech,
-      onStart: ({ key }) => setSpeechPlaybackKey(key),
-    })
-  }, [assistantSpeech, expectedSpeechPlaybackKey, profileSetupComplete])
 
   useEffect(() => {
     if (!profileSetupComplete) {
@@ -1801,7 +1761,6 @@ export function NavigationShell({
                 }
               }}
               reducedMotion={Boolean(shouldReduceMotion)}
-              speechPlaybackKey={activeSpeechPlaybackKey}
             />
             {!activeRoute ? (
               <>
@@ -3035,7 +2994,6 @@ function NaviOrbControl({
   onRecommendationAction,
   onWakeCall,
   reducedMotion,
-  speechPlaybackKey,
 }: {
   assistantStep: NaviAssistantStep
   hidden: boolean
@@ -3044,15 +3002,14 @@ function NaviOrbControl({
   onRecommendationAction: (recommendation: NaviAssistantRecommendation) => void
   onWakeCall: () => void
   reducedMotion: boolean
-  speechPlaybackKey: string
 }) {
   if (hidden) {
     return null
   }
 
   const expanded = assistantStep.mode !== 'idle'
-  const visibleOrbState = getAssistantVisibleOrbState(assistantStep, speechPlaybackKey)
-  const showVoiceWave = isAssistantVoiceWaveVisible(assistantStep, speechPlaybackKey)
+  const visibleOrbState = getAssistantVisibleOrbState(assistantStep)
+  const showVoiceWave = isAssistantVoiceWaveVisible(assistantStep)
   const contentRevealDelay = assistantStep.text || assistantStep.userText
     ? 0
     : NAVI_ASSISTANT_CONTENT_REVEAL_DELAY_SECONDS
@@ -3204,16 +3161,13 @@ function NaviOrbControl({
                   <AssistantUserText
                     animateWords={assistantStep.mode === 'user-listening'}
                     motionTiming={motionTiming}
-                    playbackKey={speechPlaybackKey}
                     reducedMotion={reducedMotion}
                     text={assistantStep.userText}
                   />
                 ) : null}
                 {assistantStep.text ? (
                   <AssistantSpeechText
-                    key={speechPlaybackKey}
                     motionTiming={motionTiming}
-                    playbackKey={speechPlaybackKey}
                     reducedMotion={reducedMotion}
                     text={assistantStep.text}
                   />
@@ -3238,19 +3192,13 @@ function NaviOrbControl({
 
 function AssistantSpeechText({
   motionTiming,
-  playbackKey,
   reducedMotion,
   text,
 }: {
   motionTiming: MotionTiming
-  playbackKey: string
   reducedMotion: boolean
   text: string
 }) {
-  if (!playbackKey) {
-    return null
-  }
-
   if (reducedMotion || motionTiming.duration === 0) {
     return (
       <p className="max-w-[17rem] text-pretty text-xl font-bold leading-8 tracking-normal">
@@ -3290,23 +3238,15 @@ function AssistantSpeechText({
 function AssistantUserText({
   animateWords,
   motionTiming,
-  playbackKey,
   reducedMotion,
   text,
 }: {
   animateWords: boolean
   motionTiming: MotionTiming
-  playbackKey: string
   reducedMotion: boolean
   text: string
 }) {
-  const shouldReveal = Boolean(playbackKey)
-
   if (!animateWords || reducedMotion || motionTiming.duration === 0) {
-    if (!shouldReveal) {
-      return null
-    }
-
     return (
       <p
         aria-label={text}
@@ -3316,10 +3256,6 @@ function AssistantUserText({
         {text}
       </p>
     )
-  }
-
-  if (!shouldReveal) {
-    return null
   }
 
   const words = text.split(/(\s+)/)
@@ -3365,8 +3301,16 @@ function AssistantRecommendationList({
   onRecommendationAction: (recommendation: NaviAssistantRecommendation) => void
   recommendations: NaviAssistantRecommendation[]
 }) {
+  const completedRecommendation = recommendations.length === 1 && recommendations[0]?.action === '확인'
+  const selectedRouteRecommendation = recommendations.length === 1
+    && recommendations[0]?.type === 'place'
+    && recommendations[0].title.includes('경로 변경')
   const recommendationCount = recommendations.reduce((count, item) => {
     if (item.type !== 'place') {
+      return count + 1
+    }
+
+    if (item.title.includes('경로 변경')) {
       return count + 1
     }
 
@@ -3375,7 +3319,7 @@ function AssistantRecommendationList({
 
   return (
     <motion.div
-      className="mt-2 flex min-h-0 w-full flex-col overflow-hidden rounded-2xl bg-[var(--nav-panel)]"
+      className="pointer-events-auto mt-2 flex min-h-0 w-full flex-col overflow-hidden rounded-2xl bg-[var(--nav-panel)]"
       data-testid="navi-assistant-recommendations"
       exit={{ opacity: 0, height: 0, y: 8 }}
       initial={{ opacity: 0, height: 0, y: 8 }}
@@ -3385,11 +3329,17 @@ function AssistantRecommendationList({
         duration: motionTiming.duration === 0 ? 0 : 0.28,
       }}
     >
-      <div className="flex items-center justify-between px-4 py-3 text-left">
-        <h3 className="text-sm font-bold tracking-normal">추천</h3>
-        <span className="text-xs font-semibold text-[var(--nav-muted)]">{recommendationCount}개</span>
-      </div>
-      <div className="min-h-0 max-h-[13.75rem] overflow-auto px-3 pb-3">
+      {completedRecommendation || selectedRouteRecommendation ? null : (
+        <div className="flex items-center justify-between px-4 py-3 text-left">
+          <h3 className="text-sm font-bold tracking-normal">추천</h3>
+          <span className="text-xs font-semibold text-[var(--nav-muted)]">{recommendationCount}개</span>
+        </div>
+      )}
+      <div
+        className={['min-h-0 overflow-x-hidden overflow-y-auto overscroll-contain px-3', completedRecommendation || selectedRouteRecommendation ? 'py-3' : 'max-h-[16rem] pb-3'].join(' ')}
+        data-testid="navi-assistant-recommendations-scroll"
+        onWheel={(event) => event.stopPropagation()}
+      >
         <div className="grid gap-2">
           {recommendations.map((item, index) => (
             <motion.div
@@ -3404,9 +3354,19 @@ function AssistantRecommendationList({
               }}
             >
               {item.type === 'place' ? (
-                <AssistantRouteRecommendationCard
+                selectedRouteRecommendation ? (
+                  <AssistantSelectedRouteCard
+                    recommendation={item}
+                  />
+                ) : (
+                  <AssistantRouteRecommendationCard
+                    recommendation={item}
+                    onAction={() => onRecommendationAction(item)}
+                  />
+                )
+              ) : completedRecommendation ? (
+                <AssistantCompletionCard
                   recommendation={item}
-                  onAction={() => onRecommendationAction(item)}
                 />
               ) : (
                 <>
@@ -3439,6 +3399,64 @@ function AssistantRecommendationList({
   )
 }
 
+function AssistantSelectedRouteCard({
+  recommendation,
+}: {
+  recommendation: Extract<NaviAssistantRecommendation, { type: 'place' }>
+}) {
+  const route = getSelectedRouteDisplay(recommendation)
+
+  return (
+    <div
+      aria-label={`${route.destinationLabel} ${route.primaryAction}`}
+      className="relative grid min-h-[3.625rem] grid-cols-[4.25rem_minmax(0,1fr)] items-center gap-3 overflow-hidden rounded-2xl border border-[var(--nav-primary)] bg-white px-3 py-2 text-left shadow-[0_12px_28px_rgb(23_70_162/0.14)]"
+      data-testid="navi-assistant-selected-route-card"
+      role="status"
+    >
+      <span
+        aria-hidden="true"
+        className="absolute right-3 top-3 size-2 rounded-full bg-[var(--nav-primary)] shadow-[0_0_0_4px_rgb(23_70_162/0.10)]"
+      />
+      <span className="min-w-0">
+        <span className="flex items-baseline gap-0.5 text-[var(--nav-ink)]">
+          <span className="text-2xl font-semibold leading-none">{route.durationValue}</span>
+          <span className="text-sm font-bold leading-none">{route.durationUnit}</span>
+        </span>
+        <span className="mt-1 block truncate text-xs font-semibold text-[var(--nav-muted)]">{route.distanceLabel}</span>
+      </span>
+      <span className="min-w-0 pr-1">
+        <span className="block truncate text-[0.9375rem] font-bold leading-5 text-[var(--nav-primary)]">{route.destinationLabel}</span>
+        <span className="mt-0.5 block truncate text-xs font-semibold text-[var(--nav-muted)]">{route.distanceLabel} · {route.tollLabel}</span>
+      </span>
+      <span className="absolute bottom-2 right-3 text-xs font-bold text-[var(--nav-primary)]">
+        {route.primaryAction}
+      </span>
+    </div>
+  )
+}
+
+function AssistantCompletionCard({
+  recommendation,
+}: {
+  recommendation: NaviAssistantRecommendation
+}) {
+  return (
+    <div
+      className="grid min-h-[3.625rem] grid-cols-[2.75rem_minmax(0,1fr)] items-center gap-3 rounded-2xl border border-[var(--nav-border)] bg-white px-3 py-2 text-left shadow-[0_10px_24px_rgb(15_23_42/0.06)]"
+      data-testid="navi-assistant-completion-card"
+      role="status"
+    >
+      <span className="grid size-10 place-items-center rounded-full bg-[var(--nav-primary-soft)] text-[var(--nav-primary)]">
+        <Check className="size-5" weight="bold" />
+      </span>
+      <span className="min-w-0">
+        <span className="block truncate text-[0.9375rem] font-bold leading-5 text-[var(--nav-ink)]">{recommendation.title}</span>
+        <span className="mt-0.5 block truncate text-xs font-semibold text-[var(--nav-muted)]">안내 경로가 적용되었습니다.</span>
+      </span>
+    </div>
+  )
+}
+
 function AssistantRouteRecommendationCard({
   recommendation,
   onAction,
@@ -3454,24 +3472,33 @@ function AssistantRouteRecommendationCard({
         <button
           aria-label={`${option.destinationLabel} ${route.primaryAction}`}
           className={[
-            'grid min-h-[3.25rem] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-xl border px-3 py-1.5 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]',
+            'relative grid min-h-[3.625rem] grid-cols-[4.25rem_minmax(0,1fr)] items-center gap-3 overflow-hidden rounded-2xl border px-3 py-2 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]',
             option.active
-              ? 'border-[var(--nav-primary)] bg-[var(--nav-primary-soft)] shadow-[0_10px_24px_rgb(23_70_162/0.10)]'
-              : 'border-[var(--nav-border)] bg-white hover:bg-[var(--nav-panel)]',
+              ? 'border-[var(--nav-primary)] bg-white shadow-[0_12px_28px_rgb(23_70_162/0.14)]'
+              : 'border-[var(--nav-border)] bg-white/90 hover:border-[var(--nav-primary-soft)] hover:bg-white',
           ].join(' ')}
           key={option.label}
           onClick={onAction}
           type="button"
         >
-          <span className="text-xl font-semibold leading-none text-[var(--nav-ink)]">{option.durationLabel}</span>
+          {option.active ? (
+            <span
+              aria-hidden="true"
+              className="absolute right-3 top-3 size-2 rounded-full bg-[var(--nav-primary)] shadow-[0_0_0_4px_rgb(23_70_162/0.10)]"
+            />
+          ) : null}
           <span className="min-w-0">
-            <span className={['block truncate text-base font-bold', option.active ? 'text-[var(--nav-primary)]' : 'text-[var(--nav-ink)]'].join(' ')}>
+            <span className="flex items-baseline gap-0.5 text-[var(--nav-ink)]">
+              <span className="text-2xl font-semibold leading-none">{option.durationValue}</span>
+              <span className="text-sm font-bold leading-none">{option.durationUnit}</span>
+            </span>
+            <span className="mt-1 block truncate text-xs font-semibold text-[var(--nav-muted)]">{option.distanceLabel}</span>
+          </span>
+          <span className="min-w-0 pr-3">
+            <span className={['block truncate text-[0.9375rem] font-bold leading-5', option.active ? 'text-[var(--nav-primary)]' : 'text-[var(--nav-ink)]'].join(' ')}>
               {option.destinationLabel}
             </span>
-          </span>
-          <span className="grid justify-items-end gap-1 text-right">
-            <span className="text-sm font-bold text-[var(--nav-ink)]">{option.distanceLabel}</span>
-            <span className="text-xs font-semibold text-[var(--nav-muted)]">{option.tollLabel}</span>
+            <span className="mt-0.5 block truncate text-xs font-semibold text-[var(--nav-muted)]">{option.tollLabel}</span>
           </span>
         </button>
       ))}
@@ -3484,9 +3511,9 @@ function getRouteRecommendationDisplay(recommendation: Extract<NaviAssistantReco
     return {
       primaryAction: '경유지 추가',
       options: [
-        { label: '추천 경로', destinationLabel: '군자 휴게소', durationLabel: '12분', distanceLabel: '8.6km', tollLabel: '통행료 0원', active: true },
-        { label: '최단 거리 경로', destinationLabel: '구리 휴게소', durationLabel: '15분', distanceLabel: '7.9km', tollLabel: '통행료 0원', active: false },
-        { label: '고속도로 우선 경로', destinationLabel: '별내 휴게소', durationLabel: '11분', distanceLabel: '10.4km', tollLabel: '통행료 1,200원', active: false },
+        { label: '추천 경로', destinationLabel: '군자 휴게소', durationValue: '12', durationUnit: '분', distanceLabel: '8.6km', tollLabel: '통행료 0원', active: true },
+        { label: '최단 거리 경로', destinationLabel: '구리 휴게소', durationValue: '15', durationUnit: '분', distanceLabel: '7.9km', tollLabel: '통행료 0원', active: false },
+        { label: '고속도로 우선 경로', destinationLabel: '별내 휴게소', durationValue: '11', durationUnit: '분', distanceLabel: '10.4km', tollLabel: '통행료 1,200원', active: false },
       ],
     }
   }
@@ -3495,9 +3522,9 @@ function getRouteRecommendationDisplay(recommendation: Extract<NaviAssistantReco
     return {
       primaryAction: '안내 시작',
       options: [
-        { label: '추천 경로', destinationLabel: getRouteDestinationLabel(recommendation), durationLabel: '4분', distanceLabel: '2.4km', tollLabel: '통행료 0원', active: true },
-        { label: '최단 거리 경로', destinationLabel: getRouteDestinationLabel(recommendation), durationLabel: '6분', distanceLabel: '2.1km', tollLabel: '통행료 0원', active: false },
-        { label: '안전 우선 경로', destinationLabel: getRouteDestinationLabel(recommendation), durationLabel: '8분', distanceLabel: '3.6km', tollLabel: '통행료 0원', active: false },
+        { label: '추천 경로', destinationLabel: getRouteDestinationLabel(recommendation), durationValue: '4', durationUnit: '분', distanceLabel: '2.4km', tollLabel: '통행료 0원', active: true },
+        { label: '최단 거리 경로', destinationLabel: getRouteDestinationLabel(recommendation), durationValue: '6', durationUnit: '분', distanceLabel: '2.1km', tollLabel: '통행료 0원', active: false },
+        { label: '안전 우선 경로', destinationLabel: getRouteDestinationLabel(recommendation), durationValue: '8', durationUnit: '분', distanceLabel: '3.6km', tollLabel: '통행료 0원', active: false },
       ],
     }
   }
@@ -3505,10 +3532,23 @@ function getRouteRecommendationDisplay(recommendation: Extract<NaviAssistantReco
   return {
     primaryAction: '안내 시작',
     options: [
-      { label: '추천 경로', destinationLabel: '중랑 졸음쉼터', durationLabel: '4분', distanceLabel: '2.4km', tollLabel: '통행료 0원', active: true },
-      { label: '최단 거리 경로', destinationLabel: '군자 졸음쉼터', durationLabel: '6분', distanceLabel: '2.1km', tollLabel: '통행료 0원', active: false },
-      { label: '정체 회피 경로', destinationLabel: '사가정 졸음쉼터', durationLabel: '7분', distanceLabel: '3.2km', tollLabel: '통행료 0원', active: false },
+      { label: '추천 경로', destinationLabel: '중랑 졸음쉼터', durationValue: '4', durationUnit: '분', distanceLabel: '2.4km', tollLabel: '통행료 0원', active: true },
+      { label: '최단 거리 경로', destinationLabel: '군자 졸음쉼터', durationValue: '6', durationUnit: '분', distanceLabel: '2.1km', tollLabel: '통행료 0원', active: false },
+      { label: '정체 회피 경로', destinationLabel: '사가정 졸음쉼터', durationValue: '7', durationUnit: '분', distanceLabel: '3.2km', tollLabel: '통행료 0원', active: false },
     ],
+  }
+}
+
+function getSelectedRouteDisplay(recommendation: Extract<NaviAssistantRecommendation, { type: 'place' }>) {
+  const restStopRoute = recommendation.detail.includes('휴게소') || recommendation.detail.includes('경로에서 가까운 휴게소')
+
+  return {
+    destinationLabel: restStopRoute ? '군자 휴게소' : '중랑 졸음쉼터',
+    durationValue: restStopRoute ? '12' : '4',
+    durationUnit: '분',
+    distanceLabel: restStopRoute ? '8.6km' : '2.4km',
+    tollLabel: '통행료 0원',
+    primaryAction: '안내 중',
   }
 }
 

@@ -6,7 +6,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   getAssistantSpeechCharacterDelaySeconds,
   getAssistantVisibleOrbState,
-  isAssistantPlaybackReady,
   isAssistantVoiceWaveVisible,
   NavigationShell,
 } from './NavigationShell'
@@ -909,20 +908,45 @@ describe('NavigationShell', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '다음 AI 시나리오 단계' }))
     expect(screen.getByTestId('navi-assistant-recommendations')).toBeInTheDocument()
+    expect(screen.getByTestId('navi-assistant-recommendations')).toHaveClass('pointer-events-auto')
+    expect(screen.getByTestId('navi-assistant-recommendations-scroll')).toHaveClass('max-h-[16rem]')
+    expect(screen.getByTestId('navi-assistant-recommendations-scroll')).toHaveClass('overscroll-contain')
     expect(screen.getByTestId('navi-assistant-route-recommendation')).toBeInTheDocument()
     expect(await screen.findByTestId('voice-wave')).toHaveAttribute('data-active', 'true')
     expect(screen.queryByText('추천 경로')).not.toBeInTheDocument()
     expect(screen.queryByText('최단 거리 경로')).not.toBeInTheDocument()
     expect(screen.queryByText('정체 회피 경로')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '중랑 졸음쉼터 안내 시작' })).toBeInTheDocument()
+    const recommendedRouteButton = screen.getByRole('button', { name: '중랑 졸음쉼터 안내 시작' })
+    expect(recommendedRouteButton).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '군자 졸음쉼터 안내 시작' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '사가정 졸음쉼터 안내 시작' })).toBeInTheDocument()
-    expect(screen.getByText('4분')).toBeInTheDocument()
-    expect(screen.getByText('2.4km')).toBeInTheDocument()
+    expect(within(recommendedRouteButton).getByText('4')).toBeInTheDocument()
+    expect(within(recommendedRouteButton).getByText('분')).toBeInTheDocument()
+    expect(within(recommendedRouteButton).getByText('2.4km')).toBeInTheDocument()
     expect(screen.getAllByText('통행료 0원')).toHaveLength(3)
     expect(screen.getByText('중랑 졸음쉼터')).toBeInTheDocument()
     expect(screen.getByText('군자 졸음쉼터')).toBeInTheDocument()
     expect(screen.getByText('사가정 졸음쉼터')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '다음 AI 시나리오 단계' }))
+    fireEvent.click(screen.getByRole('button', { name: '다음 AI 시나리오 단계' }))
+    const selectedRouteCard = screen.getByTestId('navi-assistant-selected-route-card')
+    expect(selectedRouteCard).toBeInTheDocument()
+    expect(screen.queryByText('추천')).not.toBeInTheDocument()
+    expect(screen.queryByText('1개')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('navi-assistant-route-recommendation')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '군자 졸음쉼터 안내 시작' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '사가정 졸음쉼터 안내 시작' })).not.toBeInTheDocument()
+    expect(within(selectedRouteCard).getByText('중랑 졸음쉼터')).toBeInTheDocument()
+    expect(within(selectedRouteCard).getByText('안내 중')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '다음 AI 시나리오 단계' }))
+    const completionCard = screen.getByTestId('navi-assistant-completion-card')
+    expect(completionCard).toBeInTheDocument()
+    expect(screen.queryByText('추천')).not.toBeInTheDocument()
+    expect(screen.queryByText('1개')).not.toBeInTheDocument()
+    expect(within(completionCard).getByText('완료')).toBeInTheDocument()
+    expect(within(completionCard).getByText('안내 경로가 적용되었습니다.')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'AI 시나리오 초기화' }))
     expect(screen.queryByTestId('navi-assistant-panel')).not.toBeInTheDocument()
@@ -955,29 +979,23 @@ describe('NavigationShell', () => {
     expect(screen.getByText('Evening Route')).toBeInTheDocument()
   })
 
-  it('keeps assistant speech reveal synced to the current playback key', () => {
+  it('keeps assistant speech reveal timing deterministic without audio playback', () => {
     expect(getAssistantSpeechCharacterDelaySeconds(0)).toBe(0)
     expect(getAssistantSpeechCharacterDelaySeconds(3)).toBeCloseTo(0.054)
-    expect(isAssistantPlaybackReady('scenario-2-agent:text', 'scenario-2-agent:text')).toBe(true)
-    expect(isAssistantPlaybackReady('scenario-1-agent:text', 'scenario-2-agent:text')).toBe(false)
-    expect(isAssistantPlaybackReady('', 'scenario-2-agent:text')).toBe(false)
   })
 
-  it('keeps assistant speaking orb and voice wave synced to playback start', () => {
+  it('shows assistant speaking orb and voice wave without audio playback', () => {
     const agentStep = {
       energy: 0.6,
       id: 'agent-step',
       label: '에이전트 음성 안내',
       mode: 'assistant-speaking' as const,
       orbState: 'speaking' as const,
-      speechRole: 'agent' as const,
       text: '어디로 안내할까요?',
     }
 
-    expect(getAssistantVisibleOrbState(agentStep, '')).toBe('thinking')
-    expect(isAssistantVoiceWaveVisible(agentStep, '')).toBe(false)
-    expect(getAssistantVisibleOrbState(agentStep, 'route-search-voice-1-agent:어디로 안내할까요?')).toBe('speaking')
-    expect(isAssistantVoiceWaveVisible(agentStep, 'route-search-voice-1-agent:어디로 안내할까요?')).toBe(true)
+    expect(getAssistantVisibleOrbState(agentStep)).toBe('speaking')
+    expect(isAssistantVoiceWaveVisible(agentStep)).toBe(true)
   })
 
   it('closes the expanded Navi assistant panel back to the floating orb', () => {

@@ -12,8 +12,6 @@ export type AiaiScenarioId =
   | 'safety-report'
   | 'settings-check'
 
-export type SpeechRole = 'agent' | 'user'
-
 export interface AiaiScenarioStep {
   title: string
   description: string
@@ -62,19 +60,10 @@ export interface NaviAssistantStep {
   text?: string
   userText?: string
   recommendations?: NaviAssistantRecommendation[]
-  speechRole?: SpeechRole
-  audioSrc?: string
 }
 
 export interface NaviAssistantScenario {
   id: AiaiScenarioId
   title: string
   steps: NaviAssistantStep[]
-}
-
-export interface ScenarioSpeech {
-  key: string
-  role: SpeechRole
-  text: string
-  audioSrc?: string
 }
