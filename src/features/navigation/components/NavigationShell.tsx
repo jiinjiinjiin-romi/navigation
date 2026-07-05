@@ -1268,9 +1268,10 @@ export function NavigationShell({
   const assistantStep = assistantScenario.steps[
     Math.min(assistantStepIndex, assistantScenario.steps.length - 1)
   ]
+  const selectedProfileName = selectedProfile?.displayName ?? null
   const demoActive = navigationEntryMode === 'demo-scenario' && Boolean(demoScenarioState)
   const demoNavigationLocked = demoActive && demoScenarioState?.phase === 'setup'
-  const demoAssistantStep = demoScenarioState ? createDemoAssistantStep(demoScenarioState) : undefined
+  const demoAssistantStep = demoScenarioState ? createDemoAssistantStep(demoScenarioState, selectedProfileName) : undefined
   const visibleAssistantStep = demoAssistantStep ?? assistantStep
   const motionTiming = shouldReduceMotion
     ? { duration: 0 }
@@ -1895,7 +1896,7 @@ export function NavigationShell({
                   setMusicModalOpen(false)
                 }
               }}
-              profileName={selectedProfile?.displayName ?? null}
+              profileName={selectedProfileName}
               reducedMotion={Boolean(shouldReduceMotion)}
             />
             {!activeRoute ? (
@@ -2206,6 +2207,7 @@ export function NavigationShell({
           motionTiming={motionTiming}
           routeReady={Boolean(activeRoute)}
           routeOptionsReady={routeOptionsReady}
+          profileName={selectedProfileName}
           state={demoScenarioState}
           onExit={exitActiveDemoScenario}
           onNext={advanceActiveDemoScenario}
@@ -3861,7 +3863,10 @@ function getRouteDestinationLabel(recommendation: Extract<NaviAssistantRecommend
   return destination || recommendation.meta
 }
 
-function createDemoAssistantStep(state: DemoScenarioControllerState): NaviAssistantStep {
+function createDemoAssistantStep(
+  state: DemoScenarioControllerState,
+  profileName: string | null,
+): NaviAssistantStep {
   const setupEvent = state.setupEvent
   const scenarioEvent = state.scenarioEvent
 
@@ -3896,7 +3901,7 @@ function createDemoAssistantStep(state: DemoScenarioControllerState): NaviAssist
         ? 'success'
         : 'speaking',
       energy: scenarioEvent.uiState.riskLevel === 'HIGH' ? 0.86 : 0.64,
-      text: scenarioEvent.romiMessage,
+      text: personalizeDemoRomiMessage(scenarioEvent.romiMessage, profileName),
     }
   }
 
@@ -3907,6 +3912,12 @@ function createDemoAssistantStep(state: DemoScenarioControllerState): NaviAssist
     orbState: 'idle',
     energy: 0,
   }
+}
+
+export function personalizeDemoRomiMessage(message: string, profileName: string | null): string {
+  const callName = profileName?.trim() || '운전자'
+
+  return message.split('{{profileName}}').join(callName)
 }
 
 function DemoScenarioSelection({
@@ -3982,6 +3993,7 @@ function DemoScenarioSelection({
 
 function DemoScenarioPresenterPanel({
   motionTiming,
+  profileName,
   routeOptionsReady,
   routeReady,
   state,
@@ -3991,6 +4003,7 @@ function DemoScenarioPresenterPanel({
   onRespond,
 }: {
   motionTiming: MotionTiming
+  profileName: string | null
   routeOptionsReady: boolean
   routeReady: boolean
   state: DemoScenarioControllerState
@@ -4002,7 +4015,10 @@ function DemoScenarioPresenterPanel({
   const currentSetupEvent = state.setupEvent
   const currentScenarioEvent = state.scenarioEvent
   const currentTitle = currentSetupEvent?.title ?? currentScenarioEvent?.uiState.visibleStatus ?? state.scenario.title
-  const currentDescription = currentSetupEvent?.description ?? currentScenarioEvent?.romiMessage ?? '다음 단계로 진행합니다.'
+  const currentDescription = currentSetupEvent?.description
+    ?? (currentScenarioEvent?.romiMessage
+      ? personalizeDemoRomiMessage(currentScenarioEvent.romiMessage, profileName)
+      : undefined)
   const currentRiskLevel = currentScenarioEvent?.uiState.riskLevel ?? 'LOW'
   const nextDisabled = isDemoPresenterNextDisabled(state, routeOptionsReady, routeReady)
   const waitingText = getDemoPresenterWaitingText(state, routeOptionsReady, routeReady)
@@ -4032,9 +4048,11 @@ function DemoScenarioPresenterPanel({
             </span>
           </div>
           <div className="mt-2 text-base font-bold leading-6">{currentTitle}</div>
-          <p className="mt-2 text-sm font-semibold leading-6 text-[var(--nav-muted)]">
-            {currentDescription}
-          </p>
+          {currentDescription ? (
+            <p className="mt-2 text-sm font-semibold leading-6 text-[var(--nav-muted)]">
+              {currentDescription}
+            </p>
+          ) : null}
           {waitingText ? (
             <p className="mt-2 text-xs font-bold text-[var(--nav-primary)]">{waitingText}</p>
           ) : null}

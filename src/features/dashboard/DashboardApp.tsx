@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react'
+import { useEffect, useId, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react'
 import {
   Area,
   AreaChart,
@@ -29,12 +29,10 @@ import {
   GearSix,
   HouseLine,
   List,
-  MapPin,
   NavigationArrow,
   ShieldCheck,
   SignOut,
   SlidersHorizontal,
-  Sparkle,
   SteeringWheel,
   TrendUp,
   UserCircle,
@@ -57,6 +55,16 @@ import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { DriverVideoPanel } from '@/features/navigation/components/NavigationShell'
 import { cn } from '@/lib/utils'
+import { getBootstrap, type BootstrapAccount } from '../navigation/api/bootstrapApi'
+import {
+  listProfiles,
+  selectProfile,
+  type AgentPersonality,
+  type BehaviorWarningSensitivity,
+  type Profile,
+} from '../navigation/api/profileApi'
+import { searchPlaces } from '../navigation/api/tmapApi'
+import type { Place } from '../navigation/types'
 
 const SESSION_KEY = 'jiin-dashboard-session'
 
@@ -154,6 +162,14 @@ type ProfileSettings = {
   agentPersonality: 'friendly' | 'formal' | 'warm' | 'concise'
   preferences: PreferenceState
   behaviorSensitivity: Record<BehaviorType, number>
+}
+
+type DashboardProfileState = {
+  account: BootstrapAccount | null
+  error: boolean
+  loading: boolean
+  profiles: Profile[]
+  selectedProfileId: string | null
 }
 
 type FavoritePlace = {
@@ -265,6 +281,14 @@ const DEFAULT_PROFILE_SETTINGS: ProfileSettings = {
     REACHING_BEHIND: 4,
     SMOKING: 3,
   },
+}
+
+const DEFAULT_PROFILE_STATE: DashboardProfileState = {
+  account: null,
+  error: false,
+  loading: false,
+  profiles: [],
+  selectedProfileId: null,
 }
 
 const DEFAULT_FAVORITE_PLACES: FavoritePlace[] = [
@@ -382,6 +406,41 @@ function getTrendData(filteredTrips: Trip[]) {
   }))
 }
 
+function isSameDashboardValue<T>(left: T, right: T) {
+  return JSON.stringify(left) === JSON.stringify(right)
+}
+
+function toDashboardAgentPersonality(value: AgentPersonality): ProfileSettings['agentPersonality'] {
+  if (value === 'FORMAL') return 'formal'
+  if (value === 'WARM') return 'warm'
+  return 'friendly'
+}
+
+function normalizeDashboardSensitivity(
+  value: BehaviorWarningSensitivity | undefined,
+): ProfileSettings['behaviorSensitivity'] {
+  return behaviorMetrics.reduce<ProfileSettings['behaviorSensitivity']>((result, metric) => {
+    result[metric.type] = value?.[metric.type] ?? DEFAULT_PROFILE_SETTINGS.behaviorSensitivity[metric.type]
+    return result
+  }, { ...DEFAULT_PROFILE_SETTINGS.behaviorSensitivity })
+}
+
+function createProfileSettingsFromProfile(profile: Profile): ProfileSettings {
+  return {
+    displayName: profile.displayName,
+    callName: profile.agentCallName,
+    reportEmail: profile.reportEmail ?? '',
+    agentPersonality: toDashboardAgentPersonality(profile.agentPersonality),
+    preferences: {
+      mapMode: '2D',
+      guidanceVolume: profile.guidanceVolume ?? DEFAULT_PROFILE_SETTINGS.preferences.guidanceVolume,
+      ttsSpeed: profile.ttsSpeed ?? DEFAULT_PROFILE_SETTINGS.preferences.ttsSpeed,
+      warningMode: profile.warningSensitivity === 'HIGH' ? 'sensitive' : 'balanced',
+    },
+    behaviorSensitivity: normalizeDashboardSensitivity(profile.behaviorWarningSensitivity),
+  }
+}
+
 function getInitialPath(): DashboardPath {
   const path = window.location.pathname
   if (path === '/dashboard/reports' || path === '/dashboard/videos' || path === '/dashboard/behavior' || path === '/dashboard/trips') {
@@ -406,6 +465,7 @@ export function DashboardApp() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [dashboardState, setDashboardState] = useState<DashboardState>(DEFAULT_DASHBOARD_STATE)
   const [profileSettings, setProfileSettings] = useState<ProfileSettings>(DEFAULT_PROFILE_SETTINGS)
+  const [profileState, setProfileState] = useState<DashboardProfileState>(DEFAULT_PROFILE_STATE)
   const [favoritePlaces, setFavoritePlaces] = useState<FavoritePlace[]>(DEFAULT_FAVORITE_PLACES)
   const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>(DEFAULT_NOTIFICATIONS)
   const [toasts, setToasts] = useState<ToastMessage[]>([])
@@ -438,6 +498,7 @@ export function DashboardApp() {
   const selectedTrip = analysisTrips.find((trip) => trip.id === dashboardState.selectedTripId) ?? analysisTrips[0]
   const selectedTripEvents = selectedTrip ? getTripEvents(selectedTrip.id) : []
   const selectedEvent = selectedTripEvents.find((event) => event.id === dashboardState.selectedEventId) ?? selectedTripEvents[0] ?? analysisEvents[0]
+  const selectedDashboardProfile = profileState.profiles.find((profile) => profile.id === profileState.selectedProfileId) ?? profileState.profiles[0]
 
   const notify = (message: string, tone: ToastTone = 'success') => {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`
@@ -478,6 +539,55 @@ export function DashboardApp() {
     }
   }, [analysisTrips, dashboardState.selectedTripId])
 
+  useEffect(() => {
+    if (!authenticated) {
+      setProfileState(DEFAULT_PROFILE_STATE)
+      return undefined
+    }
+
+    const controller = new AbortController()
+    let disposed = false
+
+    setProfileState((current) => ({ ...current, error: false, loading: true }))
+
+    Promise.all([
+      getBootstrap(undefined, controller.signal),
+      listProfiles(undefined, controller.signal),
+    ])
+      .then(([bootstrap, profileList]) => {
+        if (disposed) return
+
+        const profiles = profileList.profiles
+        const selectedProfileId = bootstrap.selectedProfileId
+          ?? profiles.find((profile) => profile.lastUsedAt)?.id
+          ?? profiles[0]?.id
+          ?? null
+        const selectedProfile = profiles.find((profile) => profile.id === selectedProfileId) ?? profiles[0]
+
+        setProfileState({
+          account: bootstrap.account,
+          error: false,
+          loading: false,
+          profiles,
+          selectedProfileId: selectedProfile?.id ?? null,
+        })
+
+        if (selectedProfile) {
+          setProfileSettings(createProfileSettingsFromProfile(selectedProfile))
+        }
+      })
+      .catch((error: unknown) => {
+        if (disposed || controller.signal.aborted) return
+        setProfileState((current) => ({ ...current, error: true, loading: false }))
+        console.error('Dashboard profile load failed', error)
+      })
+
+    return () => {
+      disposed = true
+      controller.abort()
+    }
+  }, [authenticated])
+
   const handleLogin = () => {
     localStorage.setItem(SESSION_KEY, 'active')
     setAuthenticated(true)
@@ -488,6 +598,18 @@ export function DashboardApp() {
     localStorage.removeItem(SESSION_KEY)
     setAuthenticated(false)
     navigate('/dashboard/login')
+  }
+
+  const handleSelectDashboardProfile = (profileId: string) => {
+    const profile = profileState.profiles.find((item) => item.id === profileId)
+    if (!profile) return
+
+    setProfileState((current) => ({ ...current, selectedProfileId: profileId }))
+    setProfileSettings(createProfileSettingsFromProfile(profile))
+    void selectProfile(profileId).catch((error: unknown) => {
+      setProfileState((current) => ({ ...current, error: true }))
+      console.error('Dashboard profile select failed', error)
+    })
   }
 
   if (!authenticated || path === '/dashboard/login') {
@@ -501,6 +623,9 @@ export function DashboardApp() {
           activePath={path}
           onLogout={handleLogout}
           onNavigate={navigate}
+          onSelectProfile={handleSelectDashboardProfile}
+          profileState={profileState}
+          selectedProfile={selectedDashboardProfile}
         />
         <div className="flex min-h-dvh min-w-0 flex-1 flex-col lg:min-h-0">
           <ShadcnButton className="fixed left-4 top-4 z-40 rounded-lg shadow-theme-xs lg:hidden" onClick={() => setMobileNavOpen(true)} type="button" aria-label="모바일 메뉴 열기" size="icon" variant="outline">
@@ -529,6 +654,7 @@ export function DashboardApp() {
                   notify={notify}
                   path={path}
                   profileSettings={profileSettings}
+                  selectedDashboardProfile={selectedDashboardProfile}
                   selectedEvent={selectedEvent}
                   selectedTrip={selectedTrip}
                   setDashboardState={setDashboardState}
@@ -573,6 +699,12 @@ export function DashboardApp() {
                   <X className="size-5" weight="bold" />
                 </ShadcnButton>
               </div>
+              <DashboardProfilePicker
+                className="mb-4"
+                onSelectProfile={handleSelectDashboardProfile}
+                profileState={profileState}
+                selectedProfile={selectedDashboardProfile}
+              />
               <DashboardNavList activePath={path} onNavigate={navigate} />
             </motion.aside>
           </motion.div>
@@ -587,28 +719,11 @@ function MockLoginPage({ onLogin, reducedMotion }: { onLogin: () => void; reduce
   return (
     <main className="grid min-h-screen place-items-center overflow-hidden bg-gray-50 px-5 py-10 text-gray-900">
       <motion.section
-        className="relative grid w-full max-w-5xl overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm lg:grid-cols-[1.05fr_0.95fr]"
+        className="relative w-full max-w-md overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm"
         initial={reducedMotion ? false : { opacity: 0, y: 16, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
       >
-        <div className="relative min-h-[22rem] overflow-hidden bg-gray-900 p-8 text-white lg:p-10">
-          <div className="relative z-10 flex h-full flex-col justify-between">
-            <DashboardBrand inverted />
-            <div>
-              <div className="mb-5 inline-flex items-center gap-2 rounded-lg bg-white/10 px-3 py-2 text-sm font-medium text-white ring-1 ring-white/15">
-                <Sparkle className="size-4" weight="fill" />
-                주행 데이터와 Navi 설정을 한 곳에서
-              </div>
-              <h1 className="max-w-md text-4xl font-semibold tracking-normal text-white sm:text-5xl">
-                JIIN 대시보드 로그인
-              </h1>
-              <p className="mt-4 max-w-sm text-sm font-medium leading-6 text-white/70">
-                최근 주행, 행동 분석, 리포트, 주행 영상과 네비게이션 설정을 운전자 본인 기준으로 확인합니다.
-              </p>
-            </div>
-          </div>
-        </div>
         <form
           className="p-7 sm:p-9 lg:p-10"
           onSubmit={(event) => {
@@ -616,10 +731,6 @@ function MockLoginPage({ onLogin, reducedMotion }: { onLogin: () => void; reduce
             onLogin()
           }}
         >
-          <div className="mb-8">
-            <p className="text-sm font-medium text-brand-500">Mock account</p>
-            <h2 className="mt-2 text-2xl font-semibold tracking-normal text-gray-900">운전자 계정으로 시작</h2>
-          </div>
           <div className="grid gap-2">
             <Label className="text-sm font-medium text-gray-700" htmlFor="dashboard-login-email">이메일</Label>
             <Input className="h-11 bg-white px-4 text-sm font-medium" defaultValue="driver@example.com" id="dashboard-login-email" type="email" />
@@ -629,12 +740,9 @@ function MockLoginPage({ onLogin, reducedMotion }: { onLogin: () => void; reduce
             <Input className="h-11 bg-white px-4 text-sm font-medium" defaultValue="demo-password" id="dashboard-login-password" type="password" />
           </div>
           <ShadcnButton className="mt-7 h-11 w-full rounded-lg" type="submit">
-            대시보드 시작
+            로그인
             <CaretRight className="size-4" weight="bold" />
           </ShadcnButton>
-          <p className="mt-5 text-xs font-medium leading-5 text-gray-500">
-            백엔드 인증 없이 localStorage 기반 mock 세션으로 동작합니다.
-          </p>
         </form>
       </motion.section>
     </main>
@@ -662,10 +770,16 @@ function DashboardSidebar({
   activePath,
   onLogout,
   onNavigate,
+  onSelectProfile,
+  profileState,
+  selectedProfile,
 }: {
   activePath: DashboardPath
   onLogout: () => void
   onNavigate: (path: DashboardPath) => void
+  onSelectProfile: (profileId: string) => void
+  profileState: DashboardProfileState
+  selectedProfile?: Profile
 }) {
   return (
     <aside className="sticky top-5 hidden w-[17rem] shrink-0 self-start rounded-2xl border border-gray-200 bg-white p-4 shadow-theme-xs lg:block">
@@ -674,16 +788,17 @@ function DashboardSidebar({
         <DashboardNavList activePath={activePath} onNavigate={onNavigate} />
       </div>
       <div className="mt-6 border-t border-gray-200 pt-4">
-        <div className="flex items-center gap-3">
-          <div className="grid size-9 place-items-center rounded-lg bg-brand-50 text-brand-500">
-            <SteeringWheel className="size-5" weight="fill" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-medium text-gray-800">안정현 님</div>
-          </div>
+        <div className="flex items-end gap-2">
+          <DashboardProfilePicker
+            className="min-w-0 flex-1 border-0 bg-transparent p-0"
+            compact
+            onSelectProfile={onSelectProfile}
+            profileState={profileState}
+            selectedProfile={selectedProfile}
+          />
           <ShadcnButton
             aria-label="로그아웃"
-            className="size-9 shrink-0 rounded-lg text-gray-500 hover:text-red-600"
+            className="size-10 shrink-0 rounded-lg text-gray-500 hover:text-red-600"
             onClick={onLogout}
             size="icon"
             type="button"
@@ -694,6 +809,74 @@ function DashboardSidebar({
         </div>
       </div>
     </aside>
+  )
+}
+
+function DashboardProfilePicker({
+  className,
+  compact = false,
+  onSelectProfile,
+  profileState,
+  selectedProfile,
+}: {
+  className?: string
+  compact?: boolean
+  onSelectProfile: (profileId: string) => void
+  profileState: DashboardProfileState
+  selectedProfile?: Profile
+}) {
+  const disabled = profileState.loading || profileState.profiles.length === 0
+  const select = (
+    <Select
+      disabled={disabled}
+      onValueChange={onSelectProfile}
+      value={selectedProfile?.id ?? ''}
+    >
+      <SelectTrigger aria-label="대시보드 프로필" className={cn('w-full min-w-0 bg-white [&>span]:min-w-0 [&>span]:truncate', compact ? 'h-10 rounded-lg px-3' : 'h-10')}>
+        <SelectValue placeholder={profileState.loading ? '불러오는 중' : '프로필 선택'} />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectGroup>
+          {profileState.profiles.map((profile) => (
+            <SelectItem key={profile.id} value={profile.id}>
+              {profile.displayName}
+            </SelectItem>
+          ))}
+        </SelectGroup>
+      </SelectContent>
+    </Select>
+  )
+
+  if (compact) {
+    return (
+      <div className={cn('flex min-w-0 items-center gap-2', className)}>
+        <UserCircle className="size-5 shrink-0 text-gray-500" weight="bold" />
+        <div className="min-w-0 flex-1">
+          {select}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <section className={cn('rounded-xl border border-gray-200 bg-gray-50 p-3', className)} aria-label="대시보드 프로필 선택">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="text-xs font-semibold text-gray-500">프로필</div>
+        {profileState.error ? (
+          <span className="text-[11px] font-semibold text-red-600">연결 확인 필요</span>
+        ) : null}
+      </div>
+      {select}
+      {selectedProfile ? (
+        <p className="mt-2 truncate text-xs font-medium text-gray-500">
+          {selectedProfile.agentCallName} 호출 · {selectedProfile.reportEmail ?? '리포트 이메일 없음'}
+        </p>
+      ) : (
+        <p className="mt-2 text-xs font-medium text-gray-500">
+          로그인 후 프로필 설정을 불러옵니다.
+        </p>
+      )}
+    </section>
   )
 }
 
@@ -833,6 +1016,7 @@ type DashboardPageProps = {
   notify: (message: string, tone?: ToastTone) => void
   path: DashboardPath
   profileSettings: ProfileSettings
+  selectedDashboardProfile?: Profile
   selectedEvent?: VideoEvent
   selectedTrip?: Trip
   setDashboardState: Dispatch<SetStateAction<DashboardState>>
@@ -1429,8 +1613,19 @@ function NavigationSettingsPage({ favoritePlaces, notify, profileSettings, setFa
   const [placesDraft, setPlacesDraft] = useState(favoritePlaces)
   const [activeTab, setActiveTab] = useState<'settings' | 'favorites'>('settings')
   const [saved, setSaved] = useState(false)
+  const hasChanges = !isSameDashboardValue(draft, profileSettings) || !isSameDashboardValue(placesDraft, favoritePlaces)
+
+  useEffect(() => {
+    setDraft(profileSettings)
+  }, [profileSettings])
+
+  useEffect(() => {
+    setPlacesDraft(favoritePlaces)
+  }, [favoritePlaces])
 
   const save = () => {
+    if (!hasChanges) return
+
     setProfileSettings(draft)
     setFavoritePlaces(placesDraft)
     setSaved(true)
@@ -1465,7 +1660,7 @@ function NavigationSettingsPage({ favoritePlaces, notify, profileSettings, setFa
     <section>
       <PageHeader
         title="네비게이션 설정"
-        action={<div className="flex flex-wrap gap-2"><DashboardActionButton variant="secondary" onClick={cancel}>취소</DashboardActionButton><DashboardActionButton variant="secondary" onClick={reset}>초기화</DashboardActionButton><DashboardActionButton onClick={save}>설정 저장</DashboardActionButton>{saved ? <Badge className="h-10 rounded-lg px-3" variant="secondary">저장됨</Badge> : null}</div>}
+        action={<div className="flex flex-wrap gap-2"><DashboardActionButton disabled={!hasChanges} variant="secondary" onClick={cancel}>취소</DashboardActionButton><DashboardActionButton variant="secondary" onClick={reset}>초기화</DashboardActionButton><DashboardActionButton disabled={!hasChanges} onClick={save}>설정 저장</DashboardActionButton>{saved ? <Badge className="h-10 rounded-lg px-3" variant="secondary">저장됨</Badge> : null}</div>}
       />
       <Tabs className="mb-4" value={activeTab} onValueChange={(value) => setActiveTab(value as 'settings' | 'favorites')}>
         <TabsList variant="line">
@@ -1516,7 +1711,7 @@ function NavigationSettingsPage({ favoritePlaces, notify, profileSettings, setFa
             {placesDraft.map((place) => (
               <div className="rounded-lg border border-gray-200 bg-gray-50 p-4" key={place.id}>
                 <div className="mb-3 flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2 text-sm font-medium text-gray-800"><MapPin className="size-4 text-brand-500" weight="fill" />{place.role === 'origin' ? '출발지' : '목적지'}</div>
+                  <SelectControl label="유형" value={place.role} onChange={(value) => updatePlace(place.id, { role: value as FavoritePlace['role'] })} options={[['origin', '출발지'], ['destination', '목적지']]} />
                   <div className="flex gap-2">
                     <ShadcnButton className={cn('h-7 rounded-lg px-2 text-xs', place.pinned && 'bg-brand-50 text-brand-500 hover:bg-brand-50')} onClick={() => updatePlace(place.id, { pinned: !place.pinned })} size="sm" type="button" variant="outline">고정</ShadcnButton>
                     <ShadcnButton className="h-7 rounded-lg px-2 text-xs text-red-500" onClick={() => setPlacesDraft((current) => current.filter((item) => item.id !== place.id))} size="sm" type="button" variant="outline">삭제</ShadcnButton>
@@ -1524,10 +1719,7 @@ function NavigationSettingsPage({ favoritePlaces, notify, profileSettings, setFa
                 </div>
                 <TextField label="라벨" value={place.label} onChange={(value) => updatePlace(place.id, { label: value })} />
                 <div className="mt-3">
-                  <TextField label="주소" value={place.address} onChange={(value) => updatePlace(place.id, { address: value })} />
-                </div>
-                <div className="mt-3">
-                  <SelectControl label="유형" value={place.role} onChange={(value) => updatePlace(place.id, { role: value as FavoritePlace['role'] })} options={[['origin', '출발지'], ['destination', '목적지']]} />
+                  <AddressAutocompleteField label="주소" value={place.address} onChange={(value) => updatePlace(place.id, { address: value })} />
                 </div>
               </div>
             ))}
@@ -1540,8 +1732,15 @@ function NavigationSettingsPage({ favoritePlaces, notify, profileSettings, setFa
 
 function NotificationsPage({ notificationSettings, notify, setNotificationSettings }: DashboardPageProps) {
   const [draft, setDraft] = useState(notificationSettings)
+  const hasChanges = !isSameDashboardValue(draft, notificationSettings)
+
+  useEffect(() => {
+    setDraft(notificationSettings)
+  }, [notificationSettings])
 
   const save = () => {
+    if (!hasChanges) return
+
     setNotificationSettings(draft)
     notify('알림 설정을 저장했습니다.')
   }
@@ -1564,7 +1763,7 @@ function NotificationsPage({ notificationSettings, notify, setNotificationSettin
 
   return (
     <section>
-      <PageHeader title="알림 설정" action={<div className="flex flex-wrap gap-2"><DashboardActionButton variant="secondary" onClick={cancel}>취소</DashboardActionButton><DashboardActionButton variant="secondary" onClick={() => notify('테스트 알림을 발송했습니다.', 'info')}>테스트 알림</DashboardActionButton><DashboardActionButton variant="secondary" onClick={disableAll}>모두 끄기</DashboardActionButton><DashboardActionButton onClick={save}>저장</DashboardActionButton></div>} />
+      <PageHeader title="알림 설정" action={<div className="flex flex-wrap gap-2"><DashboardActionButton disabled={!hasChanges} variant="secondary" onClick={cancel}>취소</DashboardActionButton><DashboardActionButton variant="secondary" onClick={() => notify('테스트 알림을 발송했습니다.', 'info')}>테스트 알림</DashboardActionButton><DashboardActionButton variant="secondary" onClick={disableAll}>모두 끄기</DashboardActionButton><DashboardActionButton disabled={!hasChanges} onClick={save}>저장</DashboardActionButton></div>} />
       <div className="grid gap-4 xl:grid-cols-[1fr_0.85fr]">
         <Panel title="알림 종류" icon={<Bell className="size-5" weight="bold" />}>
           {[
@@ -1653,6 +1852,97 @@ function TextField({ label, onChange, type = 'text', value }: { label: string; o
         type={type}
         value={value}
       />
+    </div>
+  )
+}
+
+function AddressAutocompleteField({ label, onChange, value }: { label: string; onChange: (value: string) => void; value: string }) {
+  const reactId = useId()
+  const [focused, setFocused] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [places, setPlaces] = useState<Place[]>([])
+  const [error, setError] = useState(false)
+  const id = `dashboard-field-${label.replace(/\s+/g, '-')}-${reactId}`
+  const trimmedValue = value.trim()
+  const showResults = focused && (loading || error || places.length > 0)
+
+  useEffect(() => {
+    if (!focused || trimmedValue.length < 2) {
+      setPlaces([])
+      setLoading(false)
+      setError(false)
+      return undefined
+    }
+
+    const controller = new AbortController()
+    const timeoutId = window.setTimeout(() => {
+      setLoading(true)
+      setError(false)
+      searchPlaces(trimmedValue, undefined, controller.signal)
+        .then((results) => {
+          setPlaces(results.slice(0, 5))
+        })
+        .catch((searchError: unknown) => {
+          if (controller.signal.aborted) return
+          setPlaces([])
+          setError(true)
+          console.error('Dashboard favorite place search failed', searchError)
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) setLoading(false)
+        })
+    }, 250)
+
+    return () => {
+      window.clearTimeout(timeoutId)
+      controller.abort()
+    }
+  }, [focused, trimmedValue])
+
+  const selectPlace = (place: Place) => {
+    onChange(place.address || place.name)
+    setPlaces([])
+    setFocused(false)
+  }
+
+  return (
+    <div className="relative grid gap-1">
+      <Label className="text-xs font-medium text-muted-foreground" htmlFor={id}>{label}</Label>
+      <Input
+        aria-autocomplete="list"
+        className="h-10 bg-background text-sm font-medium"
+        id={id}
+        onBlur={() => {
+          window.setTimeout(() => setFocused(false), 120)
+        }}
+        onChange={(event) => onChange(event.target.value)}
+        onFocus={() => setFocused(true)}
+        role="combobox"
+        type="text"
+        value={value}
+      />
+      {showResults ? (
+        <div className="absolute left-0 right-0 top-full z-30 mt-2 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-theme-md">
+          {loading ? (
+            <div className="px-3 py-2 text-xs font-medium text-gray-500">검색 중</div>
+          ) : null}
+          {!loading && error ? (
+            <div className="px-3 py-2 text-xs font-medium text-red-600">검색 결과를 불러오지 못했습니다.</div>
+          ) : null}
+          {!loading && !error ? places.map((place) => (
+            <button
+              className="block w-full px-3 py-2 text-left transition hover:bg-gray-50 focus:bg-gray-50 focus:outline-none"
+              key={place.id}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => selectPlace(place)}
+              type="button"
+            >
+              <span className="block truncate text-sm font-medium text-gray-800">{place.name}</span>
+              <span className="mt-0.5 block truncate text-xs font-medium text-gray-500">{place.address || '주소 정보 없음'}</span>
+            </button>
+          )) : null}
+        </div>
+      ) : null}
     </div>
   )
 }

@@ -130,7 +130,7 @@ export const DEMO_SCENARIOS: DemoScenarioDefinition[] = [
         at: 15,
         eventType: 'AGENT_MESSAGE',
         uiState: { drivingMode: 'MOVING', riskLevel: 'MEDIUM', visibleStatus: '졸음 주의' },
-        romiMessage: '예원님, 지금 눈이 조금 무거워 보여요. 괜찮으세요?',
+        romiMessage: '{{profileName}}, 지금 눈이 조금 무거워 보여요. 괜찮으세요?',
         requiresResponse: true,
         responseOptions: [
           {
@@ -236,7 +236,7 @@ export const DEMO_SCENARIOS: DemoScenarioDefinition[] = [
         at: 39,
         eventType: 'AGENT_MESSAGE',
         uiState: { drivingMode: 'MOVING', riskLevel: 'HIGH', visibleStatus: '휴식 안내 필요' },
-        romiMessage: '예원님, 지금은 계속 운전하기 위험해 보여요. 가까운 휴게소로 안내해드릴까요?',
+        romiMessage: '{{profileName}}, 지금은 계속 운전하기 위험해 보여요. 가까운 휴게소로 안내해드릴까요?',
         requiresResponse: true,
         responseOptions: [
           {
@@ -354,7 +354,7 @@ export const DEMO_SCENARIOS: DemoScenarioDefinition[] = [
         at: 13,
         eventType: 'AGENT_MESSAGE',
         uiState: { drivingMode: 'MOVING', riskLevel: 'MEDIUM', visibleStatus: '휴대폰 주의' },
-        romiMessage: '예원님, 방금 휴대폰 쪽으로 시선이 오래 갔어요. 전방을 봐주세요.',
+        romiMessage: '{{profileName}}, 방금 휴대폰 쪽으로 시선이 오래 갔어요. 전방을 봐주세요.',
         requiresResponse: false,
         responseOptions: [],
         report: { include: true, eventName: '1차 휴대폰 주의' },
@@ -528,7 +528,7 @@ export const DEMO_SCENARIOS: DemoScenarioDefinition[] = [
         at: 12,
         eventType: 'AGENT_MESSAGE',
         uiState: { drivingMode: 'MOVING', riskLevel: 'MEDIUM', visibleStatus: '오디오 조작 주의' },
-        romiMessage: '예원님, 지금 화면 조작은 제가 도와드릴게요. 전방을 봐주세요.',
+        romiMessage: '{{profileName}}, 지금 화면 조작은 제가 도와드릴게요. 전방을 봐주세요.',
         requiresResponse: false,
         responseOptions: [],
         report: { include: true, eventName: '1차 기기조작 주의' },

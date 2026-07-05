@@ -8,6 +8,7 @@ import {
   getAssistantVisibleOrbState,
   isAssistantVoiceWaveVisible,
   NavigationShell,
+  personalizeDemoRomiMessage,
 } from './NavigationShell'
 import {
   createProfile,
@@ -298,6 +299,15 @@ function createMockRouteOption(route: Awaited<ReturnType<typeof mockedGetRoute>>
 }
 
 describe('NavigationShell', () => {
+  it('personalizes demo Romi messages with the selected profile name', () => {
+    expect(
+      personalizeDemoRomiMessage('{{profileName}}, 지금 눈이 조금 무거워 보여요.', '아빠'),
+    ).toBe('아빠, 지금 눈이 조금 무거워 보여요.')
+    expect(
+      personalizeDemoRomiMessage('{{profileName}}, 전방을 봐주세요.', '지우'),
+    ).toBe('지우, 전방을 봐주세요.')
+  })
+
   const mockGeolocationSuccess = (latitude = 37.5665, longitude = 126.978) => {
     Object.defineProperty(navigator, 'geolocation', {
       configurable: true,
