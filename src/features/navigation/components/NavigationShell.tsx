@@ -3343,7 +3343,13 @@ function AssistantRecommendationList({
         <div className="grid gap-2">
           {recommendations.map((item, index) => (
             <motion.div
-              className={item.type === 'place' ? 'rounded-xl bg-white p-2 text-left' : 'flex items-center gap-3 rounded-xl bg-white p-3 text-left'}
+              className={[
+                completedRecommendation
+                  ? 'text-left'
+                  : item.type === 'place' || item.type === 'music'
+                    ? 'rounded-xl bg-white p-2 text-left'
+                    : 'flex items-center gap-3 rounded-xl bg-white p-3 text-left',
+              ].join(' ')}
               key={`${item.type}-${item.title}`}
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
@@ -3364,18 +3370,16 @@ function AssistantRecommendationList({
                     onAction={() => onRecommendationAction(item)}
                   />
                 )
-              ) : completedRecommendation ? (
-                <AssistantCompletionCard
-                  recommendation={item}
+              ) : item.type === 'music' ? (
+                <AssistantMusicRecommendationCard
+                  onAction={() => onRecommendationAction(item)}
                 />
+              ) : completedRecommendation ? (
+                <AssistantCompletionCard />
               ) : (
                 <>
                   <div className="grid size-10 shrink-0 place-items-center rounded-full bg-[var(--nav-primary-soft)] text-[var(--nav-primary)]">
-                    {item.type === 'music' ? (
-                      <MusicNotes className="size-5" weight="bold" />
-                    ) : (
-                      <ArrowBendUpRight className="size-5" weight="bold" />
-                    )}
+                    <ArrowBendUpRight className="size-5" weight="bold" />
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-bold text-[var(--nav-ink)]">{item.title}</div>
@@ -3396,6 +3400,48 @@ function AssistantRecommendationList({
         </div>
       </div>
     </motion.div>
+  )
+}
+
+function AssistantMusicRecommendationCard({
+  onAction,
+}: {
+  onAction: () => void
+}) {
+  const track = MUSIC_LIBRARY.find((item) => item.id === 'soft-focus') ?? MUSIC_LIBRARY[0]
+
+  return (
+    <div
+      className="grid min-h-[4.75rem] grid-cols-[3.25rem_minmax(0,1fr)_auto] items-center gap-3 rounded-2xl border border-[var(--nav-border)] bg-white px-3 py-2 text-left shadow-[0_10px_24px_rgb(15_23_42/0.06)]"
+      data-testid="navi-assistant-music-recommendation-card"
+    >
+      <span
+        aria-hidden="true"
+        className={[
+          'relative grid size-13 shrink-0 place-items-center overflow-hidden rounded-xl bg-gradient-to-br text-white shadow-[inset_0_-18px_30px_rgb(0_0_0/0.18)]',
+          track.coverTone,
+        ].join(' ')}
+      >
+        <MusicNotes className="size-5" weight="bold" />
+        <span className="absolute inset-x-2 bottom-2 h-1 rounded-full bg-white/40" />
+      </span>
+      <span className="min-w-0">
+        <span className="block truncate text-sm font-bold text-[var(--nav-ink)]">{track.title}</span>
+        <span className="mt-0.5 block truncate text-xs font-semibold text-[var(--nav-muted)]">{track.artist}</span>
+        <span className="mt-1 block truncate text-[11px] font-medium text-[var(--nav-subtle)]">{track.album}</span>
+      </span>
+      <span className="grid justify-items-end gap-2">
+        <span className="text-xs font-bold text-[var(--nav-ink)]">{track.duration}</span>
+        <button
+          className="inline-flex h-8 items-center gap-1.5 rounded-full bg-[var(--nav-primary)] px-3 text-xs font-bold text-white transition hover:bg-[var(--nav-primary-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
+          onClick={onAction}
+          type="button"
+        >
+          <Play className="size-3.5" weight="fill" />
+          재생
+        </button>
+      </span>
+    </div>
   )
 }
 
@@ -3435,23 +3481,18 @@ function AssistantSelectedRouteCard({
   )
 }
 
-function AssistantCompletionCard({
-  recommendation,
-}: {
-  recommendation: NaviAssistantRecommendation
-}) {
+function AssistantCompletionCard() {
   return (
     <div
-      className="grid min-h-[3.625rem] grid-cols-[2.75rem_minmax(0,1fr)] items-center gap-3 rounded-2xl border border-[var(--nav-border)] bg-white px-3 py-2 text-left shadow-[0_10px_24px_rgb(15_23_42/0.06)]"
+      className="flex items-center gap-2 px-1 py-0.5 text-left"
       data-testid="navi-assistant-completion-card"
       role="status"
     >
-      <span className="grid size-10 place-items-center rounded-full bg-[var(--nav-primary-soft)] text-[var(--nav-primary)]">
-        <Check className="size-5" weight="bold" />
+      <span className="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--nav-primary-soft)] text-[var(--nav-primary)]">
+        <Check className="size-4" weight="bold" />
       </span>
       <span className="min-w-0">
-        <span className="block truncate text-[0.9375rem] font-bold leading-5 text-[var(--nav-ink)]">{recommendation.title}</span>
-        <span className="mt-0.5 block truncate text-xs font-semibold text-[var(--nav-muted)]">안내 경로가 적용되었습니다.</span>
+        <span className="block truncate text-sm font-bold leading-5 text-[var(--nav-ink)]">안내 경로가 적용되었습니다.</span>
       </span>
     </div>
   )

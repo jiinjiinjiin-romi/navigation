@@ -945,7 +945,9 @@ describe('NavigationShell', () => {
     expect(completionCard).toBeInTheDocument()
     expect(screen.queryByText('추천')).not.toBeInTheDocument()
     expect(screen.queryByText('1개')).not.toBeInTheDocument()
-    expect(within(completionCard).getByText('완료')).toBeInTheDocument()
+    expect(screen.queryByText('완료')).not.toBeInTheDocument()
+    expect(completionCard).not.toHaveClass('border')
+    expect(completionCard).not.toHaveClass('min-h-[3.625rem]')
     expect(within(completionCard).getByText('안내 경로가 적용되었습니다.')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'AI 시나리오 초기화' }))
@@ -970,13 +972,19 @@ describe('NavigationShell', () => {
     fireEvent.click(screen.getByRole('button', { name: '다음 AI 시나리오 단계' }))
 
     expect(screen.getByTestId('navi-assistant-recommendations')).toBeInTheDocument()
-    expect(screen.getByText('음악 추천 열기')).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: '실행' }))
-
-    expect(screen.getByTestId('music-mini-player')).toBeInTheDocument()
+    expect(screen.getByTestId('navi-assistant-music-recommendation-card')).toBeInTheDocument()
+    expect(screen.queryByText('음악 추천 열기')).not.toBeInTheDocument()
     expect(screen.getByText('Soft Focus')).toBeInTheDocument()
     expect(screen.getByText('Evening Route')).toBeInTheDocument()
+    expect(screen.getByText('Bright Pop Drive')).toBeInTheDocument()
+    expect(screen.getByText('3:08')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '재생' }))
+
+    const miniPlayer = screen.getByTestId('music-mini-player')
+    expect(miniPlayer).toBeInTheDocument()
+    expect(within(miniPlayer).getByText('Soft Focus')).toBeInTheDocument()
+    expect(within(miniPlayer).getByText('Evening Route')).toBeInTheDocument()
   })
 
   it('keeps assistant speech reveal timing deterministic without audio playback', () => {
