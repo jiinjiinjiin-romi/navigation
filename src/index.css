@@ -17,6 +17,14 @@
   --font-sans: "Pretendard", "system-ui", "sans-serif";
   --color-primary: #3b82f6;
   --color-secondary: #6366f1;
+  --color-brand-50: #ecf3ff;
+  --color-brand-100: #dde9ff;
+  --color-brand-300: #9cb9ff;
+  --color-brand-500: #465fff;
+  --color-brand-600: #3641f5;
+  --shadow-theme-xs: 0px 1px 2px 0px rgb(16 24 40 / 0.05);
+  --shadow-theme-sm: 0px 1px 3px 0px rgb(16 24 40 / 0.10), 0px 1px 2px 0px rgb(16 24 40 / 0.06);
+  --shadow-theme-md: 0px 4px 8px -2px rgb(16 24 40 / 0.10), 0px 2px 4px -2px rgb(16 24 40 / 0.06);
 }
 
 /* 커스텀 스크롤바 스타일 */
@@ -86,33 +94,33 @@
 
 :root {
   --radius: 0.625rem;
-  --nav-frame: #f6f8fb;
+  --nav-frame: #f9fafb;
   --nav-surface: #ffffff;
-  --nav-surface-raised: rgb(255 255 255 / 96%);
-  --nav-panel: #f9fafc;
+  --nav-surface-raised: #ffffff;
+  --nav-panel: #f9fafb;
   --nav-border: #e4e7ec;
   --nav-ink: #101828;
   --nav-muted: #475467;
   --nav-subtle: #98a2b3;
-  --nav-primary: #1746a2;
-  --nav-primary-hover: #102f6f;
-  --nav-primary-light: #2f63c7;
-  --nav-primary-soft: #e8eeff;
-  --nav-selection: #e8eeff;
-  --nav-focus-ring: rgb(23 70 162 / 28%);
-  --nav-route: #1746a2;
-  --nav-route-glow: rgb(23 70 162 / 28%);
-  --nav-route-muted: #a9bff2;
-  --nav-success: #16a34a;
-  --nav-guidance: #16a34a;
-  --nav-guidance-strong: #15803d;
-  --nav-warning: #f97316;
-  --nav-danger: #e11d48;
+  --nav-primary: #465fff;
+  --nav-primary-hover: #3641f5;
+  --nav-primary-light: #7592ff;
+  --nav-primary-soft: #ecf3ff;
+  --nav-selection: #f2f7ff;
+  --nav-focus-ring: rgb(70 95 255 / 12%);
+  --nav-route: #465fff;
+  --nav-route-glow: rgb(70 95 255 / 20%);
+  --nav-route-muted: #c2d6ff;
+  --nav-success: #039855;
+  --nav-guidance: #039855;
+  --nav-guidance-strong: #027a48;
+  --nav-warning: #dc6803;
+  --nav-danger: #d92d20;
   --nav-control: #ffffff;
-  --nav-control-muted: #cbd5e1;
-  --nav-disabled: #cbd5e1;
-  --nav-shadow-panel: 0 12px 32px rgb(16 24 40 / 0.14);
-  --nav-shadow-control: 0 8px 18px rgb(23 70 162 / 0.22);
+  --nav-control-muted: #d0d5dd;
+  --nav-disabled: #d0d5dd;
+  --nav-shadow-panel: 0 1px 3px 0 rgb(16 24 40 / 0.10), 0 1px 2px 0 rgb(16 24 40 / 0.06);
+  --nav-shadow-control: 0 1px 2px 0 rgb(16 24 40 / 0.05);
   --nav-ai-primary: #6d5df6;
   --nav-ai-secondary: #00a8ff;
   --nav-ai-pink: #d946ef;

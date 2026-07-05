@@ -235,7 +235,7 @@ export function DashboardApp() {
   }
 
   return (
-    <div className="min-h-screen bg-[var(--nav-frame)] font-sans text-[var(--nav-ink)]">
+    <div className="min-h-screen bg-gray-50 font-sans text-gray-900">
       <div className="mx-auto flex min-h-screen w-full max-w-[88rem] gap-5 p-0 lg:p-5">
         <DashboardSidebar activePath={path} onLogout={handleLogout} onNavigate={navigate} />
         <div className="flex min-h-screen min-w-0 flex-1 flex-col lg:min-h-[calc(100vh-2.5rem)]">
@@ -261,13 +261,13 @@ export function DashboardApp() {
       <AnimatePresence>
         {mobileNavOpen ? (
           <motion.div
-            className="fixed inset-0 z-50 bg-[rgb(16_24_40/0.32)] lg:hidden"
+            className="fixed inset-0 z-50 bg-gray-900/30 lg:hidden"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
             <motion.aside
-              className="absolute inset-y-0 left-0 w-[18rem] bg-white p-4 shadow-[var(--nav-shadow-panel)]"
+              className="absolute inset-y-0 left-0 w-[18rem] border-r border-gray-200 bg-white p-4 shadow-theme-md"
               initial={{ x: '-100%' }}
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
@@ -276,7 +276,7 @@ export function DashboardApp() {
               <div className="mb-4 flex items-center justify-between">
                 <DashboardBrand />
                 <button
-                  className="grid size-10 place-items-center rounded-full bg-[var(--nav-panel)] text-[var(--nav-muted)]"
+                  className="grid size-10 place-items-center rounded-lg border border-gray-200 bg-white text-gray-500 shadow-sm hover:bg-gray-50"
                   onClick={() => setMobileNavOpen(false)}
                   type="button"
                   aria-label="모바일 메뉴 닫기"
@@ -295,27 +295,25 @@ export function DashboardApp() {
 
 function MockLoginPage({ onLogin, reducedMotion }: { onLogin: () => void; reducedMotion: boolean }) {
   return (
-    <main className="grid min-h-screen place-items-center overflow-hidden bg-[var(--nav-frame)] px-5 py-10 text-[var(--nav-ink)]">
-      <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_20%_18%,rgb(109_93_246/0.18),transparent_30%),radial-gradient(circle_at_78%_22%,rgb(0_168_255/0.14),transparent_28%),linear-gradient(180deg,#f6f8fb,#eef3fb)]" />
+    <main className="grid min-h-screen place-items-center overflow-hidden bg-gray-50 px-5 py-10 text-gray-900">
       <motion.section
-        className="relative grid w-full max-w-5xl overflow-hidden rounded-[1.5rem] bg-white shadow-[0_24px_70px_rgb(15_23_42/0.18)] ring-1 ring-white/70 lg:grid-cols-[1.05fr_0.95fr]"
+        className="relative grid w-full max-w-5xl overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm lg:grid-cols-[1.05fr_0.95fr]"
         initial={reducedMotion ? false : { opacity: 0, y: 16, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
       >
-        <div className="relative min-h-[22rem] overflow-hidden bg-[var(--nav-ink)] p-8 text-white lg:p-10">
-          <div className="navi-assistant-aura absolute inset-6 rounded-[1.25rem]" />
+        <div className="relative min-h-[22rem] overflow-hidden bg-gray-900 p-8 text-white lg:p-10">
           <div className="relative z-10 flex h-full flex-col justify-between">
             <DashboardBrand inverted />
             <div>
-              <div className="mb-5 inline-flex items-center gap-2 rounded-full bg-white/12 px-3 py-2 text-sm font-bold text-white ring-1 ring-white/18">
+              <div className="mb-5 inline-flex items-center gap-2 rounded-lg bg-white/10 px-3 py-2 text-sm font-medium text-white ring-1 ring-white/15">
                 <Sparkle className="size-4" weight="fill" />
                 주행 데이터와 Navi 설정을 한 곳에서
               </div>
-              <h1 className="max-w-md text-4xl font-black tracking-normal text-white sm:text-5xl">
+              <h1 className="max-w-md text-4xl font-semibold tracking-normal text-white sm:text-5xl">
                 JIIN 대시보드 로그인
               </h1>
-              <p className="mt-4 max-w-sm text-sm font-semibold leading-6 text-white/72">
+              <p className="mt-4 max-w-sm text-sm font-medium leading-6 text-white/70">
                 최근 주행, 행동 분석, 리포트, 영상 리뷰와 네비게이션 설정을 운전자 본인 기준으로 확인합니다.
               </p>
             </div>
@@ -329,33 +327,33 @@ function MockLoginPage({ onLogin, reducedMotion }: { onLogin: () => void; reduce
           }}
         >
           <div className="mb-8">
-            <p className="text-sm font-bold text-[var(--nav-primary)]">Mock account</p>
-            <h2 className="mt-2 text-2xl font-black tracking-normal text-[var(--nav-ink)]">운전자 계정으로 시작</h2>
+            <p className="text-sm font-medium text-brand-500">Mock account</p>
+            <h2 className="mt-2 text-2xl font-semibold tracking-normal text-gray-900">운전자 계정으로 시작</h2>
           </div>
           <label className="block">
-            <span className="text-sm font-bold text-[var(--nav-muted)]">이메일</span>
+            <span className="text-sm font-medium text-gray-700">이메일</span>
             <input
-              className="mt-2 h-12 w-full rounded-xl border border-[var(--nav-border)] bg-white px-4 text-base font-bold outline-none transition focus:border-[var(--nav-primary)] focus:shadow-[0_0_0_3px_var(--nav-focus-ring)]"
+              className="mt-2 h-11 w-full rounded-lg border border-gray-300 bg-white px-4 text-sm font-medium text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10"
               defaultValue="driver@example.com"
               type="email"
             />
           </label>
           <label className="mt-5 block">
-            <span className="text-sm font-bold text-[var(--nav-muted)]">비밀번호</span>
+            <span className="text-sm font-medium text-gray-700">비밀번호</span>
             <input
-              className="mt-2 h-12 w-full rounded-xl border border-[var(--nav-border)] bg-white px-4 text-base font-bold outline-none transition focus:border-[var(--nav-primary)] focus:shadow-[0_0_0_3px_var(--nav-focus-ring)]"
+              className="mt-2 h-11 w-full rounded-lg border border-gray-300 bg-white px-4 text-sm font-medium text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10"
               defaultValue="demo-password"
               type="password"
             />
           </label>
           <button
-            className="mt-7 inline-flex h-12 w-full items-center justify-center gap-2 rounded-full bg-[var(--nav-primary)] px-5 text-sm font-black text-white shadow-[var(--nav-shadow-control)] transition hover:bg-[var(--nav-primary-hover)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--nav-primary)]"
+            className="mt-7 inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-brand-500 px-5 text-sm font-medium text-white shadow-sm transition hover:bg-brand-600 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-brand-500"
             type="submit"
           >
             대시보드 시작
             <CaretRight className="size-4" weight="bold" />
           </button>
-          <p className="mt-5 text-xs font-semibold leading-5 text-[var(--nav-muted)]">
+          <p className="mt-5 text-xs font-medium leading-5 text-gray-500">
             백엔드 인증 없이 localStorage 기반 mock 세션으로 동작합니다.
           </p>
         </form>
@@ -368,14 +366,14 @@ function DashboardBrand({ inverted = false }: { inverted?: boolean }) {
   return (
     <div className="flex items-center gap-3">
       <div className={cn(
-        'grid size-11 place-items-center rounded-2xl shadow-[0_12px_32px_rgb(23_70_162/0.18)]',
-        inverted ? 'bg-white/16 text-white ring-1 ring-white/20' : 'bg-[var(--nav-primary)] text-white',
+        'grid size-11 place-items-center rounded-xl shadow-theme-xs',
+        inverted ? 'bg-white/10 text-white ring-1 ring-white/20' : 'bg-brand-500 text-white',
       )}>
         <SteeringWheel className="size-6" weight="fill" />
       </div>
       <div>
-        <div className={cn('text-base font-black tracking-normal', inverted ? 'text-white' : 'text-[var(--nav-ink)]')}>JIIN</div>
-        <div className={cn('text-xs font-bold', inverted ? 'text-white/64' : 'text-[var(--nav-muted)]')}>Driver Dashboard</div>
+        <div className={cn('text-base font-semibold tracking-normal', inverted ? 'text-white' : 'text-gray-900')}>JIIN</div>
+        <div className={cn('text-xs font-medium', inverted ? 'text-white/60' : 'text-gray-500')}>Driver Dashboard</div>
       </div>
     </div>
   )
@@ -383,22 +381,22 @@ function DashboardBrand({ inverted = false }: { inverted?: boolean }) {
 
 function DashboardSidebar({ activePath, onLogout, onNavigate }: { activePath: DashboardPath; onLogout: () => void; onNavigate: (path: DashboardPath) => void }) {
   return (
-    <aside className="sticky top-5 hidden w-[17rem] shrink-0 self-start rounded-[1.5rem] border border-white/80 bg-white/88 p-4 shadow-[0_24px_70px_rgb(15_23_42/0.10)] backdrop-blur-xl lg:block">
+    <aside className="sticky top-5 hidden w-[17rem] shrink-0 self-start rounded-2xl border border-gray-200 bg-white p-4 shadow-theme-xs lg:block">
       <DashboardBrand />
       <div className="mt-8">
         <DashboardNavList activePath={activePath} onNavigate={onNavigate} />
       </div>
-      <div className="mt-6 border-t border-[var(--nav-border)] pt-4">
+      <div className="mt-6 border-t border-gray-200 pt-4">
         <div className="flex items-center gap-3">
-          <div className="grid size-9 place-items-center rounded-full bg-[var(--nav-primary-soft)] text-[var(--nav-primary)]">
+          <div className="grid size-9 place-items-center rounded-lg bg-brand-50 text-brand-500">
             <SteeringWheel className="size-5" weight="fill" />
           </div>
           <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-black text-[var(--nav-ink)]">안정현 님</div>
+            <div className="truncate text-sm font-medium text-gray-800">안정현 님</div>
           </div>
           <button
             aria-label="로그아웃"
-            className="grid size-9 shrink-0 place-items-center rounded-full text-[var(--nav-muted)] transition hover:bg-[var(--nav-panel)] hover:text-[var(--nav-danger)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
+            className="grid size-9 shrink-0 place-items-center rounded-lg text-gray-500 transition hover:bg-gray-100 hover:text-red-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500"
             onClick={onLogout}
             type="button"
           >
@@ -420,10 +418,10 @@ function DashboardNavList({ activePath, onNavigate }: { activePath: DashboardPat
           <a
             aria-current={active ? 'page' : undefined}
             className={cn(
-              'group relative flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-black transition',
+              'group relative flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium transition',
               active
-                ? 'bg-[var(--nav-primary-soft)] text-[var(--nav-primary)]'
-                : 'text-[var(--nav-muted)] hover:bg-[var(--nav-panel)] hover:text-[var(--nav-ink)]',
+                ? 'bg-brand-50 text-brand-500'
+                : 'text-gray-700 hover:bg-gray-100 hover:text-gray-700',
             )}
             href={route.path}
             key={route.path}
@@ -443,17 +441,17 @@ function DashboardNavList({ activePath, onNavigate }: { activePath: DashboardPat
 
 function DashboardTopbar({ onLogout, onOpenMobileNav }: { onLogout: () => void; onOpenMobileNav: () => void }) {
   return (
-    <header className="sticky top-0 z-30 border-b border-[var(--nav-border)] bg-[rgb(246_248_251/0.84)] px-4 py-3 backdrop-blur-xl sm:px-6 lg:px-8">
+    <header className="sticky top-0 z-30 border-b border-gray-200 bg-white px-4 py-3 sm:px-6 lg:px-6">
       <div className="flex items-center justify-between gap-3">
-        <button className="grid size-10 place-items-center rounded-full bg-white text-[var(--nav-ink)] shadow-[0_6px_18px_rgb(15_23_42/0.08)] lg:hidden" onClick={onOpenMobileNav} type="button" aria-label="모바일 메뉴 열기">
+        <button className="grid size-10 place-items-center rounded-lg border border-gray-200 bg-white text-gray-500 shadow-theme-xs hover:bg-gray-50 lg:hidden" onClick={onOpenMobileNav} type="button" aria-label="모바일 메뉴 열기">
           <List className="size-5" weight="bold" />
         </button>
-        <div className="ml-auto hidden min-w-0 items-center gap-2 rounded-full bg-white px-3 py-2 text-xs font-bold text-[var(--nav-muted)] shadow-[0_6px_18px_rgb(15_23_42/0.06)] sm:flex">
-          <CalendarBlank className="size-4 text-[var(--nav-primary)]" weight="bold" />
+        <div className="ml-auto hidden min-w-0 items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-500 shadow-theme-xs sm:flex">
+          <CalendarBlank className="size-4 text-brand-500" weight="bold" />
           이번 주
         </div>
         <button
-          className="inline-flex h-10 items-center gap-2 rounded-full bg-white px-4 text-sm font-black text-[var(--nav-muted)] shadow-[0_6px_18px_rgb(15_23_42/0.06)] transition hover:text-[var(--nav-danger)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)] lg:hidden"
+          className="inline-flex h-10 items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 text-sm font-medium text-gray-500 shadow-theme-xs transition hover:bg-gray-50 hover:text-red-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 lg:hidden"
           onClick={onLogout}
           type="button"
         >
@@ -467,14 +465,14 @@ function DashboardTopbar({ onLogout, onOpenMobileNav }: { onLogout: () => void; 
 
 function DashboardMobileNav({ activePath, onNavigate }: { activePath: DashboardPath; onNavigate: (path: DashboardPath) => void }) {
   return (
-    <nav className="fixed inset-x-3 bottom-3 z-40 grid grid-cols-5 rounded-[1.25rem] bg-white/94 p-1 shadow-[0_16px_44px_rgb(15_23_42/0.18)] ring-1 ring-[var(--nav-border)] backdrop-blur-xl lg:hidden" aria-label="모바일 대시보드 메뉴">
+    <nav className="fixed inset-x-3 bottom-3 z-40 grid grid-cols-5 rounded-2xl border border-gray-200 bg-white p-1 shadow-theme-md lg:hidden" aria-label="모바일 대시보드 메뉴">
       {dashboardRoutes.slice(0, 5).map((route) => {
         const Icon = route.icon
         const active = activePath === route.path
         return (
           <a
             aria-label={`모바일 ${route.label}`}
-            className={cn('grid min-h-12 place-items-center rounded-2xl text-[11px] font-black', active ? 'bg-[var(--nav-primary-soft)] text-[var(--nav-primary)]' : 'text-[var(--nav-muted)]')}
+            className={cn('grid min-h-12 place-items-center rounded-lg text-[11px] font-medium', active ? 'bg-brand-50 text-brand-500' : 'text-gray-500')}
             href={route.path}
             key={route.path}
             onClick={(event) => {
@@ -506,9 +504,9 @@ function PageHeader({ eyebrow, title, description, action }: { eyebrow: string; 
   return (
     <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
       <div>
-        <p className="text-sm font-black text-[var(--nav-primary)]">{eyebrow}</p>
-        <h1 className="mt-1 text-3xl font-black tracking-normal text-[var(--nav-ink)]">{title}</h1>
-        <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-[var(--nav-muted)]">{description}</p>
+        <p className="text-sm font-medium text-brand-500">{eyebrow}</p>
+        <h1 className="mt-1 text-3xl font-semibold tracking-normal text-gray-900">{title}</h1>
+        <p className="mt-2 max-w-2xl text-sm font-medium leading-6 text-gray-500">{description}</p>
       </div>
       {action}
     </div>
@@ -518,19 +516,19 @@ function PageHeader({ eyebrow, title, description, action }: { eyebrow: string; 
 function MetricCard({ icon, label, value, caption, tone = 'info' }: { icon: ReactNode; label: string; value: string; caption: string; tone?: BehaviorMetric['tone'] }) {
   return (
     <motion.section
-      className="rounded-[1.1rem] bg-white p-4 shadow-[0_10px_30px_rgb(15_23_42/0.06)] ring-1 ring-[var(--nav-border)]"
+      className="rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-xs"
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.16 }}
     >
       <div className="flex items-center justify-between gap-3">
-        <div className="text-sm font-black text-[var(--nav-muted)]">{label}</div>
-        <div className="grid size-9 place-items-center rounded-full" style={{ background: `color-mix(in srgb, ${riskColors[tone]} 12%, white)`, color: riskColors[tone] }}>
+        <div className="text-sm font-medium text-gray-500">{label}</div>
+        <div className="grid size-10 place-items-center rounded-lg" style={{ background: `color-mix(in srgb, ${riskColors[tone]} 12%, white)`, color: riskColors[tone] }}>
           {icon}
         </div>
       </div>
-      <div className="mt-4 text-3xl font-black tracking-normal text-[var(--nav-ink)]">{value}</div>
-      <div className="mt-1 text-xs font-bold text-[var(--nav-muted)]">{caption}</div>
+      <div className="mt-5 text-3xl font-semibold tracking-normal text-gray-900">{value}</div>
+      <div className="mt-1 text-xs font-medium text-gray-500">{caption}</div>
     </motion.section>
   )
 }
@@ -583,21 +581,21 @@ function OverviewPage({ navigate }: { navigate: (path: DashboardPath) => void })
 
 function InsightPanel() {
   return (
-    <section className="navi-assistant-aura relative overflow-hidden rounded-[1.25rem] p-5 shadow-[var(--nav-shadow-ai)]">
-      <div className="relative z-10">
-        <div className="flex items-center gap-2 text-sm font-black text-[var(--nav-ai-primary)]">
+    <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-xs">
+      <div>
+        <div className="flex items-center gap-2 text-sm font-medium text-brand-500">
           <Sparkle className="size-5" weight="fill" />
           Navi Insight
         </div>
-        <h2 className="mt-4 max-w-xl text-2xl font-black tracking-normal text-[var(--nav-ink)]">
+        <h2 className="mt-4 max-w-xl text-2xl font-semibold tracking-normal text-gray-900">
           저녁 시간대 시선 이탈이 늘었습니다.
         </h2>
-        <p className="mt-3 max-w-2xl text-sm font-semibold leading-6 text-[var(--nav-muted)]">
+        <p className="mt-3 max-w-2xl text-sm font-medium leading-6 text-gray-500">
           18시 이후 주행에서 시선 이탈 이벤트가 전체의 46%를 차지합니다. 퇴근길에는 음성 안내 볼륨을 높이고 목적지 조작을 출발 전에 마치는 설정을 추천합니다.
         </p>
         <div className="mt-5 flex flex-wrap gap-2">
-          <span className="rounded-full bg-white/80 px-3 py-2 text-xs font-black text-[var(--nav-primary)] ring-1 ring-white">안내 볼륨 +10</span>
-          <span className="rounded-full bg-white/80 px-3 py-2 text-xs font-black text-[var(--nav-warning)] ring-1 ring-white">시선 이탈 민감도 8</span>
+          <span className="rounded-lg bg-brand-50 px-3 py-2 text-xs font-medium text-brand-500">안내 볼륨 +10</span>
+          <span className="rounded-lg bg-orange-50 px-3 py-2 text-xs font-medium text-orange-600">시선 이탈 민감도 8</span>
         </div>
       </div>
     </section>
@@ -606,10 +604,10 @@ function InsightPanel() {
 
 function Panel({ title, icon, children, className }: { title: string; icon?: ReactNode; children: ReactNode; className?: string }) {
   return (
-    <section className={cn('rounded-[1.1rem] bg-white p-4 shadow-[0_10px_30px_rgb(15_23_42/0.06)] ring-1 ring-[var(--nav-border)]', className)}>
+    <section className={cn('rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-xs', className)}>
       <div className="mb-4 flex items-center gap-2">
-        {icon ? <div className="text-[var(--nav-primary)]">{icon}</div> : null}
-        <h2 className="text-base font-black tracking-normal text-[var(--nav-ink)]">{title}</h2>
+        {icon ? <div className="text-brand-500">{icon}</div> : null}
+        <h2 className="text-base font-medium tracking-normal text-gray-800">{title}</h2>
       </div>
       {children}
     </section>
@@ -622,16 +620,16 @@ function RecentTrips({ navigate }: { navigate: (path: DashboardPath) => void }) 
       <div className="space-y-2">
         {trips.slice(0, 3).map((trip) => (
           <button
-            className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-2xl bg-[var(--nav-panel)] p-3 text-left transition hover:bg-[var(--nav-selection)]"
+            className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg bg-gray-50 p-3 text-left transition hover:bg-gray-100"
             key={trip.id}
             onClick={() => navigate('/dashboard/trips')}
             type="button"
           >
             <div className="min-w-0">
-              <div className="truncate text-sm font-black text-[var(--nav-ink)]">{trip.destination}</div>
-              <div className="mt-1 text-xs font-bold text-[var(--nav-muted)]">{trip.date} · {trip.distance} · {trip.duration}</div>
+              <div className="truncate text-sm font-medium text-gray-800">{trip.destination}</div>
+              <div className="mt-1 text-xs font-medium text-gray-500">{trip.date} · {trip.distance} · {trip.duration}</div>
             </div>
-            <div className="text-right text-sm font-black text-[var(--nav-primary)]">{trip.score}점</div>
+            <div className="text-right text-sm font-medium text-brand-500">{trip.score}점</div>
           </button>
         ))}
       </div>
@@ -657,9 +655,9 @@ function BehaviorDistribution() {
         </div>
         <div className="space-y-2">
           {behaviorMetrics.slice(0, 5).map((item) => (
-            <div className="flex items-center justify-between gap-3 rounded-xl bg-[var(--nav-panel)] px-3 py-2" key={item.type}>
-              <span className="text-sm font-bold text-[var(--nav-muted)]">{item.label}</span>
-              <span className="text-sm font-black text-[var(--nav-ink)]">{item.count}건</span>
+            <div className="flex items-center justify-between gap-3 rounded-lg bg-gray-50 px-3 py-2" key={item.type}>
+              <span className="text-sm font-medium text-gray-500">{item.label}</span>
+              <span className="text-sm font-medium text-gray-800">{item.count}건</span>
             </div>
           ))}
         </div>
@@ -699,12 +697,12 @@ function ReportsPage({ navigate }: { navigate: (path: DashboardPath) => void }) 
         <Panel title="세션 리포트" icon={<FileText className="size-5" weight="bold" />}>
           <div className="space-y-2">
             {trips.map((trip) => (
-              <div className="rounded-2xl bg-[var(--nav-panel)] p-3" key={trip.id}>
+              <div className="rounded-lg bg-gray-50 p-3" key={trip.id}>
                 <div className="flex items-center justify-between gap-3">
-                  <div className="text-sm font-black">{trip.destination}</div>
-                  <div className="text-sm font-black text-[var(--nav-primary)]">{trip.score}점</div>
+                  <div className="text-sm font-medium text-gray-800">{trip.destination}</div>
+                  <div className="text-sm font-medium text-brand-500">{trip.score}점</div>
                 </div>
-                <div className="mt-1 text-xs font-bold text-[var(--nav-muted)]">{trip.date} · 이벤트 {trip.events}건</div>
+                <div className="mt-1 text-xs font-medium text-gray-500">{trip.date} · 이벤트 {trip.events}건</div>
               </div>
             ))}
           </div>
@@ -722,7 +720,7 @@ function VideosPage() {
       <PageHeader eyebrow="Drive Videos" title="주행 영상 리뷰" description="주행 영상 위에 행동 이벤트 타임라인을 겹쳐 위험 순간과 교정 여부를 빠르게 확인합니다." />
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_24rem]">
         <Panel title="성수 오피스 주행 영상" icon={<VideoCamera className="size-5" weight="bold" />}>
-          <div className="relative aspect-video overflow-hidden rounded-[1rem] bg-[var(--nav-ink)] text-white">
+          <div className="relative aspect-video overflow-hidden rounded-lg bg-gray-900 text-white">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_25%,rgb(59_130_246/0.26),transparent_32%),linear-gradient(145deg,#0f172a,#111827_52%,#020617)]" />
             <div className="absolute inset-0 grid place-items-center">
               <div className="grid size-20 place-items-center rounded-full bg-white/12 text-white ring-1 ring-white/20">
@@ -730,7 +728,7 @@ function VideosPage() {
               </div>
             </div>
             <div className="absolute bottom-5 left-5 right-5">
-              <div className="mb-3 flex items-center justify-between text-xs font-bold text-white/74">
+              <div className="mb-3 flex items-center justify-between text-xs font-medium text-white/74">
                 <span>00:19:42</span>
                 <span>42:18</span>
               </div>
@@ -739,7 +737,7 @@ function VideosPage() {
                 {videoEvents.map((event) => (
                   <button
                     aria-label={`${event.label} 이벤트 보기`}
-                    className={cn('absolute top-1/2 size-5 -translate-y-1/2 rounded-full border-2 border-white transition', selectedEventId === event.id ? 'scale-125 bg-[var(--nav-danger)]' : 'bg-[var(--nav-warning)]')}
+                    className={cn('absolute top-1/2 size-5 -translate-y-1/2 rounded-full border-2 border-white transition', selectedEventId === event.id ? 'scale-125 bg-red-500' : 'bg-orange-500')}
                     key={event.id}
                     onClick={() => setSelectedEventId(event.id)}
                     style={{ left: event.id === 'event-01' ? '18%' : event.id === 'event-02' ? '46%' : '74%' }}
@@ -752,22 +750,22 @@ function VideosPage() {
           <div className="mt-4 grid gap-2 sm:grid-cols-3">
             {videoEvents.map((event) => (
               <button
-                className={cn('rounded-2xl p-3 text-left transition', selectedEventId === event.id ? 'bg-[var(--nav-primary-soft)] text-[var(--nav-primary)]' : 'bg-[var(--nav-panel)] text-[var(--nav-muted)] hover:bg-[var(--nav-selection)]')}
+                className={cn('rounded-lg p-3 text-left transition', selectedEventId === event.id ? 'bg-brand-50 text-brand-500' : 'bg-gray-50 text-gray-500 hover:bg-gray-100')}
                 key={event.id}
                 onClick={() => setSelectedEventId(event.id)}
                 type="button"
               >
-                <div className="text-xs font-black">{event.time}</div>
-                <div className="mt-1 text-sm font-black">{event.label}</div>
+                <div className="text-xs font-semibold">{event.time}</div>
+                <div className="mt-1 text-sm font-semibold">{event.label}</div>
               </button>
             ))}
           </div>
         </Panel>
         <Panel title="선택 이벤트" icon={<Eye className="size-5" weight="bold" />}>
-          <div data-testid="dashboard-video-event-detail" className="rounded-[1rem] bg-[var(--nav-panel)] p-4">
-            <div className="text-2xl font-black text-[var(--nav-ink)]">{selectedEvent.label}</div>
-            <div className="mt-2 text-sm font-bold text-[var(--nav-muted)]">{`${selectedEvent.time} · 위험도 ${selectedEvent.riskLevel}`}</div>
-            <div className="mt-3 inline-flex rounded-full bg-white px-3 py-1.5 text-xs font-black text-[var(--nav-danger)]">{`위험도 ${selectedEvent.riskLevel}`}</div>
+          <div data-testid="dashboard-video-event-detail" className="rounded-lg bg-gray-50 p-4">
+            <div className="text-2xl font-semibold text-gray-900">{selectedEvent.label}</div>
+            <div className="mt-2 text-sm font-medium text-gray-500">{`${selectedEvent.time} · 위험도 ${selectedEvent.riskLevel}`}</div>
+            <div className="mt-3 inline-flex rounded-lg bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600">{`위험도 ${selectedEvent.riskLevel}`}</div>
             <div className="mt-4 grid gap-2">
               <StatusRow label="신뢰도" value={`${selectedEvent.confidence}%`} />
               <StatusRow label="교정 여부" value={selectedEvent.corrected ? '교정됨' : '미교정'} />
@@ -790,7 +788,7 @@ function BehaviorPage() {
       <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
         {behaviorMetrics.map((metric) => (
           <button
-            className={cn('min-h-10 shrink-0 rounded-full px-4 text-sm font-black transition', selectedType === metric.type ? 'bg-[var(--nav-primary)] text-white shadow-[var(--nav-shadow-control)]' : 'bg-white text-[var(--nav-muted)] ring-1 ring-[var(--nav-border)] hover:bg-[var(--nav-panel)]')}
+            className={cn('min-h-10 shrink-0 rounded-lg px-4 text-sm font-medium transition', selectedType === metric.type ? 'bg-brand-500 text-white shadow-theme-xs' : 'bg-white text-gray-700 ring-1 ring-gray-300 hover:bg-gray-50')}
             key={metric.type}
             onClick={() => setSelectedType(metric.type)}
             type="button"
@@ -801,10 +799,10 @@ function BehaviorPage() {
       </div>
       <div className="grid gap-4 xl:grid-cols-[0.8fr_1.2fr]">
         <Panel title="선택 행동" icon={<Warning className="size-5" weight="fill" />}>
-          <div data-testid="dashboard-behavior-focus" className="rounded-[1rem] bg-[var(--nav-panel)] p-5">
-            <div className="text-sm font-black text-[var(--nav-primary)]">{selected.label}</div>
-            <div className="mt-2 text-3xl font-black">{selected.count}건</div>
-            <div className="mt-2 text-sm font-bold text-[var(--nav-muted)]">평균 지속 {formatBehaviorDuration(selected.averageDurationSeconds)}</div>
+          <div data-testid="dashboard-behavior-focus" className="rounded-lg bg-gray-50 p-5">
+            <div className="text-sm font-medium text-brand-500">{selected.label}</div>
+            <div className="mt-2 text-3xl font-semibold text-gray-900">{selected.count}건</div>
+            <div className="mt-2 text-sm font-medium text-gray-500">평균 지속 {formatBehaviorDuration(selected.averageDurationSeconds)}</div>
             <div className="mt-5 grid grid-cols-2 gap-2">
               <StatusTile label="위험도" value={`${selected.riskLevel}`} />
               <StatusTile label="교정률" value={`${selected.correctionRate}%`} />
@@ -842,27 +840,27 @@ function TripsPage({ navigate }: { navigate: (path: DashboardPath) => void }) {
       <PageHeader eyebrow="Trips" title="주행 기록" description="각 주행의 목적지, 점수, 이벤트 수와 영상 유무를 비교합니다." />
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
         <Panel title="주행 목록" icon={<NavigationArrow className="size-5" weight="bold" />}>
-          <div className="overflow-hidden rounded-2xl ring-1 ring-[var(--nav-border)]">
+          <div className="overflow-hidden rounded-lg border border-gray-200">
             {trips.map((trip) => (
               <button
-                className={cn('grid w-full grid-cols-[minmax(0,1fr)_5rem] gap-3 border-b border-[var(--nav-border)] p-4 text-left last:border-b-0', selectedTripId === trip.id ? 'bg-[var(--nav-primary-soft)]' : 'bg-white hover:bg-[var(--nav-panel)]')}
+                className={cn('grid w-full grid-cols-[minmax(0,1fr)_5rem] gap-3 border-b border-gray-200 p-4 text-left last:border-b-0', selectedTripId === trip.id ? 'bg-brand-50' : 'bg-white hover:bg-gray-50')}
                 key={trip.id}
                 onClick={() => setSelectedTripId(trip.id)}
                 type="button"
               >
                 <div className="min-w-0">
-                  <div className="truncate text-sm font-black">{trip.destination}</div>
-                  <div className="mt-1 text-xs font-bold text-[var(--nav-muted)]">{trip.date} · {trip.distance} · {trip.duration}</div>
+                  <div className="truncate text-sm font-medium text-gray-800">{trip.destination}</div>
+                  <div className="mt-1 text-xs font-medium text-gray-500">{trip.date} · {trip.distance} · {trip.duration}</div>
                 </div>
-                <div className="text-right text-sm font-black text-[var(--nav-primary)]">{trip.score}점</div>
+                <div className="text-right text-sm font-medium text-brand-500">{trip.score}점</div>
               </button>
             ))}
           </div>
         </Panel>
         <Panel title="주행 상세" icon={<FileText className="size-5" weight="bold" />}>
-          <div className="rounded-[1rem] bg-[var(--nav-panel)] p-4">
-            <div className="text-xl font-black">{selectedTrip.destination}</div>
-            <div className="mt-1 text-sm font-bold text-[var(--nav-muted)]">{selectedTrip.date}</div>
+          <div className="rounded-lg bg-gray-50 p-4">
+            <div className="text-xl font-semibold text-gray-900">{selectedTrip.destination}</div>
+            <div className="mt-1 text-sm font-medium text-gray-500">{selectedTrip.date}</div>
             <div className="mt-5 grid grid-cols-2 gap-2">
               <StatusTile label="거리" value={selectedTrip.distance} />
               <StatusTile label="시간" value={selectedTrip.duration} />
@@ -904,14 +902,14 @@ function NavigationSettingsPage() {
             <RangePreview label="TTS 속도" value={`${preferences.ttsSpeed.toFixed(2)}x`} />
           </div>
           <button
-            className="mt-5 inline-flex h-11 items-center justify-center gap-2 rounded-full bg-[var(--nav-primary)] px-5 text-sm font-black text-white shadow-[var(--nav-shadow-control)] transition hover:bg-[var(--nav-primary-hover)]"
+            className="mt-5 inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-brand-500 px-5 text-sm font-medium text-white shadow-theme-xs transition hover:bg-brand-600"
             onClick={save}
             type="button"
           >
             <Check className="size-4" weight="bold" />
             설정 저장
           </button>
-          {saved ? <motion.span className="ml-3 inline-flex rounded-full bg-[rgb(22_163_74/0.12)] px-3 py-2 text-sm font-black text-[var(--nav-success)]">저장됨</motion.span> : null}
+          {saved ? <motion.span className="ml-3 inline-flex rounded-lg bg-green-50 px-3 py-2 text-sm font-medium text-green-600">저장됨</motion.span> : null}
         </Panel>
         <Panel title="즐겨찾기 장소" icon={<HouseLine className="size-5" weight="bold" />}>
           {[
@@ -919,9 +917,9 @@ function NavigationSettingsPage() {
             ['회사', '서울 성동구 성수이로 88'],
             ['자주 가는 곳', '경기 성남시 분당구 정자동'],
           ].map(([label, address]) => (
-            <div className="mb-3 rounded-2xl bg-[var(--nav-panel)] p-4 last:mb-0" key={label}>
-              <div className="flex items-center gap-2 text-sm font-black"><MapPin className="size-4 text-[var(--nav-primary)]" weight="fill" />{label}</div>
-              <div className="mt-1 text-xs font-bold text-[var(--nav-muted)]">{address}</div>
+            <div className="mb-3 rounded-lg bg-gray-50 p-4 last:mb-0" key={label}>
+              <div className="flex items-center gap-2 text-sm font-medium text-gray-800"><MapPin className="size-4 text-brand-500" weight="fill" />{label}</div>
+              <div className="mt-1 text-xs font-medium text-gray-500">{address}</div>
             </div>
           ))}
         </Panel>
@@ -946,13 +944,13 @@ function ProfileSettingsPage() {
         <Panel title="행동별 경고 민감도" icon={<SlidersHorizontal className="size-5" weight="bold" />}>
           <div className="grid gap-3 md:grid-cols-2">
             {behaviorMetrics.map((metric, index) => (
-              <div className="rounded-2xl bg-[var(--nav-panel)] p-3" key={metric.type}>
+              <div className="rounded-lg bg-gray-50 p-3" key={metric.type}>
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-sm font-black">{metric.label}</span>
-                  <span className="rounded-full bg-white px-2.5 py-1 text-xs font-black text-[var(--nav-primary)]">{Math.max(3, 9 - index)}</span>
+                  <span className="text-sm font-medium text-gray-800">{metric.label}</span>
+                  <span className="rounded-lg bg-white px-2.5 py-1 text-xs font-medium text-brand-500">{Math.max(3, 9 - index)}</span>
                 </div>
                 <div className="mt-3 h-2 rounded-full bg-white">
-                  <div className="h-full rounded-full bg-[var(--nav-primary)]" style={{ width: `${Math.max(32, 92 - index * 8)}%` }} />
+                  <div className="h-full rounded-full bg-brand-500" style={{ width: `${Math.max(32, 92 - index * 8)}%` }} />
                 </div>
               </div>
             ))}
@@ -983,16 +981,16 @@ function NotificationsPage() {
           ['score', '안전 점수 하락 경고', '안전 점수가 급격히 낮아질 때 알려줍니다.'],
         ].map(([id, title, description]) => (
           <button
-            className="mb-3 flex w-full items-center justify-between gap-4 rounded-2xl bg-[var(--nav-panel)] p-4 text-left last:mb-0"
+            className="mb-3 flex w-full items-center justify-between gap-4 rounded-lg bg-gray-50 p-4 text-left transition hover:bg-gray-100 last:mb-0"
             key={id}
             onClick={() => setEnabled((current) => ({ ...current, [id]: !current[id] }))}
             type="button"
           >
             <span>
-              <span className="block text-sm font-black">{title}</span>
-              <span className="mt-1 block text-xs font-bold text-[var(--nav-muted)]">{description}</span>
+              <span className="block text-sm font-medium text-gray-800">{title}</span>
+              <span className="mt-1 block text-xs font-medium text-gray-500">{description}</span>
             </span>
-            <span className={cn('relative h-7 w-12 rounded-full transition', enabled[id] ? 'bg-[var(--nav-primary)]' : 'bg-[var(--nav-control-muted)]')}>
+            <span className={cn('relative h-7 w-12 rounded-full transition', enabled[id] ? 'bg-brand-500' : 'bg-gray-300')}>
               <span className={cn('absolute top-1 size-5 rounded-full bg-white transition', enabled[id] ? 'left-6' : 'left-1')} />
             </span>
           </button>
@@ -1005,7 +1003,7 @@ function NotificationsPage() {
 function DashboardActionButton({ children, disabled, onClick }: { children: ReactNode; disabled?: boolean; onClick: () => void }) {
   return (
     <button
-      className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-[var(--nav-primary)] px-4 text-sm font-black text-white shadow-[var(--nav-shadow-control)] transition hover:bg-[var(--nav-primary-hover)] disabled:cursor-not-allowed disabled:opacity-40"
+      className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 text-sm font-medium text-white shadow-theme-xs transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
       disabled={disabled}
       onClick={onClick}
       type="button"
@@ -1017,18 +1015,18 @@ function DashboardActionButton({ children, disabled, onClick }: { children: Reac
 
 function StatusRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between rounded-xl bg-white px-3 py-2 text-sm">
-      <span className="font-bold text-[var(--nav-muted)]">{label}</span>
-      <span className="font-black text-[var(--nav-ink)]">{value}</span>
+    <div className="flex items-center justify-between rounded-lg bg-white px-3 py-2 text-sm">
+      <span className="font-medium text-gray-500">{label}</span>
+      <span className="font-medium text-gray-800">{value}</span>
     </div>
   )
 }
 
 function StatusTile({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl bg-white p-3">
-      <div className="text-xs font-bold text-[var(--nav-muted)]">{label}</div>
-      <div className="mt-1 text-lg font-black text-[var(--nav-ink)]">{value}</div>
+    <div className="rounded-lg bg-white p-3 shadow-theme-xs">
+      <div className="text-xs font-medium text-gray-500">{label}</div>
+      <div className="mt-1 text-lg font-semibold text-gray-900">{value}</div>
     </div>
   )
 }
@@ -1036,7 +1034,7 @@ function StatusTile({ label, value }: { label: string; value: string }) {
 function SettingButton({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
   return (
     <button
-      className={cn('flex min-h-12 w-full items-center justify-between rounded-2xl px-4 text-left text-sm font-black transition', active ? 'bg-[var(--nav-primary-soft)] text-[var(--nav-primary)] ring-1 ring-[rgb(23_70_162/0.18)]' : 'bg-[var(--nav-panel)] text-[var(--nav-muted)] hover:bg-[var(--nav-selection)]')}
+      className={cn('flex min-h-12 w-full items-center justify-between rounded-lg px-4 text-left text-sm font-medium transition', active ? 'bg-brand-50 text-brand-500 ring-1 ring-brand-100' : 'bg-gray-50 text-gray-600 hover:bg-gray-100')}
       onClick={onClick}
       type="button"
     >
@@ -1048,20 +1046,20 @@ function SettingButton({ active, label, onClick }: { active: boolean; label: str
 
 function RangePreview({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl bg-[var(--nav-panel)] p-4">
-      <div className="text-xs font-bold text-[var(--nav-muted)]">{label}</div>
-      <div className="mt-1 text-xl font-black">{value}</div>
+    <div className="rounded-lg bg-gray-50 p-4">
+      <div className="text-xs font-medium text-gray-500">{label}</div>
+      <div className="mt-1 text-xl font-semibold text-gray-900">{value}</div>
     </div>
   )
 }
 
 function ProfileField({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
   return (
-    <div className="flex items-center gap-3 rounded-2xl bg-[var(--nav-panel)] p-4">
-      <div className="grid size-10 place-items-center rounded-full bg-white text-[var(--nav-primary)]">{icon}</div>
+    <div className="flex items-center gap-3 rounded-lg bg-gray-50 p-4">
+      <div className="grid size-10 place-items-center rounded-lg bg-white text-brand-500 shadow-theme-xs">{icon}</div>
       <div>
-        <div className="text-xs font-bold text-[var(--nav-muted)]">{label}</div>
-        <div className="text-sm font-black text-[var(--nav-ink)]">{value}</div>
+        <div className="text-xs font-medium text-gray-500">{label}</div>
+        <div className="text-sm font-medium text-gray-800">{value}</div>
       </div>
     </div>
   )
