@@ -1246,9 +1246,10 @@ describe('NavigationShell', () => {
     expect(screen.getByText('총 운행 거리')).toBeInTheDocument()
     expect(screen.getByText('이상행동')).toBeInTheDocument()
     expect(screen.getAllByText('교정률').length).toBeGreaterThan(0)
-    expect(screen.getByText('86점')).toHaveClass('text-2xl')
-    expect(screen.getByText('86점')).not.toHaveClass('text-3xl')
-    const totalDistanceValue = screen.getAllByText('82.4 km').find((element) => element.classList.contains('text-2xl'))!
+    const averageScoreValue = screen.getAllByText('82점').find((element) => element.classList.contains('text-2xl'))!
+    expect(averageScoreValue).toHaveClass('text-2xl')
+    expect(averageScoreValue).not.toHaveClass('text-3xl')
+    const totalDistanceValue = screen.getAllByText('37.0 km').find((element) => element.classList.contains('text-2xl'))!
     expect(totalDistanceValue).toHaveClass('whitespace-nowrap')
     expect(totalDistanceValue).not.toHaveClass('truncate')
     expect(totalDistanceValue.parentElement).toHaveClass('flex-1')
@@ -1271,8 +1272,8 @@ describe('NavigationShell', () => {
     expect(screen.getByTestId('behavior-type-chart')).toHaveAttribute('data-chart-library', 'recharts')
     const hourlyEventGrid = screen.getByTestId('hourly-event-grid')
     expect(hourlyEventGrid).toHaveAttribute('data-chart-library', 'recharts')
-    expect(within(hourlyEventGrid).getByText('18시')).toBeInTheDocument()
-    expect(within(hourlyEventGrid).getByText('4건')).toBeInTheDocument()
+    expect(within(hourlyEventGrid).getByText('17시')).toBeInTheDocument()
+    expect(within(hourlyEventGrid).getAllByText('1건').length).toBeGreaterThan(0)
     expect(screen.getByText('세션 상세')).toBeInTheDocument()
     expect(screen.getByTestId('report-sessions-layout')).toHaveClass('h-[26rem]')
     expect(screen.getByTestId('report-sessions-layout')).toHaveClass('min-h-0')
@@ -1280,9 +1281,9 @@ describe('NavigationShell', () => {
     expect(screen.getByTestId('report-session-list-scroll')).toHaveClass('overflow-y-auto')
     expect(screen.getByTestId('report-session-detail-panel')).toHaveClass('overflow-hidden')
     expect(screen.getByTestId('report-session-detail-scroll')).toHaveClass('overflow-y-auto')
-    fireEvent.click(screen.getByRole('button', { name: /성수 카페/ }))
-    expect(screen.getByText('종료 상태 ABORTED')).toBeInTheDocument()
-    expect(screen.getByText('위치 기록 4개')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /17:42/ }))
+    expect(screen.getByText('종료 상태 COMPLETED')).toBeInTheDocument()
+    expect(screen.getByText('위치 기록 3개')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '전체 운행 보고서 닫기' }))
     await waitFor(() => {
       expect(screen.queryByRole('dialog', { name: '전체 운행 보고서' })).not.toBeInTheDocument()

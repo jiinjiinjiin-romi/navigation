@@ -195,6 +195,12 @@ type ToastMessage = {
   message: string
 }
 
+type DashboardMockData = {
+  safetyTrend: Array<{ day: string; score: number }>
+  trips: Trip[]
+  videoEvents: VideoEvent[]
+}
+
 const dashboardRoutes: Array<{
   path: DashboardPath
   label: string
@@ -221,24 +227,25 @@ const behaviorMetrics: BehaviorMetric[] = [
   { type: 'SMOKING', label: '흡연', count: 0, averageDurationSeconds: 0, correctionRate: 0, riskLevel: 0, tone: 'success' },
 ]
 
-const trips: Trip[] = [
-  { id: 'trip-01', destination: '성수 오피스', origin: '집', date: '2026.07.05 08:32', startedAt: '2026-07-05T08:32:00', duration: '42분', distance: '18.4km', distanceKm: 18.4, score: 91, events: 2, hasVideo: true, averageSpeedKph: 42, routeSummary: '집 -> 성수 오피스 · 도심 간선도로' },
-  { id: 'trip-02', destination: '강남역', origin: '회사', date: '2026.07.04 19:10', startedAt: '2026-07-04T19:10:00', duration: '36분', distance: '12.9km', distanceKm: 12.9, score: 84, events: 4, hasVideo: true, averageSpeedKph: 31, routeSummary: '회사 -> 강남역 · 정체 구간 포함' },
-  { id: 'trip-03', destination: '분당 정자동', origin: '성수 오피스', date: '2026.07.03 21:44', startedAt: '2026-07-03T21:44:00', duration: '58분', distance: '31.2km', distanceKm: 31.2, score: 76, events: 7, hasVideo: false, averageSpeedKph: 37, routeSummary: '성수 오피스 -> 분당 정자동 · 영상 없음' },
-  { id: 'trip-04', destination: '상암 DMC', origin: '집', date: '2026.07.02 09:08', startedAt: '2026-07-02T09:08:00', duration: '47분', distance: '22.1km', distanceKm: 22.1, score: 94, events: 1, hasVideo: true, averageSpeedKph: 45, routeSummary: '집 -> 상암 DMC · 원활' },
+const BASE_DASHBOARD_TRIPS: Trip[] = [
+  { id: 'trip-01', destination: '서울숲 주차장', origin: '세종대학교', date: '2026.07.06 08:12', startedAt: '2026-07-06T08:12:00', duration: '22분', distance: '12.3km', distanceKm: 12.3, score: 82, events: 3, hasVideo: true, averageSpeedKph: 34, routeSummary: '세종대학교 -> 서울숲 주차장 · 군자로/뚝섬로' },
+  { id: 'trip-02', destination: '서울숲 주차장', origin: '세종대학교', date: '2026.07.06 17:42', startedAt: '2026-07-06T17:42:00', duration: '22분', distance: '12.3km', distanceKm: 12.3, score: 78, events: 3, hasVideo: true, averageSpeedKph: 34, routeSummary: '세종대학교 -> 서울숲 주차장 · 휴대폰 사용 감지 데모' },
+  { id: 'trip-03', destination: '서울숲 주차장', origin: '세종대학교', date: '2026.07.06 19:10', startedAt: '2026-07-06T19:10:00', duration: '22분', distance: '12.3km', distanceKm: 12.3, score: 85, events: 3, hasVideo: true, averageSpeedKph: 34, routeSummary: '세종대학교 -> 서울숲 주차장 · 기기조작 감지 데모' },
 ]
 
-const videoEvents: VideoEvent[] = [
-  { id: 'event-01', tripId: 'trip-01', label: '시선 이탈', time: '00:08:14', seconds: 494, type: 'GAZE_AWAY', riskLevel: 3, confidence: 92, corrected: true, durationSeconds: 9, speedKph: 42, road: '도심 간선도로' },
-  { id: 'event-02', tripId: 'trip-01', label: '휴대폰 사용', time: '00:19:42', seconds: 1182, type: 'PHONE_USE', riskLevel: 4, confidence: 88, corrected: false, durationSeconds: 18, speedKph: 38, road: '성수대교 북단' },
-  { id: 'event-03', tripId: 'trip-01', label: '졸음', time: '00:31:05', seconds: 1865, type: 'DROWSINESS', riskLevel: 5, confidence: 94, corrected: true, durationSeconds: 42, speedKph: 47, road: '강변북로' },
-  { id: 'event-04', tripId: 'trip-02', label: '시선 이탈', time: '00:07:21', seconds: 441, type: 'GAZE_AWAY', riskLevel: 3, confidence: 84, corrected: false, durationSeconds: 12, speedKph: 28, road: '테헤란로' },
-  { id: 'event-05', tripId: 'trip-02', label: '보조 작업', time: '00:15:08', seconds: 908, type: 'SECONDARY_TASK', riskLevel: 3, confidence: 81, corrected: true, durationSeconds: 16, speedKph: 12, road: '정체 구간' },
-  { id: 'event-06', tripId: 'trip-03', label: '졸음', time: '00:28:44', seconds: 1724, type: 'DROWSINESS', riskLevel: 5, confidence: 91, corrected: false, durationSeconds: 37, speedKph: 52, road: '분당수서로' },
-  { id: 'event-07', tripId: 'trip-04', label: '음식/음료', time: '00:11:36', seconds: 696, type: 'FOOD_OR_DRINK', riskLevel: 2, confidence: 78, corrected: true, durationSeconds: 21, speedKph: 44, road: '월드컵북로' },
+const BASE_DASHBOARD_VIDEO_EVENTS: VideoEvent[] = [
+  { id: 'event-01', tripId: 'trip-01', label: '졸음 징후 감지', time: '00:00:12', seconds: 12, type: 'DROWSINESS', riskLevel: 3, confidence: 87, corrected: true, durationSeconds: 10, speedKph: 34, road: '군자로' },
+  { id: 'event-02', tripId: 'trip-01', label: '반복 졸음 징후', time: '00:00:31', seconds: 31, type: 'DROWSINESS', riskLevel: 5, confidence: 91, corrected: true, durationSeconds: 14, speedKph: 32, road: '뚝섬로' },
+  { id: 'event-03', tripId: 'trip-01', label: '집중 운전 모드', time: '00:00:58', seconds: 58, type: 'GAZE_AWAY', riskLevel: 1, confidence: 82, corrected: true, durationSeconds: 6, speedKph: 30, road: '서울숲 진입로' },
+  { id: 'event-04', tripId: 'trip-02', label: '휴대폰 주의', time: '00:00:10', seconds: 10, type: 'PHONE_USE', riskLevel: 3, confidence: 86, corrected: false, durationSeconds: 12, speedKph: 33, road: '군자로' },
+  { id: 'event-05', tripId: 'trip-02', label: '휴대폰 사용 반복', time: '00:00:25', seconds: 25, type: 'PHONE_USE', riskLevel: 5, confidence: 92, corrected: true, durationSeconds: 17, speedKph: 31, road: '뚝섬로' },
+  { id: 'event-06', tripId: 'trip-02', label: '집중 운전 모드', time: '00:00:48', seconds: 48, type: 'GAZE_AWAY', riskLevel: 1, confidence: 80, corrected: true, durationSeconds: 5, speedKph: 30, road: '서울숲 진입로' },
+  { id: 'event-07', tripId: 'trip-03', label: '기기조작 감지', time: '00:00:09', seconds: 9, type: 'SECONDARY_TASK', riskLevel: 3, confidence: 84, corrected: false, durationSeconds: 10, speedKph: 34, road: '군자로' },
+  { id: 'event-08', tripId: 'trip-03', label: '오디오 조작 지속', time: '00:00:24', seconds: 24, type: 'SECONDARY_TASK', riskLevel: 5, confidence: 89, corrected: true, durationSeconds: 18, speedKph: 32, road: '뚝섬로' },
+  { id: 'event-09', tripId: 'trip-03', label: '집중 운전 모드', time: '00:00:48', seconds: 48, type: 'GAZE_AWAY', riskLevel: 1, confidence: 81, corrected: true, durationSeconds: 5, speedKph: 30, road: '서울숲 진입로' },
 ]
 
-const safetyTrend = [
+const BASE_DASHBOARD_SAFETY_TREND = [
   { day: '월', score: 82 },
   { day: '화', score: 85 },
   { day: '수', score: 79 },
@@ -248,6 +255,98 @@ const safetyTrend = [
   { day: '일', score: 89 },
 ]
 
+function createProfileTrip(overrides: Partial<Trip> & Pick<Trip, 'id' | 'date' | 'startedAt'>): Trip {
+  return {
+    destination: '서울숲 주차장',
+    origin: '세종대학교',
+    duration: '22분',
+    distance: '12.3km',
+    distanceKm: 12.3,
+    score: 82,
+    events: 3,
+    hasVideo: true,
+    averageSpeedKph: 34,
+    routeSummary: '세종대학교 -> 서울숲 주차장 · 군자로/뚝섬로',
+    ...overrides,
+  }
+}
+
+function getDashboardProfileKind(profile?: Profile) {
+  const value = `${profile?.id ?? ''} ${profile?.displayName ?? ''}`.toLowerCase()
+  if (value.includes('mom') || value.includes('엄마')) return 'mom'
+  if (value.includes('jiwoo') || value.includes('지우')) return 'jiwoo'
+  return 'dad'
+}
+
+function createDashboardDataForProfile(profile?: Profile, settings?: ProfileSettings): DashboardMockData {
+  const profileKind = getDashboardProfileKind(profile)
+  const sensitivityValues = settings ? Object.values(settings.behaviorSensitivity) : []
+  const averageSensitivity = sensitivityValues.length
+    ? sensitivityValues.reduce((sum, value) => sum + value, 0) / sensitivityValues.length
+    : 0
+  const isSensitiveProfile = settings?.preferences.warningMode === 'sensitive' || averageSensitivity >= 8.5
+
+  if (profileKind === 'mom' || isSensitiveProfile) {
+    return {
+      trips: [
+        createProfileTrip({ id: 'trip-01', date: '2026.07.06 08:12', startedAt: '2026-07-06T08:12:00', score: 79, events: 4, routeSummary: '세종대학교 -> 서울숲 주차장 · 민감도 높음 기준' }),
+        createProfileTrip({ id: 'trip-02', date: '2026.07.06 17:42', startedAt: '2026-07-06T17:42:00', score: 73, events: 5, routeSummary: '세종대학교 -> 서울숲 주차장 · 휴대폰 사용 반복 감지' }),
+        createProfileTrip({ id: 'trip-03', date: '2026.07.06 19:10', startedAt: '2026-07-06T19:10:00', score: 80, events: 3, routeSummary: '세종대학교 -> 서울숲 주차장 · 화면 조작 보조' }),
+      ],
+      safetyTrend: [
+        { day: '월', score: 79 },
+        { day: '화', score: 81 },
+        { day: '수', score: 78 },
+        { day: '목', score: 82 },
+        { day: '금', score: 80 },
+        { day: '토', score: 83 },
+        { day: '일', score: 77 },
+      ],
+      videoEvents: [
+        ...BASE_DASHBOARD_VIDEO_EVENTS.map((event) => ({
+          ...event,
+          confidence: Math.min(99, event.confidence + 3),
+          riskLevel: event.riskLevel >= 3 ? Math.min(5, event.riskLevel + 1) : event.riskLevel,
+        })),
+        { id: 'mom-event-01', tripId: 'trip-01', label: '전방주시 이탈 추가 감지', time: '00:00:44', seconds: 44, type: 'GAZE_AWAY', riskLevel: 3, confidence: 86, corrected: true, durationSeconds: 8, speedKph: 31, road: '뚝섬로' },
+        { id: 'mom-event-02', tripId: 'trip-02', label: '휴대폰 재확인 시도', time: '00:00:34', seconds: 34, type: 'PHONE_USE', riskLevel: 5, confidence: 94, corrected: true, durationSeconds: 13, speedKph: 30, road: '뚝섬로' },
+        { id: 'mom-event-03', tripId: 'trip-02', label: '시선 이탈 지속', time: '00:00:41', seconds: 41, type: 'GAZE_AWAY', riskLevel: 4, confidence: 88, corrected: true, durationSeconds: 9, speedKph: 30, road: '서울숲 진입로' },
+      ],
+    }
+  }
+
+  if (profileKind === 'jiwoo' && !isSensitiveProfile) {
+    return {
+      trips: [
+        createProfileTrip({ id: 'trip-01', date: '2026.07.06 08:12', startedAt: '2026-07-06T08:12:00', score: 88, events: 2, averageSpeedKph: 33, routeSummary: '세종대학교 -> 서울숲 주차장 · 빠른 교정' }),
+        createProfileTrip({ id: 'trip-02', date: '2026.07.06 17:42', startedAt: '2026-07-06T17:42:00', score: 86, events: 2, averageSpeedKph: 32, routeSummary: '세종대학교 -> 서울숲 주차장 · 알림 대행 빠른 수락' }),
+        createProfileTrip({ id: 'trip-03', date: '2026.07.06 19:10', startedAt: '2026-07-06T19:10:00', score: 90, events: 2, averageSpeedKph: 35, routeSummary: '세종대학교 -> 서울숲 주차장 · 음성 조작 우선 사용' }),
+      ],
+      safetyTrend: [
+        { day: '월', score: 86 },
+        { day: '화', score: 87 },
+        { day: '수', score: 88 },
+        { day: '목', score: 89 },
+        { day: '금', score: 90 },
+        { day: '토', score: 91 },
+        { day: '일', score: 88 },
+      ],
+      videoEvents: BASE_DASHBOARD_VIDEO_EVENTS.filter((event) => !['event-03', 'event-06', 'event-09'].includes(event.id)).map((event) => ({
+        ...event,
+        confidence: Math.max(78, event.confidence - 2),
+        corrected: true,
+        durationSeconds: Math.max(4, event.durationSeconds - 3),
+      })),
+    }
+  }
+
+  return {
+    trips: BASE_DASHBOARD_TRIPS,
+    safetyTrend: BASE_DASHBOARD_SAFETY_TREND,
+    videoEvents: BASE_DASHBOARD_VIDEO_EVENTS,
+  }
+}
+
 const riskColors = {
   success: 'var(--nav-success)',
   warning: 'var(--nav-warning)',
@@ -255,14 +354,14 @@ const riskColors = {
   info: 'var(--nav-primary-light)',
 }
 
-const MOCK_TODAY = '2026-07-05'
+const MOCK_TODAY = '2026-07-06'
 
 const DEFAULT_DASHBOARD_STATE: DashboardState = {
   dateRange: { preset: '7d', start: '2026-06-29', end: MOCK_TODAY },
   selectedAnalysisDate: MOCK_TODAY,
   analysisTab: 'report',
-  selectedTripId: trips[0].id,
-  selectedEventId: videoEvents[0].id,
+  selectedTripId: BASE_DASHBOARD_TRIPS[0].id,
+  selectedEventId: BASE_DASHBOARD_VIDEO_EVENTS[0].id,
   selectedBehaviorType: 'DROWSINESS',
 }
 
@@ -356,12 +455,12 @@ function sortTrips(items: Trip[], mode: SortMode) {
   })
 }
 
-function getEventsForTrips(filteredTrips: Trip[]) {
+function getEventsForTrips(filteredTrips: Trip[], videoEvents: VideoEvent[]) {
   const ids = new Set(filteredTrips.map((trip) => trip.id))
   return videoEvents.filter((event) => ids.has(event.tripId))
 }
 
-function getTripEvents(tripId: string) {
+function getTripEvents(tripId: string, videoEvents: VideoEvent[]) {
   return videoEvents.filter((event) => event.tripId === tripId)
 }
 
@@ -388,7 +487,7 @@ function getBehaviorMetrics(events: VideoEvent[]) {
   })
 }
 
-function getHourlyData(events: VideoEvent[]) {
+function getHourlyData(events: VideoEvent[], trips: Trip[]) {
   const buckets = ['06', '09', '12', '15', '18', '21', '24'].map((hour) => ({ hour, count: 0 }))
   events.forEach((event) => {
     const trip = trips.find((item) => item.id === event.tripId)
@@ -399,7 +498,7 @@ function getHourlyData(events: VideoEvent[]) {
   return buckets
 }
 
-function getTrendData(filteredTrips: Trip[]) {
+function getTrendData(filteredTrips: Trip[], safetyTrend: DashboardMockData['safetyTrend']) {
   return safetyTrend.map((item, index) => ({
     day: item.day,
     score: filteredTrips[index]?.score ?? item.score,
@@ -477,28 +576,37 @@ export function DashboardApp() {
     setMobileNavOpen(false)
   }
 
+  const selectedDashboardProfile = profileState.profiles.find((profile) => profile.id === profileState.selectedProfileId) ?? profileState.profiles[0]
+  const dashboardData = useMemo(
+    () => createDashboardDataForProfile(selectedDashboardProfile, profileSettings),
+    [
+      selectedDashboardProfile?.id,
+      selectedDashboardProfile?.displayName,
+      profileSettings.preferences.warningMode,
+      profileSettings.behaviorSensitivity,
+    ],
+  )
   const filteredTrips = useMemo(
-    () => trips.filter((trip) => isTripInRange(trip, dashboardState.dateRange)),
-    [dashboardState.dateRange],
+    () => dashboardData.trips.filter((trip) => isTripInRange(trip, dashboardState.dateRange)),
+    [dashboardData.trips, dashboardState.dateRange],
   )
   const filteredEvents = useMemo(
-    () => getEventsForTrips(filteredTrips),
-    [filteredTrips],
+    () => getEventsForTrips(filteredTrips, dashboardData.videoEvents),
+    [dashboardData.videoEvents, filteredTrips],
   )
   const analysisTrips = useMemo(
-    () => sortTrips(trips.filter((trip) => getTripDate(trip) === dashboardState.selectedAnalysisDate), 'latest'),
-    [dashboardState.selectedAnalysisDate],
+    () => sortTrips(dashboardData.trips.filter((trip) => getTripDate(trip) === dashboardState.selectedAnalysisDate), 'latest'),
+    [dashboardData.trips, dashboardState.selectedAnalysisDate],
   )
   const analysisEvents = useMemo(
-    () => getEventsForTrips(analysisTrips),
-    [analysisTrips],
+    () => getEventsForTrips(analysisTrips, dashboardData.videoEvents),
+    [analysisTrips, dashboardData.videoEvents],
   )
   const summary = useMemo(() => getSummary(filteredTrips, filteredEvents), [filteredTrips, filteredEvents])
   const behaviorMetricsForRange = useMemo(() => getBehaviorMetrics(filteredEvents), [filteredEvents])
   const selectedTrip = analysisTrips.find((trip) => trip.id === dashboardState.selectedTripId) ?? analysisTrips[0]
-  const selectedTripEvents = selectedTrip ? getTripEvents(selectedTrip.id) : []
+  const selectedTripEvents = selectedTrip ? getTripEvents(selectedTrip.id, dashboardData.videoEvents) : []
   const selectedEvent = selectedTripEvents.find((event) => event.id === dashboardState.selectedEventId) ?? selectedTripEvents[0] ?? analysisEvents[0]
-  const selectedDashboardProfile = profileState.profiles.find((profile) => profile.id === profileState.selectedProfileId) ?? profileState.profiles[0]
 
   const notify = (message: string, tone: ToastTone = 'success') => {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`
@@ -530,14 +638,14 @@ export function DashboardApp() {
     const hasSelectedTrip = analysisTrips.some((trip) => trip.id === dashboardState.selectedTripId)
     if (!hasSelectedTrip) {
       const nextTrip = analysisTrips[0]
-      const nextEvent = getTripEvents(nextTrip.id)[0]
+      const nextEvent = getTripEvents(nextTrip.id, dashboardData.videoEvents)[0]
       setDashboardState((current) => ({
         ...current,
         selectedTripId: nextTrip.id,
         selectedEventId: nextEvent?.id ?? current.selectedEventId,
       }))
     }
-  }, [analysisTrips, dashboardState.selectedTripId])
+  }, [analysisTrips, dashboardData.videoEvents, dashboardState.selectedTripId])
 
   useEffect(() => {
     if (!authenticated) {
@@ -645,6 +753,7 @@ export function DashboardApp() {
                   analysisEvents={analysisEvents}
                   analysisTrips={analysisTrips}
                   behaviorMetrics={behaviorMetricsForRange}
+                  dashboardData={dashboardData}
                   dashboardState={dashboardState}
                   favoritePlaces={favoritePlaces}
                   filteredEvents={filteredEvents}
@@ -1007,6 +1116,7 @@ type DashboardPageProps = {
   analysisEvents: VideoEvent[]
   analysisTrips: Trip[]
   behaviorMetrics: BehaviorMetric[]
+  dashboardData: DashboardMockData
   dashboardState: DashboardState
   favoritePlaces: FavoritePlace[]
   filteredEvents: VideoEvent[]
@@ -1082,9 +1192,9 @@ function Panel({ title, icon, children, className }: { title: string; icon?: Rea
   )
 }
 
-function OverviewPage({ behaviorMetrics, dashboardState, filteredEvents, filteredTrips, navigate, setDashboardState, summary }: DashboardPageProps) {
+function OverviewPage({ behaviorMetrics, dashboardData, dashboardState, filteredEvents, filteredTrips, navigate, setDashboardState, summary }: DashboardPageProps) {
   const topBehavior = behaviorMetrics.filter((metric) => metric.count > 0).sort((a, b) => b.count - a.count)[0] ?? behaviorMetrics[0]
-  const trend = getTrendData(filteredTrips)
+  const trend = getTrendData(filteredTrips, dashboardData.safetyTrend)
   const pendingEvents = filteredEvents.filter((event) => !event.corrected).slice(0, 4)
   const updateDateRange = (preset: DateRangePreset) => {
     setDashboardState((current) => ({ ...current, dateRange: getDateRange(preset, current.dateRange) }))
@@ -1130,7 +1240,7 @@ function OverviewPage({ behaviorMetrics, dashboardState, filteredEvents, filtere
             emptyText="확인할 이벤트가 없습니다."
             events={pendingEvents}
             onEventClick={(event) => {
-              const trip = trips.find((item) => item.id === event.tripId)
+              const trip = dashboardData.trips.find((item) => item.id === event.tripId)
               setDashboardState((current) => ({
                 ...current,
                 analysisTab: 'video',
@@ -1145,14 +1255,14 @@ function OverviewPage({ behaviorMetrics, dashboardState, filteredEvents, filtere
         </Panel>
       </div>
       <div className="mt-4 grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
-        <RecentTrips filteredTrips={filteredTrips} navigate={navigate} setDashboardState={setDashboardState} />
+        <RecentTrips dashboardData={dashboardData} filteredTrips={filteredTrips} navigate={navigate} setDashboardState={setDashboardState} />
         <BehaviorDistribution behaviorMetrics={behaviorMetrics} navigate={navigate} setDashboardState={setDashboardState} />
       </div>
     </section>
   )
 }
 
-function RecentTrips({ filteredTrips, navigate, setDashboardState }: { filteredTrips: Trip[]; navigate: (path: DashboardPath) => void; setDashboardState: Dispatch<SetStateAction<DashboardState>> }) {
+function RecentTrips({ dashboardData, filteredTrips, navigate, setDashboardState }: { dashboardData: DashboardMockData; filteredTrips: Trip[]; navigate: (path: DashboardPath) => void; setDashboardState: Dispatch<SetStateAction<DashboardState>> }) {
   return (
     <Panel title="최근 주행" icon={<Clock className="size-5" weight="bold" />}>
       <div className="space-y-2">
@@ -1166,7 +1276,7 @@ function RecentTrips({ filteredTrips, navigate, setDashboardState }: { filteredT
                 analysisTab: 'report',
                 selectedAnalysisDate: getTripDate(trip),
                 selectedTripId: trip.id,
-                selectedEventId: getTripEvents(trip.id)[0]?.id ?? current.selectedEventId,
+                selectedEventId: getTripEvents(trip.id, dashboardData.videoEvents)[0]?.id ?? current.selectedEventId,
               }))
               navigate('/dashboard/analysis')
             }}
@@ -1225,7 +1335,7 @@ function BehaviorDistribution({ behaviorMetrics, navigate, setDashboardState }: 
 }
 
 function AnalysisPage(props: DashboardPageProps) {
-  const { analysisEvents, analysisTrips, dashboardState, selectedTrip, setDashboardState } = props
+  const { analysisEvents, analysisTrips, dashboardData, dashboardState, selectedTrip, setDashboardState } = props
   const analysisBehaviorMetrics = useMemo(() => getBehaviorMetrics(analysisEvents), [analysisEvents])
   const analysisSummary = useMemo(() => getSummary(analysisTrips, analysisEvents), [analysisTrips, analysisEvents])
   const analysisProps = {
@@ -1235,12 +1345,12 @@ function AnalysisPage(props: DashboardPageProps) {
     filteredTrips: analysisTrips,
     summary: analysisSummary,
   }
-  const tripDates = Array.from(new Set(trips.map((trip) => getTripDate(trip)))).sort((a, b) => b.localeCompare(a))
+  const tripDates = Array.from(new Set(dashboardData.trips.map((trip) => getTripDate(trip)))).sort((a, b) => b.localeCompare(a))
 
   const selectDate = (value: string) => {
-    const nextTrips = sortTrips(trips.filter((trip) => getTripDate(trip) === value), 'latest')
+    const nextTrips = sortTrips(dashboardData.trips.filter((trip) => getTripDate(trip) === value), 'latest')
     const nextTrip = nextTrips[0]
-    const nextEvent = nextTrip ? getTripEvents(nextTrip.id)[0] : undefined
+    const nextEvent = nextTrip ? getTripEvents(nextTrip.id, dashboardData.videoEvents)[0] : undefined
     setDashboardState((current) => ({
       ...current,
       selectedAnalysisDate: value,
@@ -1250,7 +1360,7 @@ function AnalysisPage(props: DashboardPageProps) {
   }
 
   const selectTrip = (tripId: string) => {
-    const nextEvent = getTripEvents(tripId)[0]
+    const nextEvent = getTripEvents(tripId, dashboardData.videoEvents)[0]
     setDashboardState((current) => ({
       ...current,
       selectedTripId: tripId,
@@ -1312,12 +1422,12 @@ function AnalysisPage(props: DashboardPageProps) {
   )
 }
 
-function ReportsPage({ embedded = false, filteredEvents, filteredTrips, navigate, notify, selectedTrip, setDashboardState, summary }: DashboardPageProps & { embedded?: boolean }) {
+function ReportsPage({ dashboardData, embedded = false, filteredEvents, filteredTrips, navigate, notify, selectedTrip, setDashboardState, summary }: DashboardPageProps & { embedded?: boolean }) {
   const [reportType, setReportType] = useState<ReportType>('weekly')
   const [sortMode, setSortMode] = useState<SortMode>('latest')
   const sessionList = sortTrips(filteredTrips, sortMode)
   const activeTrip = selectedTrip ?? sessionList[0]
-  const activeEvents = activeTrip ? getTripEvents(activeTrip.id) : []
+  const activeEvents = activeTrip ? getTripEvents(activeTrip.id, dashboardData.videoEvents) : []
   const exportReport = (type: 'PDF' | 'CSV') => notify(`${type} 다운로드가 준비되었습니다.`)
   return (
     <section>
@@ -1347,7 +1457,7 @@ function ReportsPage({ embedded = false, filteredEvents, filteredTrips, navigate
         <Panel title="안전 점수 추이" icon={<ChartLineUp className="size-5" weight="bold" />}>
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={getTrendData(filteredTrips)}>
+              <LineChart data={getTrendData(filteredTrips, dashboardData.safetyTrend)}>
                 <CartesianGrid stroke="var(--nav-border)" vertical={false} />
                 <XAxis dataKey="day" tickLine={false} axisLine={false} />
                 <YAxis domain={[60, 100]} tickLine={false} axisLine={false} width={32} />
@@ -1363,7 +1473,7 @@ function ReportsPage({ embedded = false, filteredEvents, filteredTrips, navigate
               <ShadcnButton
                 className={cn('h-auto w-full rounded-lg p-3 text-left', activeTrip?.id === trip.id ? 'bg-brand-50 ring-1 ring-brand-100 hover:bg-brand-50' : 'bg-muted hover:bg-muted/80')}
                 key={trip.id}
-                onClick={() => setDashboardState((current) => ({ ...current, selectedTripId: trip.id, selectedEventId: getTripEvents(trip.id)[0]?.id ?? current.selectedEventId }))}
+                onClick={() => setDashboardState((current) => ({ ...current, selectedTripId: trip.id, selectedEventId: getTripEvents(trip.id, dashboardData.videoEvents)[0]?.id ?? current.selectedEventId }))}
                 type="button"
                 variant="ghost"
               >
@@ -1396,12 +1506,12 @@ function ReportsPage({ embedded = false, filteredEvents, filteredTrips, navigate
   )
 }
 
-function VideosPage({ dashboardState, embedded = false, filteredTrips, selectedEvent, selectedTrip, setDashboardState }: DashboardPageProps & { embedded?: boolean }) {
+function VideosPage({ dashboardData, dashboardState, embedded = false, filteredTrips, selectedEvent, selectedTrip, setDashboardState }: DashboardPageProps & { embedded?: boolean }) {
   const [videoFilter, setVideoFilter] = useState<VideoFilter>('all')
   const [currentTime, setCurrentTime] = useState(selectedEvent?.seconds ?? 0)
   const videoTrips = filteredTrips.filter((trip) => trip.hasVideo)
   const activeTrip = embedded ? selectedTrip : selectedTrip?.hasVideo ? selectedTrip : videoTrips[0]
-  const tripEvents = activeTrip ? getTripEvents(activeTrip.id) : []
+  const tripEvents = activeTrip ? getTripEvents(activeTrip.id, dashboardData.videoEvents) : []
   const videoFilterOptions: Array<[VideoFilter, string]> = [
     ['all', '전체'],
     ['uncorrected', '미교정'],
@@ -1428,7 +1538,7 @@ function VideosPage({ dashboardState, embedded = false, filteredTrips, selectedE
             label="주행 선택"
             value={activeTrip?.id ?? ''}
             onChange={(value) => {
-              const nextEvent = getTripEvents(value)[0]
+              const nextEvent = getTripEvents(value, dashboardData.videoEvents)[0]
               setDashboardState((current) => ({ ...current, selectedTripId: value, selectedEventId: nextEvent?.id ?? current.selectedEventId }))
             }}
             options={videoTrips.map((trip) => [trip.id, `${trip.origin} -> ${trip.destination}`])}
@@ -1525,13 +1635,13 @@ function VideosPage({ dashboardState, embedded = false, filteredTrips, selectedE
   )
 }
 
-function BehaviorPage({ behaviorMetrics, dashboardState, embedded = false, filteredEvents, navigate, setDashboardState }: DashboardPageProps & { embedded?: boolean }) {
+function BehaviorPage({ behaviorMetrics, dashboardData, dashboardState, embedded = false, filteredEvents, navigate, setDashboardState }: DashboardPageProps & { embedded?: boolean }) {
   const [riskFilter, setRiskFilter] = useState('all')
   const [correctionFilter, setCorrectionFilter] = useState<CorrectionFilter>('all')
   const [hourFilter, setHourFilter] = useState('all')
   const selected = behaviorMetrics.find((metric) => metric.type === dashboardState.selectedBehaviorType) ?? behaviorMetrics[0]
   const selectedEvents = filteredEvents.filter((event) => {
-    const trip = trips.find((item) => item.id === event.tripId)
+    const trip = dashboardData.trips.find((item) => item.id === event.tripId)
     const hour = trip?.startedAt.slice(11, 13) ?? ''
     if (event.type !== selected.type) return false
     if (riskFilter === 'high' && event.riskLevel < 4) return false
@@ -1577,7 +1687,7 @@ function BehaviorPage({ behaviorMetrics, dashboardState, embedded = false, filte
         <Panel title="시간대별 발생" icon={<Clock className="size-5" weight="bold" />}>
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={getHourlyData(selectedEvents.length ? selectedEvents : filteredEvents.filter((event) => event.type === selected.type))}>
+              <BarChart data={getHourlyData(selectedEvents.length ? selectedEvents : filteredEvents.filter((event) => event.type === selected.type), dashboardData.trips)}>
                 <CartesianGrid stroke="var(--nav-border)" vertical={false} />
                 <XAxis dataKey="hour" tickLine={false} axisLine={false} />
                 <YAxis tickLine={false} axisLine={false} width={32} />

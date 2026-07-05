@@ -166,15 +166,15 @@ describe('DashboardApp', () => {
     render(<DashboardApp />)
 
     activateTab('주행 영상')
-    const phoneEventButtons = screen.getAllByRole('button', { name: /휴대폰 사용/ })
-    fireEvent.click(phoneEventButtons[phoneEventButtons.length - 1])
+    const drowsyEventButtons = screen.getAllByRole('button', { name: /졸음 징후 감지/ })
+    fireEvent.click(drowsyEventButtons[drowsyEventButtons.length - 1])
 
     expect(screen.getByTestId('driver-video-panel')).toHaveClass('driver-video-player-surface')
     expect(screen.queryByLabelText('운전자 영상 파일 선택')).not.toBeInTheDocument()
     expect(screen.queryByText('영상 선택')).not.toBeInTheDocument()
     const detailPanel = screen.getByTestId('dashboard-video-event-detail')
-    expect(within(detailPanel).getByText('휴대폰 사용')).toBeInTheDocument()
-    expect(within(detailPanel).getByText('위험도 4')).toBeInTheDocument()
+    expect(within(detailPanel).getByText('졸음 징후 감지')).toBeInTheDocument()
+    expect(within(detailPanel).getByText('위험도 3')).toBeInTheDocument()
   })
 
   test('filters behavior analytics by selected behavior type', () => {
@@ -186,7 +186,7 @@ describe('DashboardApp', () => {
     fireEvent.click(screen.getByRole('button', { name: '졸음 필터' }))
 
     expect(screen.getByTestId('dashboard-behavior-focus')).toHaveTextContent('졸음')
-    expect(screen.getByText('평균 지속 42초')).toBeInTheDocument()
+    expect(screen.getByText('평균 지속 12초')).toBeInTheDocument()
   })
 
   test('shows a saved state after changing navigation settings', () => {
@@ -243,6 +243,7 @@ describe('DashboardApp', () => {
     fireEvent.click(await screen.findByRole('option', { name: '엄마' }))
 
     expect(mockedSelectProfile).toHaveBeenCalledWith('profile-mom')
+    expect(await screen.findByText('77점')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('link', { name: '네비게이션 설정' }))
 
@@ -290,7 +291,7 @@ describe('DashboardApp', () => {
     fireEvent.keyDown(periodSelect, { key: 'ArrowDown' })
     fireEvent.click(await screen.findByRole('option', { name: '오늘' }))
 
-    expect(screen.getByText('18.4km')).toBeInTheDocument()
-    expect(screen.getByText('1회 주행')).toBeInTheDocument()
+    expect(screen.getByText('36.9km')).toBeInTheDocument()
+    expect(screen.getByText('3회 주행')).toBeInTheDocument()
   })
 })
