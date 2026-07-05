@@ -122,12 +122,12 @@ type LocationStatus = 'checking' | 'granted' | 'denied' | 'unsupported'
 type SidePanelId = 'labels' | 'settings' | 'report' | 'connect'
 type ProfileSetupView = 'list' | 'create' | 'edit'
 type ProfileSettingsPageId = 'basic' | 'guidance' | 'behavior'
-type DriverVideoSource = {
+export type DriverVideoSource = {
   name: string
   type: string
   url: string
 }
-type MotionTiming = {
+export type MotionTiming = {
   duration: number
   ease?: [number, number, number, number]
 }
@@ -2855,7 +2855,10 @@ function normalizeOptionalProfileText(value: string | null) {
   return normalized ? normalized : null
 }
 
-function DriverVideoPanel({
+export function DriverVideoPanel({
+  allowVideoSelection = true,
+  emptyDescription = '로컬 영상 파일은 브라우저에서만 재생됩니다.',
+  emptyTitle = '운전자 영상을 선택하세요',
   error,
   fileName,
   motionTiming,
@@ -2863,12 +2866,15 @@ function DriverVideoPanel({
   onError,
   onSelectVideo,
 }: {
+  allowVideoSelection?: boolean
+  emptyDescription?: string
+  emptyTitle?: string
   error: boolean
   fileName?: string
   motionTiming: MotionTiming
   source?: DriverVideoSource
   onError: () => void
-  onSelectVideo: (file: File) => void
+  onSelectVideo?: (file: File) => void
 }) {
   // Driver monitoring video playback surface for the top cockpit layout.
   const videoInputId = 'driver-video-file-input'
@@ -2906,8 +2912,10 @@ function DriverVideoPanel({
   }, [source])
 
   const openVideoFilePicker = useCallback(() => {
-    videoInputRef.current?.click()
-  }, [])
+    if (allowVideoSelection && onSelectVideo) {
+      videoInputRef.current?.click()
+    }
+  }, [allowVideoSelection, onSelectVideo])
 
   return (
     <motion.section
@@ -2943,9 +2951,9 @@ function DriverVideoPanel({
             <FileVideo className="size-7" weight="duotone" />
           </div>
           <div>
-            <p className="text-base font-bold">운전자 영상을 선택하세요</p>
+            <p className="text-base font-bold">{emptyTitle}</p>
             <p className="mt-1 text-sm font-medium text-white/62">
-              로컬 영상 파일은 브라우저에서만 재생됩니다.
+              {emptyDescription}
             </p>
           </div>
         </div>
@@ -2956,22 +2964,24 @@ function DriverVideoPanel({
         {error ? <span className="shrink-0 text-[#fda4af]">재생 오류</span> : null}
       </div>
 
-      <input
-        accept="video/*"
-        aria-label="운전자 영상 파일 선택"
-        className="sr-only"
-        id={videoInputId}
-        ref={videoInputRef}
-        onChange={(event) => {
-          const file = event.currentTarget.files?.[0]
-          if (file) {
-            onSelectVideo(file)
-            event.currentTarget.value = ''
-          }
-        }}
-        type="file"
-      />
-      {!source ? (
+      {allowVideoSelection && onSelectVideo ? (
+        <input
+          accept="video/*"
+          aria-label="운전자 영상 파일 선택"
+          className="sr-only"
+          id={videoInputId}
+          ref={videoInputRef}
+          onChange={(event) => {
+            const file = event.currentTarget.files?.[0]
+            if (file) {
+              onSelectVideo(file)
+              event.currentTarget.value = ''
+            }
+          }}
+          type="file"
+        />
+      ) : null}
+      {!source && allowVideoSelection && onSelectVideo ? (
         <label
           className="absolute right-4 top-4 inline-flex h-10 cursor-pointer items-center gap-2 rounded-full bg-white px-4 text-sm font-bold text-[#101828] shadow-[0_8px_18px_rgb(0_0_0/0.18)] transition hover:bg-[#eef2ff] focus-within:ring-2 focus-within:ring-white/70"
           htmlFor={videoInputId}
