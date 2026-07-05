@@ -17,6 +17,7 @@ import {
 } from 'recharts'
 import {
   Bell,
+  CalendarBlank,
   CaretRight,
   ChartLineUp,
   Check,
@@ -42,6 +43,18 @@ import {
   X,
 } from '@phosphor-icons/react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { Badge } from '@/components/ui/badge'
+import { Button as ShadcnButton } from '@/components/ui/button'
+import { Calendar } from '@/components/ui/calendar'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Empty, EmptyHeader, EmptyTitle } from '@/components/ui/empty'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Slider } from '@/components/ui/slider'
+import { Switch } from '@/components/ui/switch'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { DriverVideoPanel } from '@/features/navigation/components/NavigationShell'
 import { cn } from '@/lib/utils'
 
@@ -299,6 +312,17 @@ function getDateLabel(value: string) {
   return value.split('-').join('.')
 }
 
+function parseDateString(value: string) {
+  return value ? new Date(`${value}T00:00:00`) : undefined
+}
+
+function formatDateValue(date: Date) {
+  const year = date.getFullYear()
+  const month = `${date.getMonth() + 1}`.padStart(2, '0')
+  const day = `${date.getDate()}`.padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 function sortTrips(items: Trip[], mode: SortMode) {
   return [...items].sort((a, b) => {
     if (mode === 'score-low') return a.score - b.score
@@ -479,9 +503,9 @@ export function DashboardApp() {
           onNavigate={navigate}
         />
         <div className="flex min-h-dvh min-w-0 flex-1 flex-col lg:min-h-0">
-          <button className="fixed left-4 top-4 z-40 grid size-10 place-items-center rounded-lg border border-gray-200 bg-white text-gray-500 shadow-theme-xs hover:bg-gray-50 lg:hidden" onClick={() => setMobileNavOpen(true)} type="button" aria-label="모바일 메뉴 열기">
+          <ShadcnButton className="fixed left-4 top-4 z-40 rounded-lg shadow-theme-xs lg:hidden" onClick={() => setMobileNavOpen(true)} type="button" aria-label="모바일 메뉴 열기" size="icon" variant="outline">
             <List className="size-5" weight="bold" />
-          </button>
+          </ShadcnButton>
           <main className="min-h-0 flex-1 overflow-x-hidden px-4 pb-24 pt-16 sm:px-6 lg:overflow-y-auto lg:px-0 lg:pb-0 lg:pt-0">
             <AnimatePresence mode="wait">
               <motion.div
@@ -538,14 +562,16 @@ export function DashboardApp() {
             >
               <div className="mb-4 flex items-center justify-between">
                 <DashboardBrand />
-                <button
-                  className="grid size-10 place-items-center rounded-lg border border-gray-200 bg-white text-gray-500 shadow-sm hover:bg-gray-50"
+                <ShadcnButton
+                  className="rounded-lg shadow-sm"
                   onClick={() => setMobileNavOpen(false)}
                   type="button"
                   aria-label="모바일 메뉴 닫기"
+                  size="icon"
+                  variant="outline"
                 >
                   <X className="size-5" weight="bold" />
-                </button>
+                </ShadcnButton>
               </div>
               <DashboardNavList activePath={path} onNavigate={navigate} />
             </motion.aside>
@@ -594,29 +620,18 @@ function MockLoginPage({ onLogin, reducedMotion }: { onLogin: () => void; reduce
             <p className="text-sm font-medium text-brand-500">Mock account</p>
             <h2 className="mt-2 text-2xl font-semibold tracking-normal text-gray-900">운전자 계정으로 시작</h2>
           </div>
-          <label className="block">
-            <span className="text-sm font-medium text-gray-700">이메일</span>
-            <input
-              className="mt-2 h-11 w-full rounded-lg border border-gray-300 bg-white px-4 text-sm font-medium text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10"
-              defaultValue="driver@example.com"
-              type="email"
-            />
-          </label>
-          <label className="mt-5 block">
-            <span className="text-sm font-medium text-gray-700">비밀번호</span>
-            <input
-              className="mt-2 h-11 w-full rounded-lg border border-gray-300 bg-white px-4 text-sm font-medium text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10"
-              defaultValue="demo-password"
-              type="password"
-            />
-          </label>
-          <button
-            className="mt-7 inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-brand-500 px-5 text-sm font-medium text-white shadow-sm transition hover:bg-brand-600 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-brand-500"
-            type="submit"
-          >
+          <div className="grid gap-2">
+            <Label className="text-sm font-medium text-gray-700" htmlFor="dashboard-login-email">이메일</Label>
+            <Input className="h-11 bg-white px-4 text-sm font-medium" defaultValue="driver@example.com" id="dashboard-login-email" type="email" />
+          </div>
+          <div className="mt-5 grid gap-2">
+            <Label className="text-sm font-medium text-gray-700" htmlFor="dashboard-login-password">비밀번호</Label>
+            <Input className="h-11 bg-white px-4 text-sm font-medium" defaultValue="demo-password" id="dashboard-login-password" type="password" />
+          </div>
+          <ShadcnButton className="mt-7 h-11 w-full rounded-lg" type="submit">
             대시보드 시작
             <CaretRight className="size-4" weight="bold" />
-          </button>
+          </ShadcnButton>
           <p className="mt-5 text-xs font-medium leading-5 text-gray-500">
             백엔드 인증 없이 localStorage 기반 mock 세션으로 동작합니다.
           </p>
@@ -666,14 +681,16 @@ function DashboardSidebar({
           <div className="min-w-0 flex-1">
             <div className="truncate text-sm font-medium text-gray-800">안정현 님</div>
           </div>
-          <button
+          <ShadcnButton
             aria-label="로그아웃"
-            className="grid size-9 shrink-0 place-items-center rounded-lg text-gray-500 transition hover:bg-gray-100 hover:text-red-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500"
+            className="size-9 shrink-0 rounded-lg text-gray-500 hover:text-red-600"
             onClick={onLogout}
+            size="icon"
             type="button"
+            variant="ghost"
           >
             <SignOut className="size-4" weight="bold" />
-          </button>
+          </ShadcnButton>
         </div>
       </div>
     </aside>
@@ -690,38 +707,52 @@ function DateRangeControl({
   onDateRangeChange: (preset: DateRangePreset) => void
 }) {
   return (
-    <div className="rounded-xl bg-gray-50 p-3">
-      <select
-        aria-label="개요 기간"
-        className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-gray-800 outline-none transition focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10"
-        onChange={(event) => onDateRangeChange(event.target.value as DateRangePreset)}
-        value={dateRange.preset}
-      >
-        <option value="today">오늘</option>
-        <option value="yesterday">어제</option>
-        <option value="7d">최근 7일</option>
-        <option value="30d">최근 30일</option>
-        <option value="custom">사용자 지정</option>
-      </select>
+    <div className="rounded-xl bg-muted p-3">
+      <Select onValueChange={(value) => onDateRangeChange(value as DateRangePreset)} value={dateRange.preset}>
+        <SelectTrigger aria-label="개요 기간" className="h-10 w-full bg-background">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectGroup>
+            <SelectItem value="today">오늘</SelectItem>
+            <SelectItem value="yesterday">어제</SelectItem>
+            <SelectItem value="7d">최근 7일</SelectItem>
+            <SelectItem value="30d">최근 30일</SelectItem>
+            <SelectItem value="custom">사용자 지정</SelectItem>
+          </SelectGroup>
+        </SelectContent>
+      </Select>
       {dateRange.preset === 'custom' ? (
         <div className="mt-2 grid gap-2">
-          <input
-            aria-label="시작일"
-            className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-xs font-medium text-gray-700 outline-none transition focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10"
-            onChange={(event) => onCustomDateRangeChange('start', event.target.value)}
-            type="date"
-            value={dateRange.start}
-          />
-          <input
-            aria-label="종료일"
-            className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-xs font-medium text-gray-700 outline-none transition focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10"
-            onChange={(event) => onCustomDateRangeChange('end', event.target.value)}
-            type="date"
-            value={dateRange.end}
-          />
+          <DatePickerField ariaLabel="시작일" value={dateRange.start} onChange={(value) => onCustomDateRangeChange('start', value)} />
+          <DatePickerField ariaLabel="종료일" value={dateRange.end} onChange={(value) => onCustomDateRangeChange('end', value)} />
         </div>
       ) : null}
     </div>
+  )
+}
+
+function DatePickerField({ ariaLabel, onChange, value }: { ariaLabel: string; onChange: (value: string) => void; value: string }) {
+  const selectedDate = parseDateString(value)
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <ShadcnButton aria-label={ariaLabel} className="h-10 w-full justify-start bg-background text-left font-medium" variant="outline">
+          <CalendarBlank data-icon="inline-start" weight="bold" />
+          {value ? getDateLabel(value) : '날짜 선택'}
+        </ShadcnButton>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-auto p-0">
+        <Calendar
+          mode="single"
+          selected={selectedDate}
+          onSelect={(date) => {
+            if (date) onChange(formatDateValue(date))
+          }}
+        />
+      </PopoverContent>
+    </Popover>
   )
 }
 
@@ -832,21 +863,38 @@ function PageHeader({ title, description, action }: { title: string; description
 
 function MetricCard({ icon, label, value, caption, tone = 'info' }: { icon: ReactNode; label: string; value: string; caption: string; tone?: BehaviorMetric['tone'] }) {
   return (
-    <motion.section
-      className="rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-xs"
+    <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.16 }}
     >
-      <div className="flex items-center justify-between gap-3">
-        <div className="text-sm font-medium text-gray-500">{label}</div>
-        <div className="grid size-10 place-items-center rounded-lg" style={{ background: `color-mix(in srgb, ${riskColors[tone]} 12%, white)`, color: riskColors[tone] }}>
-          {icon}
-        </div>
-      </div>
-      <div className="mt-5 text-3xl font-semibold tracking-normal text-gray-900">{value}</div>
-      <div className="mt-1 text-xs font-medium text-gray-500">{caption}</div>
-    </motion.section>
+      <Card className="gap-0 rounded-2xl py-5 shadow-theme-xs">
+        <CardContent className="px-5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-sm font-medium text-muted-foreground">{label}</div>
+            <div className="grid size-10 place-items-center rounded-lg" style={{ background: `color-mix(in srgb, ${riskColors[tone]} 12%, white)`, color: riskColors[tone] }}>
+              {icon}
+            </div>
+          </div>
+          <div className="mt-5 text-3xl font-semibold tracking-normal text-foreground">{value}</div>
+          <div className="mt-1 text-xs font-medium text-muted-foreground">{caption}</div>
+        </CardContent>
+      </Card>
+    </motion.div>
+  )
+}
+
+function Panel({ title, icon, children, className }: { title: string; icon?: ReactNode; children: ReactNode; className?: string }) {
+  return (
+    <Card className={cn('gap-0 rounded-2xl py-5 shadow-theme-xs', className)}>
+      <CardHeader className="mb-4 flex-row items-center gap-2 px-5">
+        {icon ? <div className="text-brand-500">{icon}</div> : null}
+        <CardTitle className="text-base font-medium tracking-normal text-gray-800">{title}</CardTitle>
+      </CardHeader>
+      <CardContent className="px-5">
+        {children}
+      </CardContent>
+    </Card>
   )
 }
 
@@ -920,25 +968,13 @@ function OverviewPage({ behaviorMetrics, dashboardState, filteredEvents, filtere
   )
 }
 
-function Panel({ title, icon, children, className }: { title: string; icon?: ReactNode; children: ReactNode; className?: string }) {
-  return (
-    <section className={cn('rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-xs', className)}>
-      <div className="mb-4 flex items-center gap-2">
-        {icon ? <div className="text-brand-500">{icon}</div> : null}
-        <h2 className="text-base font-medium tracking-normal text-gray-800">{title}</h2>
-      </div>
-      {children}
-    </section>
-  )
-}
-
 function RecentTrips({ filteredTrips, navigate, setDashboardState }: { filteredTrips: Trip[]; navigate: (path: DashboardPath) => void; setDashboardState: Dispatch<SetStateAction<DashboardState>> }) {
   return (
     <Panel title="최근 주행" icon={<Clock className="size-5" weight="bold" />}>
       <div className="space-y-2">
         {filteredTrips.slice(0, 3).map((trip) => (
-          <button
-            className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg bg-gray-50 p-3 text-left transition hover:bg-gray-100"
+          <ShadcnButton
+            className="grid h-auto w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg bg-muted p-3 text-left hover:bg-muted/80"
             key={trip.id}
             onClick={() => {
               setDashboardState((current) => ({
@@ -951,13 +987,14 @@ function RecentTrips({ filteredTrips, navigate, setDashboardState }: { filteredT
               navigate('/dashboard/analysis')
             }}
             type="button"
+            variant="ghost"
           >
             <div className="min-w-0">
               <div className="truncate text-sm font-medium text-gray-800">{trip.destination}</div>
               <div className="mt-1 text-xs font-medium text-gray-500">{trip.date} · {trip.distance} · {trip.duration}</div>
             </div>
             <div className="text-right text-sm font-medium text-brand-500">{trip.score}점</div>
-          </button>
+          </ShadcnButton>
         ))}
         {filteredTrips.length === 0 ? <EmptyState text="선택 기간에 주행 기록이 없습니다." /> : null}
       </div>
@@ -983,18 +1020,19 @@ function BehaviorDistribution({ behaviorMetrics, navigate, setDashboardState }: 
         </div>
         <div className="space-y-2">
           {behaviorMetrics.slice(0, 5).map((item) => (
-            <button
-              className="flex w-full items-center justify-between gap-3 rounded-lg bg-gray-50 px-3 py-2 text-left transition hover:bg-gray-100"
+            <ShadcnButton
+              className="flex h-auto w-full items-center justify-between gap-3 rounded-lg bg-muted px-3 py-2 text-left hover:bg-muted/80"
               key={item.type}
               onClick={() => {
                 setDashboardState((current) => ({ ...current, analysisTab: 'behavior', selectedBehaviorType: item.type }))
                 navigate('/dashboard/analysis')
               }}
               type="button"
+              variant="ghost"
             >
               <span className="text-sm font-medium text-gray-500">{item.label}</span>
               <span className="text-sm font-medium text-gray-800">{item.count}건</span>
-            </button>
+            </ShadcnButton>
           ))}
         </div>
       </div>
@@ -1039,42 +1077,43 @@ function AnalysisPage(props: DashboardPageProps) {
   return (
     <section>
       <PageHeader title="분석" description="날짜와 주행 기록을 선택한 뒤 보고서, 영상, 행동을 한 화면에서 전환합니다." />
-      <div className="mb-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-theme-xs">
+      <Card className="mb-4 gap-0 rounded-2xl py-4 shadow-theme-xs">
+        <CardContent className="px-4">
         <div className="grid gap-3 lg:grid-cols-[14rem_minmax(0,1fr)]">
-          <label className="block">
-            <span className="text-xs font-medium text-gray-500">날짜</span>
-            <input
-              aria-label="분석 날짜"
-              className="mt-1 h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-gray-800 outline-none transition focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10"
-              onChange={(event) => selectDate(event.target.value)}
-              type="date"
-              value={dashboardState.selectedAnalysisDate}
-            />
-          </label>
-          <label className="block">
-            <span className="text-xs font-medium text-gray-500">주행 기록</span>
-            <select
-              aria-label="분석 주행 기록"
-              className="mt-1 h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-gray-800 outline-none transition focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10"
-              disabled={analysisTrips.length === 0}
-              onChange={(event) => selectTrip(event.target.value)}
-              value={selectedTrip?.id ?? ''}
-            >
-              {analysisTrips.map((trip) => (
-                <option key={trip.id} value={trip.id}>
-                  {trip.origin} - {trip.destination} · {trip.startedAt.slice(11, 16)} · {trip.distance}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div>
+            <Label className="text-xs font-medium text-muted-foreground">날짜</Label>
+            <div className="mt-1">
+              <DatePickerField ariaLabel="분석 날짜" value={dashboardState.selectedAnalysisDate} onChange={selectDate} />
+            </div>
+          </div>
+          <div>
+            <Label className="text-xs font-medium text-muted-foreground">주행 기록</Label>
+            <Select disabled={analysisTrips.length === 0} onValueChange={selectTrip} value={selectedTrip?.id ?? ''}>
+              <SelectTrigger aria-label="분석 주행 기록" className="mt-1 h-10 w-full bg-background">
+                <SelectValue placeholder="주행 기록 선택" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  {analysisTrips.map((trip) => (
+                    <SelectItem key={trip.id} value={trip.id}>
+                      {trip.origin} - {trip.destination} · {trip.startedAt.slice(11, 16)} · {trip.distance}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
         {analysisTrips.length === 0 ? <div className="mt-3"><EmptyState text="선택한 날짜에 주행 기록이 없습니다." /></div> : null}
-      </div>
-      <div className="mb-4 flex flex-wrap gap-2 border-b border-gray-200">
-        <SettingsTabButton active={dashboardState.analysisTab === 'report'} onClick={() => setDashboardState((current) => ({ ...current, analysisTab: 'report' }))}>보고서</SettingsTabButton>
-        <SettingsTabButton active={dashboardState.analysisTab === 'video'} onClick={() => setDashboardState((current) => ({ ...current, analysisTab: 'video' }))}>주행 영상</SettingsTabButton>
-        <SettingsTabButton active={dashboardState.analysisTab === 'behavior'} onClick={() => setDashboardState((current) => ({ ...current, analysisTab: 'behavior' }))}>운전 행동</SettingsTabButton>
-      </div>
+        </CardContent>
+      </Card>
+      <Tabs className="mb-4" value={dashboardState.analysisTab} onValueChange={(value) => setDashboardState((current) => ({ ...current, analysisTab: value as AnalysisTab }))}>
+        <TabsList variant="line">
+          <TabsTrigger value="report" onClick={() => setDashboardState((current) => ({ ...current, analysisTab: 'report' }))}>보고서</TabsTrigger>
+          <TabsTrigger value="video" onClick={() => setDashboardState((current) => ({ ...current, analysisTab: 'video' }))}>주행 영상</TabsTrigger>
+          <TabsTrigger value="behavior" onClick={() => setDashboardState((current) => ({ ...current, analysisTab: 'behavior' }))}>운전 행동</TabsTrigger>
+        </TabsList>
+      </Tabs>
       {analysisTrips.length === 0 ? null : (
         <>
           {dashboardState.analysisTab === 'report' ? <ReportsPage {...analysisProps} embedded /> : null}
@@ -1137,18 +1176,19 @@ function ReportsPage({ embedded = false, filteredEvents, filteredTrips, navigate
         <Panel title="세션 리포트" icon={<FileText className="size-5" weight="bold" />}>
           <div className="space-y-2">
             {sessionList.map((trip) => (
-              <button
-                className={cn('w-full rounded-lg p-3 text-left transition', activeTrip?.id === trip.id ? 'bg-brand-50 ring-1 ring-brand-100' : 'bg-gray-50 hover:bg-gray-100')}
+              <ShadcnButton
+                className={cn('h-auto w-full rounded-lg p-3 text-left', activeTrip?.id === trip.id ? 'bg-brand-50 ring-1 ring-brand-100 hover:bg-brand-50' : 'bg-muted hover:bg-muted/80')}
                 key={trip.id}
                 onClick={() => setDashboardState((current) => ({ ...current, selectedTripId: trip.id, selectedEventId: getTripEvents(trip.id)[0]?.id ?? current.selectedEventId }))}
                 type="button"
+                variant="ghost"
               >
                 <div className="flex items-center justify-between gap-3">
                   <div className="text-sm font-medium text-gray-800">{trip.destination}</div>
                   <div className="text-sm font-medium text-brand-500">{trip.score}점</div>
                 </div>
                 <div className="mt-1 text-xs font-medium text-gray-500">{trip.date} · 이벤트 {trip.events}건</div>
-              </button>
+              </ShadcnButton>
             ))}
             {sessionList.length === 0 ? <EmptyState text="보고서로 만들 주행 세션이 없습니다." /> : null}
           </div>
@@ -1212,17 +1252,18 @@ function VideosPage({ dashboardState, embedded = false, filteredTrips, selectedE
         ) : null}
         <div aria-label="이벤트 필터" className="flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1" role="group">
           {videoFilterOptions.map(([value, label]) => (
-            <button
+            <ShadcnButton
               className={cn(
-                'h-10 shrink-0 rounded-lg px-4 text-sm font-medium transition',
-                videoFilter === value ? 'bg-brand-500 text-white shadow-theme-xs' : 'bg-white text-gray-700 ring-1 ring-gray-200 hover:bg-gray-50'
+                'h-10 shrink-0 rounded-lg px-4 shadow-theme-xs',
+                videoFilter === value && 'bg-brand-500 text-white hover:bg-brand-500'
               )}
               key={value}
               onClick={() => setVideoFilter(value)}
               type="button"
+              variant={videoFilter === value ? 'default' : 'outline'}
             >
               {label}
-            </button>
+            </ShadcnButton>
           ))}
         </div>
       </Toolbar>
@@ -1247,9 +1288,9 @@ function VideosPage({ dashboardState, embedded = false, filteredTrips, selectedE
               <div className="relative h-2 rounded-full bg-white/16">
                 <div className="absolute inset-y-0 left-0 rounded-full bg-white" style={{ width: `${Math.min(100, (currentTime / 2538) * 100)}%` }} />
                 {tripEvents.map((event) => (
-                  <button
+                  <ShadcnButton
                     aria-label={`${event.label} 이벤트 보기`}
-                    className={cn('pointer-events-auto absolute top-1/2 size-5 -translate-y-1/2 rounded-full border-2 border-white transition', dashboardState.selectedEventId === event.id ? 'scale-125 bg-red-500' : 'bg-orange-500')}
+                    className={cn('pointer-events-auto absolute top-1/2 size-5 -translate-y-1/2 rounded-full border-2 border-white p-0 transition', dashboardState.selectedEventId === event.id ? 'scale-125 bg-red-500 hover:bg-red-500' : 'bg-orange-500 hover:bg-orange-500')}
                     key={event.id}
                     onClick={() => {
                       setCurrentTime(event.seconds)
@@ -1264,18 +1305,19 @@ function VideosPage({ dashboardState, embedded = false, filteredTrips, selectedE
           </div>
           <div className="mt-4 grid gap-2 sm:grid-cols-3">
             {visibleEvents.map((event) => (
-              <button
-                className={cn('rounded-lg p-3 text-left transition', dashboardState.selectedEventId === event.id ? 'bg-brand-50 text-brand-500' : 'bg-gray-50 text-gray-500 hover:bg-gray-100')}
+              <ShadcnButton
+                className={cn('h-auto rounded-lg p-3 text-left', dashboardState.selectedEventId === event.id ? 'bg-brand-50 text-brand-500 hover:bg-brand-50' : 'bg-muted text-muted-foreground hover:bg-muted/80')}
                 key={event.id}
                 onClick={() => {
                   setCurrentTime(event.seconds)
                   setDashboardState((current) => ({ ...current, selectedEventId: event.id, selectedBehaviorType: event.type }))
                 }}
                 type="button"
+                variant="ghost"
               >
                 <div className="text-xs font-semibold">{event.time}</div>
                 <div className="mt-1 text-sm font-semibold">{event.label}</div>
-              </button>
+              </ShadcnButton>
             ))}
             {visibleEvents.length === 0 ? <EmptyState text="필터에 맞는 이벤트가 없습니다." /> : null}
           </div>
@@ -1284,7 +1326,7 @@ function VideosPage({ dashboardState, embedded = false, filteredTrips, selectedE
           {selectedEvent ? <div data-testid="dashboard-video-event-detail" className="rounded-lg bg-gray-50 p-4">
             <div className="text-2xl font-semibold text-gray-900">{selectedEvent.label}</div>
             <div className="mt-2 text-sm font-medium text-gray-500">{`${selectedEvent.time} · 위험도 ${selectedEvent.riskLevel}`}</div>
-            <div className="mt-3 inline-flex rounded-lg bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600">{`위험도 ${selectedEvent.riskLevel}`}</div>
+            <Badge className="mt-3 rounded-lg px-3 py-1.5" variant="destructive">{`위험도 ${selectedEvent.riskLevel}`}</Badge>
             <div className="mt-4 grid gap-2">
               <StatusRow label="신뢰도" value={`${selectedEvent.confidence}%`} />
               <StatusRow label="교정 여부" value={selectedEvent.corrected ? '교정됨' : '미교정'} />
@@ -1320,14 +1362,15 @@ function BehaviorPage({ behaviorMetrics, dashboardState, embedded = false, filte
       {!embedded ? <PageHeader title="운전 행동 분석" /> : null}
       <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
         {behaviorMetrics.map((metric) => (
-          <button
-            className={cn('min-h-10 shrink-0 rounded-lg px-4 text-sm font-medium transition', dashboardState.selectedBehaviorType === metric.type ? 'bg-brand-500 text-white shadow-theme-xs' : 'bg-white text-gray-700 ring-1 ring-gray-300 hover:bg-gray-50')}
+          <ShadcnButton
+            className={cn('min-h-10 shrink-0 rounded-lg px-4 shadow-theme-xs', dashboardState.selectedBehaviorType === metric.type && 'bg-brand-500 text-white hover:bg-brand-500')}
             key={metric.type}
             onClick={() => setDashboardState((current) => ({ ...current, selectedBehaviorType: metric.type }))}
             type="button"
+            variant={dashboardState.selectedBehaviorType === metric.type ? 'default' : 'outline'}
           >
             {metric.label} 필터
-          </button>
+          </ShadcnButton>
         ))}
       </div>
       <Toolbar>
@@ -1422,12 +1465,14 @@ function NavigationSettingsPage({ favoritePlaces, notify, profileSettings, setFa
     <section>
       <PageHeader
         title="네비게이션 설정"
-        action={<div className="flex flex-wrap gap-2"><DashboardActionButton variant="secondary" onClick={cancel}>취소</DashboardActionButton><DashboardActionButton variant="secondary" onClick={reset}>초기화</DashboardActionButton><DashboardActionButton onClick={save}>설정 저장</DashboardActionButton>{saved ? <span className="inline-flex h-10 items-center rounded-lg bg-green-50 px-3 text-sm font-medium text-green-600">저장됨</span> : null}</div>}
+        action={<div className="flex flex-wrap gap-2"><DashboardActionButton variant="secondary" onClick={cancel}>취소</DashboardActionButton><DashboardActionButton variant="secondary" onClick={reset}>초기화</DashboardActionButton><DashboardActionButton onClick={save}>설정 저장</DashboardActionButton>{saved ? <Badge className="h-10 rounded-lg px-3" variant="secondary">저장됨</Badge> : null}</div>}
       />
-      <div className="mb-4 flex flex-wrap gap-2 border-b border-gray-200">
-        <SettingsTabButton active={activeTab === 'settings'} onClick={() => setActiveTab('settings')}>기본 설정</SettingsTabButton>
-        <SettingsTabButton active={activeTab === 'favorites'} onClick={() => setActiveTab('favorites')}>즐겨찾기 장소</SettingsTabButton>
-      </div>
+      <Tabs className="mb-4" value={activeTab} onValueChange={(value) => setActiveTab(value as 'settings' | 'favorites')}>
+        <TabsList variant="line">
+          <TabsTrigger value="settings" onClick={() => setActiveTab('settings')}>기본 설정</TabsTrigger>
+          <TabsTrigger value="favorites" onClick={() => setActiveTab('favorites')}>즐겨찾기 장소</TabsTrigger>
+        </TabsList>
+      </Tabs>
       {activeTab === 'settings' ? (
         <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
           <Panel title="프로필과 안내" icon={<UserCircle className="size-5" weight="bold" />}>
@@ -1473,8 +1518,8 @@ function NavigationSettingsPage({ favoritePlaces, notify, profileSettings, setFa
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2 text-sm font-medium text-gray-800"><MapPin className="size-4 text-brand-500" weight="fill" />{place.role === 'origin' ? '출발지' : '목적지'}</div>
                   <div className="flex gap-2">
-                    <button className={cn('rounded-lg px-2 py-1 text-xs font-medium', place.pinned ? 'bg-brand-50 text-brand-500' : 'bg-white text-gray-500')} onClick={() => updatePlace(place.id, { pinned: !place.pinned })} type="button">고정</button>
-                    <button className="rounded-lg bg-white px-2 py-1 text-xs font-medium text-red-500" onClick={() => setPlacesDraft((current) => current.filter((item) => item.id !== place.id))} type="button">삭제</button>
+                    <ShadcnButton className={cn('h-7 rounded-lg px-2 text-xs', place.pinned && 'bg-brand-50 text-brand-500 hover:bg-brand-50')} onClick={() => updatePlace(place.id, { pinned: !place.pinned })} size="sm" type="button" variant="outline">고정</ShadcnButton>
+                    <ShadcnButton className="h-7 rounded-lg px-2 text-xs text-red-500" onClick={() => setPlacesDraft((current) => current.filter((item) => item.id !== place.id))} size="sm" type="button" variant="outline">삭제</ShadcnButton>
                   </div>
                 </div>
                 <TextField label="라벨" value={place.label} onChange={(value) => updatePlace(place.id, { label: value })} />
@@ -1579,51 +1624,66 @@ function Toolbar({ children }: { children: ReactNode }) {
 
 function SelectControl({ label, onChange, options, value }: { label: string; onChange: (value: string) => void; options: Array<[string, string]>; value: string }) {
   return (
-    <label className="flex h-10 items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-xs font-medium text-gray-500 shadow-theme-xs">
-      {label}
-      <select className="min-w-28 bg-transparent text-sm font-medium text-gray-800 outline-none" onChange={(event) => onChange(event.target.value)} value={value}>
-        {options.map(([optionValue, optionLabel]) => <option key={optionValue} value={optionValue}>{optionLabel}</option>)}
-      </select>
-    </label>
+    <div className="flex h-10 items-center gap-2 rounded-lg border border-border bg-background px-3 text-xs font-medium text-muted-foreground shadow-xs">
+      <Label className="shrink-0 text-xs font-medium text-muted-foreground">{label}</Label>
+      <Select onValueChange={onChange} value={value}>
+        <SelectTrigger aria-label={label} className="h-8 min-w-28 border-0 bg-transparent px-0 shadow-none focus:ring-0">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectGroup>
+            {options.map(([optionValue, optionLabel]) => <SelectItem key={optionValue} value={optionValue}>{optionLabel}</SelectItem>)}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
+    </div>
   )
 }
 
 function TextField({ label, onChange, type = 'text', value }: { label: string; onChange: (value: string) => void; type?: string; value: string }) {
+  const id = `dashboard-field-${label.replace(/\s+/g, '-')}`
+
   return (
-    <label className="block">
-      <span className="text-xs font-medium text-gray-500">{label}</span>
-      <input
-        className="mt-1 h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-gray-800 outline-none transition focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10"
+    <div className="grid gap-1">
+      <Label className="text-xs font-medium text-muted-foreground" htmlFor={id}>{label}</Label>
+      <Input
+        className="h-10 bg-background text-sm font-medium"
+        id={id}
         onChange={(event) => onChange(event.target.value)}
         type={type}
         value={value}
       />
-    </label>
+    </div>
   )
 }
 
 function RangeControl({ label, max, min, onChange, step = 1, suffix = '', value }: { label: string; max: number; min: number; onChange: (value: number) => void; step?: number; suffix?: string; value: number }) {
   return (
-    <label className="rounded-lg bg-gray-50 p-3">
-      <span className="flex items-center justify-between gap-3 text-sm font-medium text-gray-700">
+    <div className="rounded-lg bg-muted p-3">
+      <Label className="flex items-center justify-between gap-3 text-sm font-medium text-foreground">
         {label}
         <span className="text-brand-500">{value}{suffix}</span>
-      </span>
-      <input
-        className="mt-3 w-full accent-[var(--nav-primary)]"
+      </Label>
+      <Slider
+        className="mt-3"
         max={max}
         min={min}
-        onChange={(event) => onChange(Number(event.target.value))}
+        onValueChange={([next]) => onChange(next)}
         step={step}
-        type="range"
-        value={value}
+        value={[value]}
       />
-    </label>
+    </div>
   )
 }
 
 function EmptyState({ text }: { text: string }) {
-  return <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 p-5 text-center text-sm font-medium text-gray-500">{text}</div>
+  return (
+    <Empty className="rounded-lg border border-dashed bg-muted/50 p-5 md:p-5">
+      <EmptyHeader>
+        <EmptyTitle className="text-sm font-medium text-muted-foreground">{text}</EmptyTitle>
+      </EmptyHeader>
+    </Empty>
+  )
 }
 
 function TripDetail({ trip }: { trip: Trip }) {
@@ -1647,18 +1707,19 @@ function EventList({ emptyText = '이벤트가 없습니다.', events, onEventCl
   return (
     <div className="space-y-2">
       {events.map((event) => (
-        <button
-          className="flex w-full items-center justify-between gap-3 rounded-lg bg-gray-50 p-3 text-left transition hover:bg-gray-100"
+        <ShadcnButton
+          className="flex h-auto w-full items-center justify-between gap-3 rounded-lg bg-muted p-3 text-left hover:bg-muted/80"
           key={event.id}
           onClick={() => onEventClick(event)}
           type="button"
+          variant="ghost"
         >
           <span className="min-w-0">
             <span className="block truncate text-sm font-medium text-gray-800">{event.label}</span>
             <span className="mt-1 block text-xs font-medium text-gray-500">{event.time} · 위험도 {event.riskLevel} · {event.corrected ? '교정됨' : '미교정'}</span>
           </span>
           <CaretRight className="size-4 shrink-0 text-gray-400" weight="bold" />
-        </button>
+        </ShadcnButton>
       ))}
     </div>
   )
@@ -1666,12 +1727,10 @@ function EventList({ emptyText = '이벤트가 없습니다.', events, onEventCl
 
 function ToggleRow({ enabled, onClick, title }: { enabled: boolean; onClick: () => void; title: string }) {
   return (
-    <button className="mb-3 flex w-full items-center justify-between gap-4 rounded-lg bg-gray-50 p-4 text-left transition hover:bg-gray-100 last:mb-0" onClick={onClick} type="button">
-      <span className="block text-sm font-medium text-gray-800">{title}</span>
-      <span className={cn('relative h-7 w-12 rounded-full transition', enabled ? 'bg-brand-500' : 'bg-gray-300')}>
-        <span className={cn('absolute top-1 size-5 rounded-full bg-white transition', enabled ? 'left-6' : 'left-1')} />
-      </span>
-    </button>
+    <div className="mb-3 flex w-full items-center justify-between gap-4 rounded-lg bg-muted p-4 last:mb-0">
+      <Label className="block text-sm font-medium text-foreground">{title}</Label>
+      <Switch checked={enabled} onCheckedChange={onClick} />
+    </div>
   )
 }
 
@@ -1703,17 +1762,15 @@ function ToastStack({ toasts }: { toasts: ToastMessage[] }) {
 
 function DashboardActionButton({ children, disabled, onClick, variant = 'primary' }: { children: ReactNode; disabled?: boolean; onClick: () => void; variant?: 'primary' | 'secondary' }) {
   return (
-    <button
-      className={cn(
-        'inline-flex h-10 items-center justify-center gap-2 rounded-lg px-4 text-sm font-medium shadow-theme-xs transition disabled:cursor-not-allowed disabled:opacity-50',
-        variant === 'primary' ? 'bg-brand-500 text-white hover:bg-brand-600' : 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-50',
-      )}
+    <ShadcnButton
+      className="h-10 rounded-lg shadow-theme-xs"
       disabled={disabled}
       onClick={onClick}
+      variant={variant === 'primary' ? 'default' : 'outline'}
       type="button"
     >
       {children}
-    </button>
+    </ShadcnButton>
   )
 }
 
@@ -1737,28 +1794,14 @@ function StatusTile({ label, value }: { label: string; value: string }) {
 
 function SettingButton({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
   return (
-    <button
-      className={cn('flex min-h-12 w-full items-center justify-between rounded-lg px-4 text-left text-sm font-medium transition', active ? 'bg-brand-50 text-brand-500 ring-1 ring-brand-100' : 'bg-gray-50 text-gray-600 hover:bg-gray-100')}
+    <ShadcnButton
+      className={cn('min-h-12 w-full justify-between rounded-lg px-4 text-left', active && 'bg-brand-50 text-brand-500 ring-1 ring-brand-100 hover:bg-brand-50')}
       onClick={onClick}
+      variant={active ? 'secondary' : 'outline'}
       type="button"
     >
       {label}
       {active ? <Check className="size-4" weight="bold" /> : null}
-    </button>
-  )
-}
-
-function SettingsTabButton({ active, children, onClick }: { active: boolean; children: ReactNode; onClick: () => void }) {
-  return (
-    <button
-      className={cn(
-        '-mb-px min-h-10 border-b-2 px-1 text-sm font-medium transition',
-        active ? 'border-brand-500 text-brand-500' : 'border-transparent text-gray-500 hover:text-gray-800',
-      )}
-      onClick={onClick}
-      type="button"
-    >
-      {children}
-    </button>
+    </ShadcnButton>
   )
 }

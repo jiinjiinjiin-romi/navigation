@@ -13,3 +13,26 @@ Object.defineProperty(window, 'matchMedia', {
     dispatchEvent: () => false,
   }),
 })
+
+class ResizeObserverMock {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
+Object.defineProperty(window, 'ResizeObserver', {
+  writable: true,
+  value: ResizeObserverMock,
+})
+
+Object.defineProperty(globalThis, 'ResizeObserver', {
+  writable: true,
+  value: ResizeObserverMock,
+})
+
+window.HTMLElement.prototype.scrollIntoView = function scrollIntoView() {}
+window.HTMLElement.prototype.hasPointerCapture = function hasPointerCapture() {
+  return false
+}
+window.HTMLElement.prototype.setPointerCapture = function setPointerCapture() {}
+window.HTMLElement.prototype.releasePointerCapture = function releasePointerCapture() {}

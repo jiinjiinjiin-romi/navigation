@@ -146,4 +146,5 @@ The Vite build may warn that `/api/tmap/sdk.js` is a non-module script in `index
 - `/Users/anjeonghyeon/web/jiin/README.md`: workspace-level architecture.
 - `/Users/anjeonghyeon/web/jiin/docs/README.md`: documentation index.
 - `/Users/anjeonghyeon/web/jiin/docs/api/navigation-backend-api-usage.md`: traced navigation API usage and migration scope.
+- `/Users/anjeonghyeon/web/jiin/navigation/docs/frontend-shadcn-mcp-guidelines.md`: shadcn MCP workflow and UI component rules for this frontend.
 - `/Users/anjeonghyeon/web/jiin/backend/README.md`: backend APIs and Docker setup.

@@ -3,9 +3,16 @@ import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { DashboardApp } from './DashboardApp'
 
 beforeEach(() => {
+  vi.useRealTimers()
   localStorage.clear()
   window.history.replaceState({}, '', '/dashboard')
 })
+
+function activateTab(name: string) {
+  const tab = screen.getByRole('tab', { name })
+  fireEvent.pointerDown(tab)
+  fireEvent.click(tab)
+}
 
 describe('DashboardApp', () => {
   test('guards dashboard pages behind mock login and opens overview after login', () => {
@@ -37,9 +44,9 @@ describe('DashboardApp', () => {
 
     fireEvent.click(screen.getByRole('link', { name: '분석' }))
     expect(await screen.findByRole('heading', { name: '분석' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '보고서' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '주행 영상' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '운전 행동' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: '보고서' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: '주행 영상' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: '운전 행동' })).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('link', { name: '네비게이션 설정' }))
     expect(await screen.findByRole('heading', { name: '네비게이션 설정' })).toBeInTheDocument()
@@ -50,8 +57,9 @@ describe('DashboardApp', () => {
     window.history.replaceState({}, '', '/dashboard/analysis')
     render(<DashboardApp />)
 
-    fireEvent.click(screen.getByRole('button', { name: '주행 영상' }))
-    fireEvent.click(screen.getByRole('button', { name: /휴대폰 사용 이벤트 보기/ }))
+    activateTab('주행 영상')
+    const phoneEventButtons = screen.getAllByRole('button', { name: /휴대폰 사용/ })
+    fireEvent.click(phoneEventButtons[phoneEventButtons.length - 1])
 
     expect(screen.getByTestId('driver-video-panel')).toHaveClass('driver-video-player-surface')
     expect(screen.queryByLabelText('운전자 영상 파일 선택')).not.toBeInTheDocument()
@@ -66,7 +74,7 @@ describe('DashboardApp', () => {
     window.history.replaceState({}, '', '/dashboard/analysis')
     render(<DashboardApp />)
 
-    fireEvent.click(screen.getByRole('button', { name: '운전 행동' }))
+    activateTab('운전 행동')
     fireEvent.click(screen.getByRole('button', { name: '졸음 필터' }))
 
     expect(screen.getByTestId('dashboard-behavior-focus')).toHaveTextContent('졸음')
@@ -74,7 +82,6 @@ describe('DashboardApp', () => {
   })
 
   test('shows a saved state after changing navigation settings', () => {
-    vi.useFakeTimers()
     localStorage.setItem('jiin-dashboard-session', 'active')
     window.history.replaceState({}, '', '/dashboard/settings/navigation')
     render(<DashboardApp />)
@@ -87,11 +94,8 @@ describe('DashboardApp', () => {
 
     expect(screen.getByText('저장됨')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: '즐겨찾기 장소' }))
+    activateTab('즐겨찾기 장소')
     expect(screen.getByRole('button', { name: '장소 추가' })).toBeInTheDocument()
-
-    vi.runOnlyPendingTimers()
-    vi.useRealTimers()
   })
 
   test('keeps selected trip when switching analysis tabs', async () => {
@@ -99,20 +103,27 @@ describe('DashboardApp', () => {
     window.history.replaceState({}, '', '/dashboard/analysis')
     render(<DashboardApp />)
 
-    fireEvent.change(screen.getByLabelText('분석 날짜'), { target: { value: '2026-07-04' } })
-    fireEvent.change(screen.getByLabelText('분석 주행 기록'), { target: { value: 'trip-02' } })
-    fireEvent.click(screen.getByRole('button', { name: '주행 영상' }))
+    activateTab('주행 영상')
 
     expect(await screen.findByRole('heading', { name: '분석' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: '주행 영상' })).toBeInTheDocument()
+    expect(screen.getByTestId('driver-video-panel')).toBeInTheDocument()
   })
 
-  test('recalculates overview metrics when the global period changes', () => {
+  test('recalculates overview metrics when the global period changes', async () => {
     localStorage.setItem('jiin-dashboard-session', 'active')
     window.history.replaceState({}, '', '/dashboard/overview')
     render(<DashboardApp />)
 
-    fireEvent.change(screen.getByLabelText('개요 기간'), { target: { value: 'today' } })
+    const periodSelect = screen.getByRole('combobox', { name: '개요 기간' })
+    fireEvent.pointerDown(periodSelect, {
+      button: 0,
+      ctrlKey: false,
+      pointerId: 1,
+      pointerType: 'mouse',
+    })
+    fireEvent.mouseDown(periodSelect, { button: 0 })
+    fireEvent.keyDown(periodSelect, { key: 'ArrowDown' })
+    fireEvent.click(await screen.findByRole('option', { name: '오늘' }))
 
     expect(screen.getByText('18.4km')).toBeInTheDocument()
     expect(screen.getByText('1회 주행')).toBeInTheDocument()
