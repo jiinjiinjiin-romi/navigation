@@ -64,6 +64,10 @@ vi.mock('../api/searchHistoryApi', () => ({
   listSearchHistories: vi.fn(),
 }))
 
+vi.mock('../api/voiceApi', () => ({
+  synthesizeVoice: vi.fn(async () => new Blob(['audio'], { type: 'audio/mpeg' })),
+}))
+
 vi.mock('@/features/orb', () => ({
   VoiceOrb: ({
     state,
@@ -494,6 +498,8 @@ describe('NavigationShell', () => {
   })
 
   const openRouteSearchSummary = async () => {
+    await enterFreeNavigationIfNeeded()
+
     const existingDestinationField = screen.queryByPlaceholderText('목적지 검색')
     if (existingDestinationField) {
       return existingDestinationField
@@ -512,6 +518,14 @@ describe('NavigationShell', () => {
     fireEvent.click(searchButton)
 
     return screen.findByPlaceholderText('목적지 검색')
+  }
+
+  const enterFreeNavigationIfNeeded = async () => {
+    if (!screen.queryByTestId('tmap-panel')) {
+      fireEvent.click(await screen.findByRole('button', { name: '네비게이션 이용하기' }))
+    }
+
+    await screen.findByTestId('tmap-panel')
   }
 
   const openOriginEditor = async () => {
@@ -575,7 +589,36 @@ describe('NavigationShell', () => {
       expect(mockedSelectProfile).toHaveBeenCalledWith('profile-1')
       expect(screen.queryByTestId('navigation-profile-setup')).not.toBeInTheDocument()
     })
+    expect(screen.getByTestId('demo-scenario-selection')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '네비게이션 이용하기' }))
     expect(screen.getByRole('button', { name: /어디로 갈까요/ })).toBeInTheDocument()
+  })
+
+  it('starts a fixed demo scenario after profile selection', async () => {
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: /민준 프로필 선택/ }))
+    fireEvent.click(screen.getByRole('button', { name: '민준(으)로 시작' }))
+    fireEvent.click(await screen.findByTestId('demo-scenario-card-drowsy_driver'))
+
+    expect(await screen.findByTestId('demo-scenario-presenter-panel')).toBeInTheDocument()
+    expect(screen.getByTestId('demo-navigation-lock')).toBeInTheDocument()
+    expect(screen.getByText('주행 화면 진입')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /다음/ }))
+
+    expect(await screen.findByText('목적지 검색 열림')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '데모 선택으로' }))
+
+    expect(await screen.findByTestId('demo-scenario-selection')).toBeInTheDocument()
+    expect(screen.queryByTestId('demo-scenario-presenter-panel')).not.toBeInTheDocument()
   })
 
   it('keeps profile cards on one horizontal scroll row', async () => {
@@ -2334,6 +2377,7 @@ describe('NavigationShell', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: /민준 프로필 선택/ }))
     fireEvent.click(screen.getByRole('button', { name: '민준(으)로 시작' }))
+    await enterFreeNavigationIfNeeded()
 
     const railButtons = within(await screen.findByTestId('right-rail-dock')).getAllByRole('button')
     expect(railButtons.map((button) => button.getAttribute('aria-label'))).toEqual([

@@ -64,6 +64,15 @@ import {
   type NaviAssistantScenario,
   type NaviAssistantStep,
 } from '@/features/assistant-scenarios'
+import {
+  DEMO_DESTINATION,
+  advanceDemoScenario,
+  createInitialDemoScenarioState,
+  getDemoScenarios,
+  respondToDemoScenario,
+  type DemoScenarioControllerState,
+  type DemoScenarioId,
+} from '@/features/demo-scenarios'
 import { VoiceWave } from '@/features/voice-wave'
 import { type CSSProperties, type KeyboardEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -96,6 +105,7 @@ import {
   type SearchHistoryItem,
 } from '../api/searchHistoryApi'
 import { getCurrentAddress, getRoadMatch, getRouteOptions, searchPlaces } from '../api/tmapApi'
+import { synthesizeVoice } from '../api/voiceApi'
 import { createRoundedRoutePath } from '../map/routeGeometry'
 import { markRoutePerformance, measureRoutePerformance } from '../performance/routePerformance'
 import { createRouteSimulationPlan, getSimulatedRoutePosition } from '../simulation/routeSimulation'
@@ -122,6 +132,7 @@ type LocationStatus = 'checking' | 'granted' | 'denied' | 'unsupported'
 type SidePanelId = 'labels' | 'settings' | 'report' | 'connect'
 type ProfileSetupView = 'list' | 'create' | 'edit'
 type ProfileSettingsPageId = 'basic' | 'guidance' | 'behavior'
+type NavigationEntryMode = 'free-navigation' | 'demo-scenario'
 export type DriverVideoSource = {
   name: string
   type: string
@@ -687,6 +698,13 @@ const MUSIC_LIBRARY = [
 ] as const
 type NaviAssistantScenarioId = AiaiScenarioId
 const NAVI_ASSISTANT_SCENARIOS: NaviAssistantScenario[] = createNaviAssistantScenarios()
+const DEMO_SCENARIO_DEFINITIONS = getDemoScenarios()
+const DEMO_DESTINATION_PLACE: Place = {
+  id: 'demo-destination-seoul-forest-parking',
+  name: DEMO_DESTINATION.name,
+  address: DEMO_DESTINATION.address,
+  coordinate: { lat: 37.5446, lng: 127.0374 },
+}
 const DRIVER_VIDEO_MIME_TYPES = new Set([
   'video/mp4',
   'video/webm',
@@ -863,6 +881,10 @@ export function NavigationShell({
   const shouldReduceMotion = useReducedMotion()
   const queryClient = useQueryClient()
   const [profileSetupComplete, setProfileSetupComplete] = useState(initialProfileSetupComplete)
+  const [navigationEntryMode, setNavigationEntryMode] = useState<NavigationEntryMode | null>(
+    initialProfileSetupComplete ? 'free-navigation' : null,
+  )
+  const [demoScenarioState, setDemoScenarioState] = useState<DemoScenarioControllerState | null>(null)
   const [profileSetupView, setProfileSetupView] = useState<ProfileSetupView>('list')
   const [selectedProfileId, setSelectedProfileId] = useState<string | undefined>(initialSelectedProfileId)
   const [editingProfileId, setEditingProfileId] = useState<string>()
@@ -1246,6 +1268,10 @@ export function NavigationShell({
   const assistantStep = assistantScenario.steps[
     Math.min(assistantStepIndex, assistantScenario.steps.length - 1)
   ]
+  const demoActive = navigationEntryMode === 'demo-scenario' && Boolean(demoScenarioState)
+  const demoNavigationLocked = demoActive && demoScenarioState?.phase === 'setup'
+  const demoAssistantStep = demoScenarioState ? createDemoAssistantStep(demoScenarioState) : undefined
+  const visibleAssistantStep = demoAssistantStep ?? assistantStep
   const motionTiming = shouldReduceMotion
     ? { duration: 0 }
     : { duration: 0.22, ease: PRODUCT_EASE }
@@ -1625,6 +1651,115 @@ export function NavigationShell({
     setRouteSearchOpen(false)
   }, [stopSimulation])
 
+  const applyDemoSetupSideEffects = useCallback((state: DemoScenarioControllerState) => {
+    const setupEvent = state.setupEvent
+
+    if (!setupEvent) {
+      return
+    }
+
+    switch (setupEvent.eventType) {
+      case 'DRIVING_SCREEN_OPENED':
+        setActiveSidePanel(null)
+        setMusicModalOpen(false)
+        break
+      case 'ROUTE_SEARCH_OPENED':
+        openRouteSearchEditor('destination')
+        break
+      case 'DESTINATION_TYPING':
+        stopSimulation()
+        setSelectedRouteOptionId(undefined)
+        setSimulationPosition(undefined)
+        setDestination(undefined)
+        setDestinationKeyword(DEMO_DESTINATION.query)
+        setRouteSearchOpen(true)
+        setActiveField('destination')
+        setHighlightedIndex(0)
+        break
+      case 'DESTINATION_CANDIDATE_SHOWN':
+        setRouteSearchOpen(true)
+        setActiveField('destination')
+        break
+      case 'DESTINATION_SELECTED':
+        selectPlace('destination', DEMO_DESTINATION_PLACE, { recordHistory: false })
+        break
+      case 'ROUTE_CANDIDATES_LOADED':
+        setRouteOptionsSearchReady(true)
+        break
+      case 'RECOMMENDED_ROUTE_SELECTED':
+        if (activeRouteOptionId) {
+          selectRouteOption(activeRouteOptionId)
+        }
+        break
+      case 'GUIDANCE_STARTED':
+        setRouteSearchOpen(false)
+        setActiveField(null)
+        break
+      case 'SIMULATION_STARTED':
+        startSimulation()
+        break
+      default:
+        break
+    }
+  }, [
+    activeRouteOptionId,
+    openRouteSearchEditor,
+    selectPlace,
+    selectRouteOption,
+    startSimulation,
+    stopSimulation,
+  ])
+
+  const completeDemoDrive = useCallback(() => {
+    stopSimulation()
+    setSimulationPosition(destination?.coordinate ?? DEMO_DESTINATION_PLACE.coordinate)
+    setSimulationRemainingDistance(0)
+    setSimulationRemainingDuration(0)
+    setGuidanceDistanceUpdateKey((key) => key + 1)
+  }, [destination?.coordinate, stopSimulation])
+
+  const advanceActiveDemoScenario = useCallback(() => {
+    setDemoScenarioState((currentState) => {
+      if (!currentState) {
+        return currentState
+      }
+
+      const nextState = advanceDemoScenario(currentState)
+      applyDemoSetupSideEffects(nextState)
+      if (nextState.phase === 'ended' || nextState.scenarioEvent?.eventType === 'SESSION_ENDED') {
+        completeDemoDrive()
+        if (nextState.scenarioEvent?.eventType === 'SESSION_ENDED') {
+          return {
+            ...nextState,
+            phase: 'ended',
+          }
+        }
+      }
+      return nextState
+    })
+  }, [applyDemoSetupSideEffects, completeDemoDrive])
+
+  const respondActiveDemoScenario = useCallback((responseValue: string) => {
+    setDemoScenarioState((currentState) => (
+      currentState ? respondToDemoScenario(currentState, responseValue) : currentState
+    ))
+  }, [])
+
+  const resetActiveDemoScenario = useCallback(() => {
+    if (!demoScenarioState) {
+      return
+    }
+
+    endGuidance()
+    setDemoScenarioState(createInitialDemoScenarioState(demoScenarioState.scenario.scenarioId))
+  }, [demoScenarioState, endGuidance])
+
+  const exitActiveDemoScenario = useCallback(() => {
+    endGuidance()
+    setDemoScenarioState(null)
+    setNavigationEntryMode(null)
+  }, [endGuidance])
+
   useEffect(() => {
     const route = activeRoute
     const simulationPlan = activeRouteSimulationPlan
@@ -1724,7 +1859,7 @@ export function NavigationShell({
             'w-full',
           ].join(' ')}
         >
-          {profileSetupComplete ? (
+          {profileSetupComplete && navigationEntryMode ? (
             <>
             <TmapPanel
               cameraSettings={mapCameraSettings}
@@ -1745,7 +1880,7 @@ export function NavigationShell({
               onRequestLocation={requestCurrentLocation}
             />
             <NaviOrbControl
-              assistantStep={assistantStep}
+              assistantStep={visibleAssistantStep}
               hidden={Boolean(activeSidePanel || musicModalOpen)}
               motionTiming={motionTiming}
               onClose={resetAssistantScenario}
@@ -1760,6 +1895,7 @@ export function NavigationShell({
                   setMusicModalOpen(false)
                 }
               }}
+              profileName={selectedProfile?.displayName ?? null}
               reducedMotion={Boolean(shouldReduceMotion)}
             />
             {!activeRoute ? (
@@ -1876,6 +2012,13 @@ export function NavigationShell({
                 onEndGuidance={endGuidance}
               />
             )}
+            {demoNavigationLocked ? (
+              <div
+                aria-label="데모 준비 중 내비게이션 조작 잠금"
+                className="pointer-events-auto absolute inset-0 z-[55] cursor-not-allowed bg-transparent"
+                data-testid="demo-navigation-lock"
+              />
+            ) : null}
 
             <BottomStatusBar
               arrivalLabel={arrivalLabel}
@@ -1938,6 +2081,20 @@ export function NavigationShell({
               </AnimatePresence>
             </motion.div>
             </>
+          ) : null}
+          {profileSetupComplete && !navigationEntryMode ? (
+            <DemoScenarioSelection
+              motionTiming={motionTiming}
+              profileName={selectedProfile?.displayName ?? '운전자'}
+              onStartFreeNavigation={() => {
+                setNavigationEntryMode('free-navigation')
+                setDemoScenarioState(null)
+              }}
+              onStartScenario={(scenarioId) => {
+                setNavigationEntryMode('demo-scenario')
+                setDemoScenarioState(createInitialDemoScenarioState(scenarioId))
+              }}
+            />
           ) : null}
         </div>
 
@@ -2044,16 +2201,36 @@ export function NavigationShell({
           ) : null}
         </AnimatePresence>
       </section>
-      <NaviAssistantDebugPanel
-        motionTiming={motionTiming}
-        scenario={assistantScenario}
-        scenarioId={assistantScenarioId}
-        stepIndex={assistantStepIndex}
-        onNext={() => moveAssistantScenarioStep(1)}
-        onPrevious={() => moveAssistantScenarioStep(-1)}
-        onReset={resetAssistantScenario}
-        onSelectScenario={selectAssistantScenario}
-      />
+      {demoScenarioState ? (
+        <DemoScenarioPresenterPanel
+          motionTiming={motionTiming}
+          routeReady={Boolean(activeRoute)}
+          routeOptionsReady={routeOptionsReady}
+          state={demoScenarioState}
+          onExit={exitActiveDemoScenario}
+          onNext={advanceActiveDemoScenario}
+          onReset={resetActiveDemoScenario}
+          onRespond={respondActiveDemoScenario}
+        />
+      ) : navigationEntryMode === 'free-navigation' ? (
+        <NaviAssistantDebugPanel
+          motionTiming={motionTiming}
+          scenario={assistantScenario}
+          scenarioId={assistantScenarioId}
+          stepIndex={assistantStepIndex}
+          onNext={() => moveAssistantScenarioStep(1)}
+          onPrevious={() => moveAssistantScenarioStep(-1)}
+          onReset={resetAssistantScenario}
+          onSelectScenario={selectAssistantScenario}
+        />
+      ) : (
+        <div className="col-start-2 row-start-2 self-start rounded-[1.1rem] border border-white/70 bg-white p-4 text-[var(--nav-ink)] shadow-[0_18px_46px_rgb(0_0_0/0.24)]">
+          <p className="text-sm font-bold">데모 준비</p>
+          <p className="mt-1 text-xs font-semibold leading-5 text-[var(--nav-muted)]">
+            프로필 선택 후 왼쪽 화면에서 데모를 선택합니다.
+          </p>
+        </div>
+      )}
     </main>
   )
 }
@@ -3003,6 +3180,7 @@ function NaviOrbControl({
   onClose,
   onRecommendationAction,
   onWakeCall,
+  profileName,
   reducedMotion,
 }: {
   assistantStep: NaviAssistantStep
@@ -3011,18 +3189,81 @@ function NaviOrbControl({
   onClose: () => void
   onRecommendationAction: (recommendation: NaviAssistantRecommendation) => void
   onWakeCall: () => void
+  profileName: string | null
   reducedMotion: boolean
 }) {
-  if (hidden) {
-    return null
-  }
-
   const expanded = assistantStep.mode !== 'idle'
   const visibleOrbState = getAssistantVisibleOrbState(assistantStep)
   const showVoiceWave = isAssistantVoiceWaveVisible(assistantStep)
   const contentRevealDelay = assistantStep.text || assistantStep.userText
     ? 0
     : NAVI_ASSISTANT_CONTENT_REVEAL_DELAY_SECONDS
+  const speechText = assistantStep.text ?? assistantStep.userText ?? ''
+  const speakerRole = assistantStep.text ? 'assistant' : assistantStep.userText ? 'user' : null
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const audioUrlRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (
+      hidden
+      || !expanded
+      || !speechText
+      || !speakerRole
+      || typeof Audio === 'undefined'
+      || typeof URL.createObjectURL !== 'function'
+    ) {
+      return undefined
+    }
+
+    const controller = new AbortController()
+    let disposed = false
+
+    const revokeAudioUrl = () => {
+      if (audioUrlRef.current) {
+        URL.revokeObjectURL(audioUrlRef.current)
+        audioUrlRef.current = null
+      }
+    }
+
+    audioRef.current?.pause()
+    audioRef.current = null
+
+    void synthesizeVoice(
+      {
+        text: speechText,
+        speakerRole,
+        profileName,
+      },
+      undefined,
+      controller.signal,
+    )
+      .then((audioBlob) => {
+        if (disposed) {
+          return
+        }
+
+        revokeAudioUrl()
+        const audioUrl = URL.createObjectURL(audioBlob)
+        audioUrlRef.current = audioUrl
+
+        const audio = new Audio(audioUrl)
+        audioRef.current = audio
+        void audio.play().catch(() => undefined)
+      })
+      .catch(() => undefined)
+
+    return () => {
+      disposed = true
+      controller.abort()
+      audioRef.current?.pause()
+      audioRef.current = null
+      revokeAudioUrl()
+    }
+  }, [expanded, hidden, profileName, speakerRole, speechText])
+
+  if (hidden) {
+    return null
+  }
 
   return (
     <motion.div
@@ -3618,6 +3859,310 @@ function getRouteDestinationLabel(recommendation: Extract<NaviAssistantRecommend
   const destination = destinationMatch?.[1]?.trim()
 
   return destination || recommendation.meta
+}
+
+function createDemoAssistantStep(state: DemoScenarioControllerState): NaviAssistantStep {
+  const setupEvent = state.setupEvent
+  const scenarioEvent = state.scenarioEvent
+
+  if (setupEvent) {
+    return {
+      id: setupEvent.id,
+      label: setupEvent.title,
+      mode: 'idle',
+      orbState: 'idle',
+      energy: 0,
+    }
+  }
+
+  if (scenarioEvent?.userSpeech) {
+    return {
+      id: scenarioEvent.id,
+      label: scenarioEvent.uiState.visibleStatus,
+      mode: 'user-listening',
+      orbState: 'listening',
+      energy: 0.72,
+      statusLabel: '듣는 중...',
+      userText: scenarioEvent.userSpeech,
+    }
+  }
+
+  if (scenarioEvent?.romiMessage) {
+    return {
+      id: scenarioEvent.id,
+      label: scenarioEvent.uiState.visibleStatus,
+      mode: 'assistant-speaking',
+      orbState: scenarioEvent.eventType === 'ACTION_COMPLETED' || scenarioEvent.eventType === 'FOCUS_MODE_ENABLED'
+        ? 'success'
+        : 'speaking',
+      energy: scenarioEvent.uiState.riskLevel === 'HIGH' ? 0.86 : 0.64,
+      text: scenarioEvent.romiMessage,
+    }
+  }
+
+  return {
+    id: scenarioEvent?.id ?? 'demo-idle',
+    label: scenarioEvent?.uiState.visibleStatus ?? state.scenario.title,
+    mode: 'idle',
+    orbState: 'idle',
+    energy: 0,
+  }
+}
+
+function DemoScenarioSelection({
+  motionTiming,
+  profileName,
+  onStartFreeNavigation,
+  onStartScenario,
+}: {
+  motionTiming: MotionTiming
+  profileName: string
+  onStartFreeNavigation: () => void
+  onStartScenario: (scenarioId: DemoScenarioId) => void
+}) {
+  return (
+    <motion.div
+      className="absolute inset-0 z-40 flex h-full flex-col bg-[var(--nav-frame)] px-7 py-6 text-[var(--nav-ink)]"
+      data-testid="demo-scenario-selection"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={motionTiming}
+    >
+      <div className="relative flex justify-center">
+        <div className="max-w-[38rem] text-center">
+          <h2 className="text-2xl font-black leading-tight">대표 위험행동 데모 선택</h2>
+          <p className="mt-2 text-sm font-semibold text-[var(--nav-muted)]">
+            {profileName} 프로필 · Calibration 적용됨
+          </p>
+        </div>
+        <button
+          className="absolute right-0 top-0 h-11 rounded-xl bg-white px-4 text-sm font-bold text-[var(--nav-ink)] shadow-[0_10px_24px_rgb(15_23_42/0.10)] transition hover:bg-[var(--nav-selection)]"
+          onClick={onStartFreeNavigation}
+          type="button"
+        >
+          네비게이션 이용하기
+        </button>
+      </div>
+
+      <div className="mx-auto mt-7 grid w-full max-w-[76rem] grid-cols-3 gap-3">
+        {DEMO_SCENARIO_DEFINITIONS.map((scenario, index) => (
+          <button
+            key={scenario.scenarioId}
+            className="group relative flex min-h-[14rem] overflow-hidden rounded-2xl border border-white/80 bg-white px-5 py-5 text-center shadow-[0_14px_32px_rgb(15_23_42/0.10)] transition hover:-translate-y-0.5 hover:border-[var(--nav-primary)] hover:shadow-[0_20px_44px_rgb(15_23_42/0.14)]"
+            data-testid={`demo-scenario-card-${scenario.scenarioId}`}
+            onClick={() => onStartScenario(scenario.scenarioId)}
+            type="button"
+          >
+            <span
+              aria-hidden="true"
+              className="absolute inset-x-0 top-0 h-1 bg-[var(--nav-primary)] opacity-80"
+            />
+            <span
+              aria-hidden="true"
+              className="absolute inset-x-0 top-4 text-5xl font-black leading-none text-[var(--nav-selection)] transition group-hover:text-[rgb(23_70_162/0.16)]"
+            >
+              {String(index + 1).padStart(2, '0')}
+            </span>
+            <span className="relative flex min-h-0 flex-1 flex-col items-center pt-12">
+              <span className="text-lg font-black leading-6">{scenario.title}</span>
+              <span className="mt-3 block max-w-[20rem] text-sm font-semibold leading-6 text-[var(--nav-muted)]">
+                {scenario.description}
+              </span>
+              <span className="mt-auto inline-flex items-center gap-1.5 pt-6 text-sm font-bold text-[var(--nav-primary)]">
+                시작
+                <CaretRight className="size-4 transition group-hover:translate-x-0.5" weight="bold" />
+              </span>
+            </span>
+          </button>
+        ))}
+      </div>
+    </motion.div>
+  )
+}
+
+function DemoScenarioPresenterPanel({
+  motionTiming,
+  routeOptionsReady,
+  routeReady,
+  state,
+  onExit,
+  onNext,
+  onReset,
+  onRespond,
+}: {
+  motionTiming: MotionTiming
+  routeOptionsReady: boolean
+  routeReady: boolean
+  state: DemoScenarioControllerState
+  onExit: () => void
+  onNext: () => void
+  onReset: () => void
+  onRespond: (responseValue: string) => void
+}) {
+  const currentSetupEvent = state.setupEvent
+  const currentScenarioEvent = state.scenarioEvent
+  const currentTitle = currentSetupEvent?.title ?? currentScenarioEvent?.uiState.visibleStatus ?? state.scenario.title
+  const currentDescription = currentSetupEvent?.description ?? currentScenarioEvent?.romiMessage ?? '다음 단계로 진행합니다.'
+  const currentRiskLevel = currentScenarioEvent?.uiState.riskLevel ?? 'LOW'
+  const nextDisabled = isDemoPresenterNextDisabled(state, routeOptionsReady, routeReady)
+  const waitingText = getDemoPresenterWaitingText(state, routeOptionsReady, routeReady)
+
+  return (
+    <motion.section
+      aria-label="데모 시나리오 진행 패널"
+      className="col-start-2 row-start-2 self-start rounded-[1.1rem] border border-white/70 bg-white p-4 text-[var(--nav-ink)] shadow-[0_18px_46px_rgb(0_0_0/0.24)]"
+      data-testid="demo-scenario-presenter-panel"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={motionTiming}
+    >
+      <div className="flex flex-col gap-4">
+        <div className="border-b border-[var(--nav-border)] pb-3">
+          <p className="text-sm font-bold">{state.scenario.title}</p>
+          <p className="mt-1 text-xs font-semibold text-[var(--nav-muted)]">
+            Presenter 진행 패널 · {getDemoScenarioProgressLabel(state)}
+          </p>
+        </div>
+
+        <div className="rounded-xl bg-[var(--nav-panel)] p-3">
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-xs font-bold text-[var(--nav-muted)]">현재 단계</div>
+            <span className={getDemoRiskBadgeClassName(currentRiskLevel)}>
+              {formatDemoRiskLevel(currentRiskLevel)}
+            </span>
+          </div>
+          <div className="mt-2 text-base font-bold leading-6">{currentTitle}</div>
+          <p className="mt-2 text-sm font-semibold leading-6 text-[var(--nav-muted)]">
+            {currentDescription}
+          </p>
+          {waitingText ? (
+            <p className="mt-2 text-xs font-bold text-[var(--nav-primary)]">{waitingText}</p>
+          ) : null}
+        </div>
+
+        {currentScenarioEvent?.requiresResponse ? (
+          <div className="grid gap-2">
+            {currentScenarioEvent.responseOptions.map((option) => (
+              <button
+                key={option.value}
+                className="flex min-h-11 items-center justify-center rounded-xl bg-[var(--nav-primary)] px-3 text-sm font-bold text-white transition hover:bg-[var(--nav-primary-hover)]"
+                onClick={() => onRespond(option.value)}
+                type="button"
+              >
+                <span>{option.label}</span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <button
+            className="flex h-11 items-center justify-center gap-2 rounded-xl bg-[var(--nav-primary)] px-3 text-sm font-bold text-white transition hover:bg-[var(--nav-primary-hover)] disabled:cursor-not-allowed disabled:opacity-40"
+            disabled={nextDisabled}
+            onClick={onNext}
+            type="button"
+          >
+            <span>다음</span>
+            <CaretRight className="size-4" weight="bold" />
+          </button>
+        )}
+
+        <button
+          className="flex h-11 items-center justify-center gap-2 rounded-xl bg-[var(--nav-panel)] px-3 text-sm font-bold text-[var(--nav-ink)] transition hover:bg-[var(--nav-selection)]"
+          onClick={onReset}
+          type="button"
+        >
+          <ArrowCounterClockwise className="size-4" weight="bold" />
+          처음부터
+        </button>
+        <button
+          className="flex h-11 items-center justify-center rounded-xl border border-[var(--nav-border)] bg-white px-3 text-sm font-bold text-[var(--nav-muted)] transition hover:bg-[var(--nav-panel)] hover:text-[var(--nav-ink)]"
+          onClick={onExit}
+          type="button"
+        >
+          데모 선택으로
+        </button>
+      </div>
+    </motion.section>
+  )
+}
+
+function getDemoScenarioProgressLabel(state: DemoScenarioControllerState) {
+  if (state.setupEvent) {
+    return '주행 준비'
+  }
+
+  if (!state.scenarioEvent) {
+    return '완료'
+  }
+
+  const index = state.scenario.events.findIndex((event) => event.id === state.scenarioEvent?.id)
+
+  return `${Math.max(1, index + 1)} / ${state.scenario.events.length}`
+}
+
+function isDemoPresenterNextDisabled(
+  state: DemoScenarioControllerState,
+  routeOptionsReady: boolean,
+  routeReady: boolean,
+) {
+  if (state.phase === 'ended' || state.scenarioEvent?.requiresResponse) {
+    return true
+  }
+
+  switch (state.setupEvent?.eventType) {
+    case 'ROUTE_CANDIDATES_LOADED':
+      return !routeOptionsReady
+    case 'RECOMMENDED_ROUTE_SELECTED':
+    case 'GUIDANCE_STARTED':
+      return !routeReady
+    default:
+      return false
+  }
+}
+
+function getDemoPresenterWaitingText(
+  state: DemoScenarioControllerState,
+  routeOptionsReady: boolean,
+  routeReady: boolean,
+) {
+  if (state.setupEvent?.eventType === 'ROUTE_CANDIDATES_LOADED' && !routeOptionsReady) {
+    return '경로 후보를 불러오는 중입니다.'
+  }
+
+  if (
+    (state.setupEvent?.eventType === 'RECOMMENDED_ROUTE_SELECTED' ||
+      state.setupEvent?.eventType === 'GUIDANCE_STARTED') &&
+    !routeReady
+  ) {
+    return '추천 경로 선택이 완료될 때까지 기다려주세요.'
+  }
+
+  return null
+}
+
+function formatDemoRiskLevel(riskLevel: 'LOW' | 'MEDIUM' | 'HIGH') {
+  switch (riskLevel) {
+    case 'HIGH':
+      return '위험도 높음'
+    case 'MEDIUM':
+      return '위험도 중간'
+    case 'LOW':
+    default:
+      return '위험도 낮음'
+  }
+}
+
+function getDemoRiskBadgeClassName(riskLevel: 'LOW' | 'MEDIUM' | 'HIGH') {
+  const baseClassName = 'rounded-full px-2 py-1 text-[0.68rem] font-black'
+
+  switch (riskLevel) {
+    case 'HIGH':
+      return `${baseClassName} bg-red-100 text-red-700`
+    case 'MEDIUM':
+      return `${baseClassName} bg-amber-100 text-amber-700`
+    case 'LOW':
+    default:
+      return `${baseClassName} bg-emerald-100 text-emerald-700`
+  }
 }
 
 function NaviAssistantDebugPanel({
