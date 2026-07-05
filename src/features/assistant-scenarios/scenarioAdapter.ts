@@ -119,7 +119,7 @@ function createNaviAssistantStep(
           type: step.actionLabel.includes('음악') ? 'music' : step.actionLabel.includes('장소') || step.actionLabel.includes('경로') ? 'place' : 'action',
           title: step.actionLabel,
           meta: step.detectionEvent ?? step.title,
-          detail: step.description,
+          detail: step.agentSpeech ?? step.description,
           action: step.actionLabel.includes('완료') ? '확인' : '실행',
         },
       ],

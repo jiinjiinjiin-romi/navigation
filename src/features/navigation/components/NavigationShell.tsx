@@ -3365,6 +3365,14 @@ function AssistantRecommendationList({
   onRecommendationAction: (recommendation: NaviAssistantRecommendation) => void
   recommendations: NaviAssistantRecommendation[]
 }) {
+  const recommendationCount = recommendations.reduce((count, item) => {
+    if (item.type !== 'place') {
+      return count + 1
+    }
+
+    return count + getRouteRecommendationDisplay(item).options.length
+  }, 0)
+
   return (
     <motion.div
       className="mt-2 flex min-h-0 w-full flex-col overflow-hidden rounded-2xl bg-[var(--nav-panel)]"
@@ -3379,13 +3387,13 @@ function AssistantRecommendationList({
     >
       <div className="flex items-center justify-between px-4 py-3 text-left">
         <h3 className="text-sm font-bold tracking-normal">추천</h3>
-        <span className="text-xs font-semibold text-[var(--nav-muted)]">{recommendations.length}개</span>
+        <span className="text-xs font-semibold text-[var(--nav-muted)]">{recommendationCount}개</span>
       </div>
-      <div className="min-h-0 overflow-auto px-3 pb-3">
+      <div className="min-h-0 max-h-[13.75rem] overflow-auto px-3 pb-3">
         <div className="grid gap-2">
           {recommendations.map((item, index) => (
             <motion.div
-              className="flex items-center gap-3 rounded-xl bg-white p-3 text-left"
+              className={item.type === 'place' ? 'rounded-xl bg-white p-2 text-left' : 'flex items-center gap-3 rounded-xl bg-white p-3 text-left'}
               key={`${item.type}-${item.title}`}
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
@@ -3395,33 +3403,130 @@ function AssistantRecommendationList({
                 duration: motionTiming.duration === 0 ? 0 : 0.18,
               }}
             >
-              <div className="grid size-10 shrink-0 place-items-center rounded-full bg-[var(--nav-primary-soft)] text-[var(--nav-primary)]">
-                {item.type === 'music' ? (
-                  <MusicNotes className="size-5" weight="bold" />
-                ) : item.type === 'place' ? (
-                  <RoadHorizon className="size-5" weight="bold" />
-                ) : (
-                  <ArrowBendUpRight className="size-5" weight="bold" />
-                )}
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-bold text-[var(--nav-ink)]">{item.title}</div>
-                <div className="mt-0.5 truncate text-xs font-semibold text-[var(--nav-primary)]">{item.meta}</div>
-                <div className="mt-1 line-clamp-2 text-xs leading-4 text-[var(--nav-muted)]">{item.detail}</div>
-              </div>
-              <button
-                className="shrink-0 rounded-full bg-[var(--nav-primary)] px-3 py-2 text-xs font-bold text-white transition hover:bg-[var(--nav-primary-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
-                onClick={() => onRecommendationAction(item)}
-                type="button"
-              >
-                {item.action}
-              </button>
+              {item.type === 'place' ? (
+                <AssistantRouteRecommendationCard
+                  recommendation={item}
+                  onAction={() => onRecommendationAction(item)}
+                />
+              ) : (
+                <>
+                  <div className="grid size-10 shrink-0 place-items-center rounded-full bg-[var(--nav-primary-soft)] text-[var(--nav-primary)]">
+                    {item.type === 'music' ? (
+                      <MusicNotes className="size-5" weight="bold" />
+                    ) : (
+                      <ArrowBendUpRight className="size-5" weight="bold" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-bold text-[var(--nav-ink)]">{item.title}</div>
+                    <div className="mt-0.5 truncate text-xs font-semibold text-[var(--nav-primary)]">{item.meta}</div>
+                    <div className="mt-1 line-clamp-2 text-xs leading-4 text-[var(--nav-muted)]">{item.detail}</div>
+                  </div>
+                  <button
+                    className="shrink-0 rounded-full bg-[var(--nav-primary)] px-3 py-2 text-xs font-bold text-white transition hover:bg-[var(--nav-primary-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
+                    onClick={() => onRecommendationAction(item)}
+                    type="button"
+                  >
+                    {item.action}
+                  </button>
+                </>
+              )}
             </motion.div>
           ))}
         </div>
       </div>
     </motion.div>
   )
+}
+
+function AssistantRouteRecommendationCard({
+  recommendation,
+  onAction,
+}: {
+  recommendation: Extract<NaviAssistantRecommendation, { type: 'place' }>
+  onAction: () => void
+}) {
+  const route = getRouteRecommendationDisplay(recommendation)
+
+  return (
+    <div className="grid gap-1.5" data-testid="navi-assistant-route-recommendation">
+      {route.options.map((option) => (
+        <button
+          aria-label={`${option.destinationLabel} ${route.primaryAction}`}
+          className={[
+            'grid min-h-[3.25rem] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-xl border px-3 py-1.5 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]',
+            option.active
+              ? 'border-[var(--nav-primary)] bg-[var(--nav-primary-soft)] shadow-[0_10px_24px_rgb(23_70_162/0.10)]'
+              : 'border-[var(--nav-border)] bg-white hover:bg-[var(--nav-panel)]',
+          ].join(' ')}
+          key={option.label}
+          onClick={onAction}
+          type="button"
+        >
+          <span className="text-xl font-semibold leading-none text-[var(--nav-ink)]">{option.durationLabel}</span>
+          <span className="min-w-0">
+            <span className={['block truncate text-base font-bold', option.active ? 'text-[var(--nav-primary)]' : 'text-[var(--nav-ink)]'].join(' ')}>
+              {option.destinationLabel}
+            </span>
+          </span>
+          <span className="grid justify-items-end gap-1 text-right">
+            <span className="text-sm font-bold text-[var(--nav-ink)]">{option.distanceLabel}</span>
+            <span className="text-xs font-semibold text-[var(--nav-muted)]">{option.tollLabel}</span>
+          </span>
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function getRouteRecommendationDisplay(recommendation: Extract<NaviAssistantRecommendation, { type: 'place' }>) {
+  if (recommendation.detail.includes('휴게소') || recommendation.detail.includes('경로 인근')) {
+    return {
+      primaryAction: '경유지 추가',
+      options: [
+        { label: '추천 경로', destinationLabel: '군자 휴게소', durationLabel: '12분', distanceLabel: '8.6km', tollLabel: '통행료 0원', active: true },
+        { label: '최단 거리 경로', destinationLabel: '구리 휴게소', durationLabel: '15분', distanceLabel: '7.9km', tollLabel: '통행료 0원', active: false },
+        { label: '고속도로 우선 경로', destinationLabel: '별내 휴게소', durationLabel: '11분', distanceLabel: '10.4km', tollLabel: '통행료 1,200원', active: false },
+      ],
+    }
+  }
+
+  if (recommendation.title.includes('경로')) {
+    return {
+      primaryAction: '안내 시작',
+      options: [
+        { label: '추천 경로', destinationLabel: getRouteDestinationLabel(recommendation), durationLabel: '4분', distanceLabel: '2.4km', tollLabel: '통행료 0원', active: true },
+        { label: '최단 거리 경로', destinationLabel: getRouteDestinationLabel(recommendation), durationLabel: '6분', distanceLabel: '2.1km', tollLabel: '통행료 0원', active: false },
+        { label: '안전 우선 경로', destinationLabel: getRouteDestinationLabel(recommendation), durationLabel: '8분', distanceLabel: '3.6km', tollLabel: '통행료 0원', active: false },
+      ],
+    }
+  }
+
+  return {
+    primaryAction: '안내 시작',
+    options: [
+      { label: '추천 경로', destinationLabel: '중랑 졸음쉼터', durationLabel: '4분', distanceLabel: '2.4km', tollLabel: '통행료 0원', active: true },
+      { label: '최단 거리 경로', destinationLabel: '군자 졸음쉼터', durationLabel: '6분', distanceLabel: '2.1km', tollLabel: '통행료 0원', active: false },
+      { label: '정체 회피 경로', destinationLabel: '사가정 졸음쉼터', durationLabel: '7분', distanceLabel: '3.2km', tollLabel: '통행료 0원', active: false },
+    ],
+  }
+}
+
+function getRouteDestinationLabel(recommendation: Extract<NaviAssistantRecommendation, { type: 'place' }>) {
+  const source = `${recommendation.title} ${recommendation.detail}`
+
+  if (source.includes('졸음쉼터')) {
+    return '중랑 졸음쉼터'
+  }
+
+  if (source.includes('휴게소')) {
+    return '군자 휴게소'
+  }
+
+  const destinationMatch = source.match(/([^\s.]+?)(?:로|으로) 안내/)
+  const destination = destinationMatch?.[1]?.trim()
+
+  return destination || recommendation.meta
 }
 
 function NaviAssistantDebugPanel({

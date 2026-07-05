@@ -50,6 +50,14 @@ describe('aiai scenario adapter', () => {
       audioSrc: '/audio/tts/user/02_가까운_졸음쉼터로_안내해줘.mp3',
       speechRole: 'user',
     })
+    expect(scenario?.steps[3]).toMatchObject({
+      mode: 'recommendation',
+      recommendations: [
+        expect.objectContaining({
+          detail: '가장 가까운 졸음쉼터를 찾았습니다. 현재 경로에서 2.4km 거리이고 4분 뒤 도착할 수 있습니다.',
+        }),
+      ],
+    })
   })
 
   it('does not expose detection-only events as assistant conversation steps', () => {
