@@ -236,11 +236,11 @@ export function DashboardApp() {
 
   return (
     <div className="min-h-screen bg-[var(--nav-frame)] font-sans text-[var(--nav-ink)]">
-      <div className="flex min-h-screen">
-        <DashboardSidebar activePath={path} onNavigate={navigate} />
-        <div className="flex min-h-screen min-w-0 flex-1 flex-col">
+      <div className="mx-auto flex min-h-screen w-full max-w-[88rem] gap-5 p-0 lg:p-5">
+        <DashboardSidebar activePath={path} onLogout={handleLogout} onNavigate={navigate} />
+        <div className="flex min-h-screen min-w-0 flex-1 flex-col lg:min-h-[calc(100vh-2.5rem)]">
           <DashboardTopbar onLogout={handleLogout} onOpenMobileNav={() => setMobileNavOpen(true)} />
-          <main className="min-h-0 flex-1 overflow-x-hidden px-4 pb-24 pt-4 sm:px-6 lg:px-8 lg:pb-8">
+          <main className="min-h-0 flex-1 overflow-x-hidden px-4 pb-24 pt-4 sm:px-6 lg:px-0 lg:pb-0">
             <AnimatePresence mode="wait">
               <motion.div
                 key={path}
@@ -381,22 +381,29 @@ function DashboardBrand({ inverted = false }: { inverted?: boolean }) {
   )
 }
 
-function DashboardSidebar({ activePath, onNavigate }: { activePath: DashboardPath; onNavigate: (path: DashboardPath) => void }) {
+function DashboardSidebar({ activePath, onLogout, onNavigate }: { activePath: DashboardPath; onLogout: () => void; onNavigate: (path: DashboardPath) => void }) {
   return (
-    <aside className="sticky top-0 hidden h-screen w-[17rem] shrink-0 border-r border-[var(--nav-border)] bg-white/88 p-4 backdrop-blur-xl lg:block">
+    <aside className="sticky top-5 hidden w-[17rem] shrink-0 self-start rounded-[1.5rem] border border-white/80 bg-white/88 p-4 shadow-[0_24px_70px_rgb(15_23_42/0.10)] backdrop-blur-xl lg:block">
       <DashboardBrand />
       <div className="mt-8">
         <DashboardNavList activePath={activePath} onNavigate={onNavigate} />
       </div>
-      <div className="absolute bottom-4 left-4 right-4 rounded-2xl bg-[var(--nav-panel)] p-4">
+      <div className="mt-6 border-t border-[var(--nav-border)] pt-4">
         <div className="flex items-center gap-3">
-          <div className="grid size-10 place-items-center rounded-full bg-white text-[var(--nav-primary)]">
-            <ShieldCheck className="size-5" weight="fill" />
+          <div className="grid size-9 place-items-center rounded-full bg-[var(--nav-primary-soft)] text-[var(--nav-primary)]">
+            <SteeringWheel className="size-5" weight="fill" />
           </div>
-          <div>
-            <div className="text-sm font-black">안전 점수 89</div>
-            <div className="text-xs font-bold text-[var(--nav-muted)]">지난주보다 +6점</div>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-black text-[var(--nav-ink)]">안정현 님</div>
           </div>
+          <button
+            aria-label="로그아웃"
+            className="grid size-9 shrink-0 place-items-center rounded-full text-[var(--nav-muted)] transition hover:bg-[var(--nav-panel)] hover:text-[var(--nav-danger)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
+            onClick={onLogout}
+            type="button"
+          >
+            <SignOut className="size-4" weight="bold" />
+          </button>
         </div>
       </div>
     </aside>
@@ -425,7 +432,6 @@ function DashboardNavList({ activePath, onNavigate }: { activePath: DashboardPat
               onNavigate(route.path)
             }}
           >
-            {active ? <motion.span className="absolute inset-y-2 left-0 w-1 rounded-full bg-[var(--nav-primary)]" layoutId="dashboard-active-rail" /> : null}
             <Icon className="size-5" weight={active ? 'fill' : 'bold'} />
             {route.label}
           </a>
@@ -442,16 +448,12 @@ function DashboardTopbar({ onLogout, onOpenMobileNav }: { onLogout: () => void; 
         <button className="grid size-10 place-items-center rounded-full bg-white text-[var(--nav-ink)] shadow-[0_6px_18px_rgb(15_23_42/0.08)] lg:hidden" onClick={onOpenMobileNav} type="button" aria-label="모바일 메뉴 열기">
           <List className="size-5" weight="bold" />
         </button>
-        <div className="min-w-0">
-          <div className="text-sm font-black text-[var(--nav-ink)]">안정현 님</div>
-          <div className="truncate text-xs font-bold text-[var(--nav-muted)]">2026.06.29 - 2026.07.05 · 개인 운전자 리포트</div>
-        </div>
         <div className="ml-auto hidden min-w-0 items-center gap-2 rounded-full bg-white px-3 py-2 text-xs font-bold text-[var(--nav-muted)] shadow-[0_6px_18px_rgb(15_23_42/0.06)] sm:flex">
           <CalendarBlank className="size-4 text-[var(--nav-primary)]" weight="bold" />
           이번 주
         </div>
         <button
-          className="inline-flex h-10 items-center gap-2 rounded-full bg-white px-4 text-sm font-black text-[var(--nav-muted)] shadow-[0_6px_18px_rgb(15_23_42/0.06)] transition hover:text-[var(--nav-danger)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
+          className="inline-flex h-10 items-center gap-2 rounded-full bg-white px-4 text-sm font-black text-[var(--nav-muted)] shadow-[0_6px_18px_rgb(15_23_42/0.06)] transition hover:text-[var(--nav-danger)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)] lg:hidden"
           onClick={onLogout}
           type="button"
         >
