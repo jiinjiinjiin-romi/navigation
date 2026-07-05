@@ -629,7 +629,7 @@ const ROUTE_SEARCH_EDITOR_FIELDS_HEIGHT = 380
 const SIDE_PANEL_WIDTH = 320
 const SIDE_PANEL_TRANSITION_DURATION_SECONDS = 0.34
 const SIDE_PANEL_TRANSITION_EASE: [number, number, number, number] = [0.34, 0, 0.2, 1]
-const MUSIC_POPOVER_WIDTH = 320
+const MUSIC_POPOVER_WIDTH = 380
 const MUSIC_MINI_PLAYER_IDLE_BOTTOM = 136
 const MUSIC_MINI_PLAYER_GUIDANCE_BOTTOM = 72
 const DEFAULT_MAP_CAMERA_SETTINGS: MapCameraSettings = {
@@ -666,19 +666,25 @@ const MUSIC_LIBRARY = [
     id: 'drive-neon',
     title: 'Drive Neon',
     artist: 'Navi Session',
-    mood: '도심 주행',
+    album: 'City Pulse',
+    duration: '3:24',
+    coverTone: 'from-[#1746a2] via-[#00a8ff] to-[#6d5df6]',
   },
   {
     id: 'soft-focus',
     title: 'Soft Focus',
     artist: 'Evening Route',
-    mood: '집중 모드',
+    album: 'Bright Pop Drive',
+    duration: '3:08',
+    coverTone: 'from-[#16a34a] via-[#22c55e] to-[#bae6fd]',
   },
   {
     id: 'night-line',
     title: 'Night Line',
     artist: 'Low Tide',
-    mood: '야간 드라이브',
+    album: 'Midnight Lane',
+    duration: '4:02',
+    coverTone: 'from-[#101828] via-[#475467] to-[#6d5df6]',
   },
 ] as const
 type NaviAssistantScenarioId = AiaiScenarioId
@@ -1786,6 +1792,13 @@ export function NavigationShell({
               onWakeCall={() => {
                 selectAssistantScenario('route-search-voice')
                 setAssistantStepIndex(1)
+              }}
+              onRecommendationAction={(recommendation) => {
+                if (recommendation.type === 'music') {
+                  setMusicTrackId('soft-focus')
+                  setMusicPlaying(true)
+                  setMusicModalOpen(false)
+                }
               }}
               reducedMotion={Boolean(shouldReduceMotion)}
               speechPlaybackKey={activeSpeechPlaybackKey}
@@ -3019,6 +3032,7 @@ function NaviOrbControl({
   hidden,
   motionTiming,
   onClose,
+  onRecommendationAction,
   onWakeCall,
   reducedMotion,
   speechPlaybackKey,
@@ -3027,6 +3041,7 @@ function NaviOrbControl({
   hidden: boolean
   motionTiming: MotionTiming
   onClose: () => void
+  onRecommendationAction: (recommendation: NaviAssistantRecommendation) => void
   onWakeCall: () => void
   reducedMotion: boolean
   speechPlaybackKey: string
@@ -3054,7 +3069,7 @@ function NaviOrbControl({
       animate={{
         borderRadius: expanded ? 20 : 999,
         height: expanded
-          ? assistantStep.recommendations?.length ? 520 : 328
+          ? assistantStep.recommendations?.length ? 'auto' : 328
           : 132,
         opacity: 1,
         width: expanded
@@ -3158,7 +3173,7 @@ function NaviOrbControl({
         </motion.div>
         {expanded ? (
           <div
-            className="relative z-[1] flex h-full min-h-0 flex-col items-center px-5 pb-5 pt-[12rem]"
+            className="relative z-[1] flex min-h-0 flex-col items-center px-5 pb-5 pt-[12rem]"
             data-testid="navi-assistant-content"
           >
             <motion.div
@@ -3209,6 +3224,7 @@ function NaviOrbControl({
               {assistantStep.recommendations?.length ? (
                 <AssistantRecommendationList
                   motionTiming={motionTiming}
+                  onRecommendationAction={onRecommendationAction}
                   recommendations={assistantStep.recommendations}
                 />
               ) : null}
@@ -3342,14 +3358,16 @@ function AssistantUserText({
 
 function AssistantRecommendationList({
   motionTiming,
+  onRecommendationAction,
   recommendations,
 }: {
   motionTiming: MotionTiming
+  onRecommendationAction: (recommendation: NaviAssistantRecommendation) => void
   recommendations: NaviAssistantRecommendation[]
 }) {
   return (
     <motion.div
-      className="mt-2 flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-2xl bg-[var(--nav-panel)]"
+      className="mt-2 flex min-h-0 w-full flex-col overflow-hidden rounded-2xl bg-[var(--nav-panel)]"
       data-testid="navi-assistant-recommendations"
       exit={{ opacity: 0, height: 0, y: 8 }}
       initial={{ opacity: 0, height: 0, y: 8 }}
@@ -3363,7 +3381,7 @@ function AssistantRecommendationList({
         <h3 className="text-sm font-bold tracking-normal">추천</h3>
         <span className="text-xs font-semibold text-[var(--nav-muted)]">{recommendations.length}개</span>
       </div>
-      <div className="min-h-0 flex-1 overflow-auto px-3 pb-3">
+      <div className="min-h-0 overflow-auto px-3 pb-3">
         <div className="grid gap-2">
           {recommendations.map((item, index) => (
             <motion.div
@@ -3393,6 +3411,7 @@ function AssistantRecommendationList({
               </div>
               <button
                 className="shrink-0 rounded-full bg-[var(--nav-primary)] px-3 py-2 text-xs font-bold text-white transition hover:bg-[var(--nav-primary-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
+                onClick={() => onRecommendationAction(item)}
                 type="button"
               >
                 {item.action}
@@ -5595,7 +5614,7 @@ function MusicPopover({
     return (
       track.title.toLowerCase().includes(keyword) ||
       track.artist.toLowerCase().includes(keyword) ||
-      track.mood.toLowerCase().includes(keyword)
+      track.album.toLowerCase().includes(keyword)
     )
   })
 
@@ -5664,8 +5683,11 @@ function MusicPopover({
           </div>
         </motion.label>
         <motion.div className="grid gap-2" variants={{ hidden: { opacity: 0, y: 8 }, visible: { opacity: 1, y: 0 } }}>
-          <span className="text-sm font-bold">최근 선택</span>
-          <div className="grid gap-2">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-bold">추천 트랙</span>
+            <span className="text-xs font-semibold text-[var(--nav-muted)]">{filteredTracks.length}곡</span>
+          </div>
+          <div className="grid max-h-[18rem] gap-1 overflow-auto pr-1">
             {filteredTracks.map((track) => {
               const active = track.id === selectedTrack.id
 
@@ -5673,21 +5695,32 @@ function MusicPopover({
                 <button
                   aria-pressed={active}
                   className={[
-                    'flex min-h-11 items-center justify-between gap-3 rounded-xl border px-3 py-2 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]',
+                    'grid min-h-[4.75rem] grid-cols-[3.25rem_minmax(0,1fr)_auto] items-center gap-3 rounded-2xl border px-3 py-2 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]',
                     active
-                      ? 'border-[var(--nav-primary)] bg-[var(--nav-primary-soft)]'
+                      ? 'border-[var(--nav-primary)] bg-[var(--nav-primary-soft)] shadow-[0_10px_24px_rgb(23_70_162/0.10)]'
                       : 'border-[var(--nav-border)] bg-white hover:bg-[var(--nav-panel)]',
                   ].join(' ')}
                   key={track.id}
                   onClick={() => onPickTrack(track.id)}
                   type="button"
                 >
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm font-semibold">{track.title}</span>
-                    <span className="block truncate text-xs text-[var(--nav-muted)]">{track.artist}</span>
+                  <span
+                    aria-hidden="true"
+                    className={[
+                      'relative grid size-13 shrink-0 place-items-center overflow-hidden rounded-xl bg-gradient-to-br text-white shadow-[inset_0_-18px_30px_rgb(0_0_0/0.18)]',
+                      track.coverTone,
+                    ].join(' ')}
+                  >
+                    <MusicNotes className="size-5" weight="bold" />
+                    <span className="absolute inset-x-2 bottom-2 h-1 rounded-full bg-white/40" />
                   </span>
-                  <span className="shrink-0 rounded-full bg-[var(--nav-panel)] px-2 py-1 text-[11px] font-semibold text-[var(--nav-muted)]">
-                    {track.mood}
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-bold text-[var(--nav-ink)]">{track.title}</span>
+                    <span className="mt-0.5 block truncate text-xs font-semibold text-[var(--nav-muted)]">{track.artist}</span>
+                    <span className="mt-1 block truncate text-[11px] font-medium text-[var(--nav-subtle)]">{track.album}</span>
+                  </span>
+                  <span className="grid justify-items-end">
+                    <span className="text-xs font-bold text-[var(--nav-ink)]">{track.duration}</span>
                   </span>
                 </button>
               )
@@ -5740,38 +5773,52 @@ function MiniPlayer({
 
   return (
     <motion.div
-      className="pointer-events-none absolute left-1/2 z-40 w-[min(24rem,calc(100%-1rem))] -translate-x-1/2"
+      className="pointer-events-none absolute left-1/2 z-40 w-[min(31rem,calc(100%-1rem))] -translate-x-1/2"
       data-testid="music-mini-player"
       style={{ bottom }}
-      initial={{ opacity: 0, y: 12, scale: 0.99 }}
+      initial={{ opacity: 0, y: 10, scale: 0.99 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: 8, scale: 0.99 }}
       transition={motionTiming}
     >
-      <div className="pointer-events-auto flex items-center gap-3 rounded-full bg-white/92 px-3 py-2 shadow-[0_8px_18px_rgb(15_23_42/0.12)] backdrop-blur-md">
-        <div className="grid size-11 shrink-0 place-items-center rounded-full bg-[var(--nav-panel)] text-[var(--nav-primary)]">
-          <MusicNotes className="size-5" weight="bold" />
+      <div className="pointer-events-auto grid min-h-[2.75rem] grid-cols-[2.125rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-full border border-[rgb(16_24_40/0.07)] bg-white/94 px-2 py-1 shadow-[0_10px_24px_rgb(15_23_42/0.12)] backdrop-blur-md">
+        <div
+          aria-hidden="true"
+          className={[
+            'grid size-[2.125rem] shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br text-white shadow-[inset_0_-12px_20px_rgb(0_0_0/0.18)]',
+            selectedTrack.coverTone,
+          ].join(' ')}
+        >
+          <MusicNotes className="size-4" weight="bold" />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-semibold text-[var(--nav-ink)]">{selectedTrack.title}</div>
-          <div className="truncate text-xs text-[var(--nav-muted)]">{selectedTrack.artist} · 재생 중</div>
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="min-w-0 flex-1 truncate text-sm font-bold text-[var(--nav-ink)]">{selectedTrack.title}</div>
+            <div className="shrink-0 text-[11px] font-semibold text-[var(--nav-muted)]">0:42 / {selectedTrack.duration}</div>
+          </div>
+          <div className="mt-0.5 min-w-0 truncate text-xs font-medium text-[var(--nav-muted)]">{selectedTrack.artist}</div>
+          <div className="mt-1 h-0.5 overflow-hidden rounded-full bg-[var(--nav-border)]">
+            <div className="h-full w-[32%] rounded-full bg-[var(--nav-primary)]" />
+          </div>
         </div>
-        <button
-          aria-label={isPlaying ? '음악 일시정지' : '음악 재생'}
-          className="grid size-10 place-items-center rounded-full bg-[var(--nav-panel)] text-[var(--nav-ink)] transition hover:bg-[var(--nav-selection)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
-          onClick={onTogglePlay}
-          type="button"
-        >
-          {isPlaying ? <Pause className="size-4" weight="fill" /> : <Play className="size-4" weight="fill" />}
-        </button>
-        <button
-          aria-label="음악 닫기"
-          className="grid size-10 place-items-center rounded-full bg-[var(--nav-panel)] text-[var(--nav-muted)] transition hover:bg-[var(--nav-selection)] hover:text-[var(--nav-ink)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
-          onClick={onClose}
-          type="button"
-        >
-          <X className="size-4" weight="bold" />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            aria-label={isPlaying ? '음악 일시정지' : '음악 재생'}
+            className="grid size-8 place-items-center rounded-full bg-[var(--nav-primary)] text-white transition hover:bg-[var(--nav-primary-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
+            onClick={onTogglePlay}
+            type="button"
+          >
+            {isPlaying ? <Pause className="size-4" weight="fill" /> : <Play className="size-4" weight="fill" />}
+          </button>
+          <button
+            aria-label="음악 닫기"
+            className="grid size-8 place-items-center rounded-full text-[var(--nav-muted)] transition hover:bg-[var(--nav-panel)] hover:text-[var(--nav-ink)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
+            onClick={onClose}
+            type="button"
+          >
+            <X className="size-4" weight="bold" />
+          </button>
+        </div>
       </div>
     </motion.div>
   )

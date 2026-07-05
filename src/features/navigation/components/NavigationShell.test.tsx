@@ -917,6 +917,32 @@ describe('NavigationShell', () => {
     expect(screen.getByText('1 / 8')).toBeInTheDocument()
   })
 
+  it('starts the mini player from a music assistant recommendation', async () => {
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.change(screen.getByLabelText('AI 시나리오 선택'), {
+      target: { value: 'fatigue-music' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '다음 AI 시나리오 단계' }))
+    fireEvent.click(screen.getByRole('button', { name: '다음 AI 시나리오 단계' }))
+    fireEvent.click(screen.getByRole('button', { name: '다음 AI 시나리오 단계' }))
+
+    expect(screen.getByTestId('navi-assistant-recommendations')).toBeInTheDocument()
+    expect(screen.getByText('음악 추천 열기')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '실행' }))
+
+    expect(screen.getByTestId('music-mini-player')).toBeInTheDocument()
+    expect(screen.getByText('Soft Focus')).toBeInTheDocument()
+    expect(screen.getByText('Evening Route')).toBeInTheDocument()
+  })
+
   it('keeps assistant speech reveal synced to the current playback key', () => {
     expect(getAssistantSpeechCharacterDelaySeconds(0)).toBe(0)
     expect(getAssistantSpeechCharacterDelaySeconds(3)).toBeCloseTo(0.054)
@@ -1198,6 +1224,9 @@ describe('NavigationShell', () => {
     expect(screen.getByTestId('music-popover')).not.toHaveClass('top-3')
     expect(screen.getByLabelText('음악 검색')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Drive Neon/ })).toBeInTheDocument()
+    expect(screen.getByText('City Pulse')).toBeInTheDocument()
+    expect(screen.getByText('3:24')).toBeInTheDocument()
+    expect(screen.queryByText('도심 주행')).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: /Soft Focus/ }))
     fireEvent.click(screen.getByRole('button', { name: '재생' }))
@@ -1207,6 +1236,8 @@ describe('NavigationShell', () => {
     })
     expect(screen.getByTestId('music-mini-player')).toBeInTheDocument()
     expect(screen.getByText('Soft Focus')).toBeInTheDocument()
+    expect(screen.getByText((content) => content.includes('0:42 / 3:08'))).toBeInTheDocument()
+    expect(screen.getByText('Evening Route')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '음악 일시정지' })).toBeInTheDocument()
   })
 
