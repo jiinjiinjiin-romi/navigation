@@ -33,6 +33,7 @@ import { getBootstrap } from '../api/bootstrapApi'
 import { createFavorite, deleteSavedPlace, listSavedPlaces, updateSavedPlace } from '../api/savedPlaceApi'
 import { createSearchHistory, listSearchHistories } from '../api/searchHistoryApi'
 import { getCurrentAddress, getRoadMatch, getRouteOptions, searchPlaces } from '../api/tmapApi'
+import { getMusicRecommendations } from '../api/musicApi'
 
 let routeOptionsOverlayReadyByDefault = true
 let latestRouteOptionsOverlayReady: ((ready: boolean) => void) | undefined
@@ -74,6 +75,10 @@ vi.mock('../api/bootstrapApi', () => ({
 vi.mock('../api/searchHistoryApi', () => ({
   createSearchHistory: vi.fn(),
   listSearchHistories: vi.fn(),
+}))
+
+vi.mock('../api/musicApi', () => ({
+  getMusicRecommendations: vi.fn(),
 }))
 
 vi.mock('../api/voiceApi', () => ({
@@ -257,6 +262,7 @@ const mockedListSavedPlaces = vi.mocked(listSavedPlaces)
 const mockedUpdateSavedPlace = vi.mocked(updateSavedPlace)
 const mockedCreateSearchHistory = vi.mocked(createSearchHistory)
 const mockedListSearchHistories = vi.mocked(listSearchHistories)
+const mockedGetMusicRecommendations = vi.mocked(getMusicRecommendations)
 
 const mockProfiles: Profile[] = [
   {
@@ -580,6 +586,31 @@ describe('NavigationShell', () => {
     mockedUpdateSavedPlace.mockReset()
     mockedCreateSearchHistory.mockReset()
     mockedListSearchHistories.mockReset()
+    mockedGetMusicRecommendations.mockReset()
+    mockedGetMusicRecommendations.mockResolvedValue([
+      {
+        id: 'itunes-soft-focus',
+        title: 'Soft Focus',
+        artist: 'Evening Route',
+        album: 'Bright Pop Drive',
+        duration: '3:08',
+        durationSeconds: 188,
+        coverUrl: 'https://example.com/soft-focus.jpg',
+        sourceUrl: 'https://music.apple.com/kr/album/soft-focus/123?i=123',
+        provider: 'itunes',
+      },
+      {
+        id: 'itunes-drive-neon',
+        title: 'Drive Neon',
+        artist: 'Navi Session',
+        album: 'City Pulse',
+        duration: '3:24',
+        durationSeconds: 204,
+        coverUrl: null,
+        sourceUrl: 'https://music.apple.com/kr/album/drive-neon/456?i=456',
+        provider: 'itunes',
+      },
+    ])
     mockedGetBootstrap.mockResolvedValue({
       account: {
         id: 'account-1',
@@ -1370,6 +1401,19 @@ describe('NavigationShell', () => {
 
   it('renders a music assistant recommendation without an inline play action', async () => {
     const queryClient = new QueryClient()
+    mockedGetMusicRecommendations.mockResolvedValueOnce([
+      {
+        id: 'itunes-bright-road',
+        title: 'Bright Road',
+        artist: 'Real Artist',
+        album: 'Morning Drive',
+        duration: '2:58',
+        durationSeconds: 178,
+        coverUrl: 'https://example.com/bright-road.jpg',
+        sourceUrl: 'https://music.apple.com/kr/album/bright-road/789?i=789',
+        provider: 'itunes',
+      },
+    ])
 
     render(
       <QueryClientProvider client={queryClient}>
@@ -1385,13 +1429,36 @@ describe('NavigationShell', () => {
     fireEvent.click(screen.getByRole('button', { name: '다음 AI 시나리오 단계' }))
 
     expect(screen.getByTestId('navi-assistant-recommendations')).toBeInTheDocument()
+    expect(await screen.findByText('Bright Road')).toBeInTheDocument()
     expect(screen.getByTestId('navi-assistant-music-recommendation-card')).toBeInTheDocument()
     expect(screen.queryByText('음악 추천 열기')).not.toBeInTheDocument()
-    expect(screen.getByText('Soft Focus')).toBeInTheDocument()
-    expect(screen.getByText('Evening Route')).toBeInTheDocument()
-    expect(screen.getByText('Bright Pop Drive')).toBeInTheDocument()
-    expect(screen.getByText('3:08')).toBeInTheDocument()
+    expect(screen.getByText('Real Artist')).toBeInTheDocument()
+    expect(screen.getByText('Morning Drive')).toBeInTheDocument()
+    expect(screen.getByText('2:58')).toBeInTheDocument()
     expect(within(screen.getByTestId('navi-assistant-music-recommendation-card')).queryByRole('button', { name: '재생' })).not.toBeInTheDocument()
+  })
+
+  it('shows a spinner instead of fallback music while assistant recommendation is loading', async () => {
+    const queryClient = new QueryClient()
+    mockedGetMusicRecommendations.mockImplementationOnce(() => new Promise(() => undefined))
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.change(screen.getByLabelText('AI 시나리오 선택'), {
+      target: { value: 'fatigue-music' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '다음 AI 시나리오 단계' }))
+    fireEvent.click(screen.getByRole('button', { name: '다음 AI 시나리오 단계' }))
+    fireEvent.click(screen.getByRole('button', { name: '다음 AI 시나리오 단계' }))
+
+    expect(await screen.findByTestId('music-recommendation-loading')).toBeInTheDocument()
+    expect(screen.queryByText('Soft Focus')).not.toBeInTheDocument()
+    expect(screen.queryByText('Evening Route')).not.toBeInTheDocument()
+    expect(screen.queryByText('Bright Pop Drive')).not.toBeInTheDocument()
   })
 
   it('keeps assistant speech reveal timing deterministic without audio playback', () => {
@@ -1669,7 +1736,7 @@ describe('NavigationShell', () => {
     expect(screen.getByTestId('music-popover')).toHaveClass('bottom-14')
     expect(screen.getByTestId('music-popover')).not.toHaveClass('top-3')
     expect(screen.getByLabelText('음악 검색')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Drive Neon/ })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /Drive Neon/ })).toBeInTheDocument()
     expect(screen.getByText('City Pulse')).toBeInTheDocument()
     expect(screen.getByText('3:24')).toBeInTheDocument()
     expect(screen.queryByText('도심 주행')).not.toBeInTheDocument()
@@ -1682,9 +1749,59 @@ describe('NavigationShell', () => {
     })
     expect(screen.getByTestId('music-mini-player')).toBeInTheDocument()
     expect(screen.getByText('Soft Focus')).toBeInTheDocument()
-    expect(screen.getByText((content) => content.includes('0:42 / 3:08'))).toBeInTheDocument()
+    expect(screen.getByText((content) => content.includes('0:00 / 3:08'))).toBeInTheDocument()
     expect(screen.getByText('Evening Route')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '음악 일시정지' })).toBeInTheDocument()
+  })
+
+  it('advances visible playback time and loads the next track when the current track ends', async () => {
+    const queryClient = new QueryClient()
+    mockedGetMusicRecommendations.mockResolvedValueOnce([
+      {
+        id: 'track-short',
+        title: 'Short Start',
+        artist: 'First Artist',
+        album: 'Quick Drive',
+        duration: '0:02',
+        durationSeconds: 2,
+        coverUrl: null,
+        sourceUrl: 'https://music.apple.com/kr/album/short-start/1?i=1',
+        provider: 'itunes',
+      },
+      {
+        id: 'track-next',
+        title: 'Next Road',
+        artist: 'Second Artist',
+        album: 'Continue Drive',
+        duration: '0:04',
+        durationSeconds: 4,
+        coverUrl: null,
+        sourceUrl: 'https://music.apple.com/kr/album/next-road/2?i=2',
+        provider: 'itunes',
+      },
+    ])
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '음악' }))
+    fireEvent.click(await screen.findByRole('button', { name: /Short Start/ }))
+    fireEvent.click(screen.getByRole('button', { name: '재생' }))
+
+    expect(await screen.findByText('Short Start')).toBeInTheDocument()
+    expect(screen.getByText((content) => content.includes('0:00 / 0:02'))).toBeInTheDocument()
+
+    await waitFor(() => {
+      expect(screen.getByText((content) => content.includes('0:01 / 0:02'))).toBeInTheDocument()
+    }, { timeout: 1_500 })
+
+    await waitFor(() => {
+      expect(screen.getByText('Next Road')).toBeInTheDocument()
+      expect(screen.getByText((content) => content.includes('0:00 / 0:04'))).toBeInTheDocument()
+    }, { timeout: 1_500 })
   })
 
   it('requests location on entry and centers the map on the granted position', async () => {

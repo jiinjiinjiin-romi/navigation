@@ -10,6 +10,7 @@ import {
   CaretLeft,
   CaretRight,
   Check,
+  CircleNotch,
   CloudSun,
   Clock,
   CarSimple,
@@ -106,6 +107,7 @@ import {
 } from '../api/searchHistoryApi'
 import { getCurrentAddress, getRoadMatch, getRouteOptions, searchPlaces } from '../api/tmapApi'
 import { synthesizeVoice } from '../api/voiceApi'
+import { getMusicRecommendations, type MusicMood, type MusicRecommendationTrack } from '../api/musicApi'
 import { createRoundedRoutePath } from '../map/routeGeometry'
 import { markRoutePerformance, measureRoutePerformance } from '../performance/routePerformance'
 import { createRouteSimulationPlan, getSimulatedRoutePosition } from '../simulation/routeSimulation'
@@ -741,13 +743,21 @@ const DEFAULT_CURRENT_LOCATION_PLACE: Place = {
   coordinate: { lat: 37.5502, lng: 127.073 },
 }
 const NAVIGATION_PROFILE_AVATAR_COLORS = ['#1746A2', '#6D5DF6', '#00A8FF', '#E8EEFF', '#101828']
-const MUSIC_LIBRARY = [
+type UiMusicTrack = MusicRecommendationTrack & {
+  coverTone: string
+}
+
+const FALLBACK_MUSIC_LIBRARY: UiMusicTrack[] = [
   {
     id: 'drive-neon',
     title: 'Drive Neon',
     artist: 'Navi Session',
     album: 'City Pulse',
     duration: '3:24',
+    durationSeconds: 204,
+    coverUrl: null,
+    sourceUrl: '',
+    provider: 'itunes',
     coverTone: 'from-[#1746a2] via-[#00a8ff] to-[#6d5df6]',
   },
   {
@@ -756,6 +766,10 @@ const MUSIC_LIBRARY = [
     artist: 'Evening Route',
     album: 'Bright Pop Drive',
     duration: '3:08',
+    durationSeconds: 188,
+    coverUrl: null,
+    sourceUrl: '',
+    provider: 'itunes',
     coverTone: 'from-[#16a34a] via-[#22c55e] to-[#bae6fd]',
   },
   {
@@ -764,9 +778,13 @@ const MUSIC_LIBRARY = [
     artist: 'Low Tide',
     album: 'Midnight Lane',
     duration: '4:02',
+    durationSeconds: 242,
+    coverUrl: null,
+    sourceUrl: '',
+    provider: 'itunes',
     coverTone: 'from-[#101828] via-[#475467] to-[#6d5df6]',
   },
-] as const
+]
 type NaviAssistantScenarioId = AiaiScenarioId
 const NAVI_ASSISTANT_SCENARIOS: NaviAssistantScenario[] = createNaviAssistantScenarios()
 const DEMO_SCENARIO_DEFINITIONS = getDemoScenarios()
@@ -990,7 +1008,8 @@ export function NavigationShell({
   const [reportFullscreenOpen, setReportFullscreenOpen] = useState(false)
   const [musicModalOpen, setMusicModalOpen] = useState(false)
   const [musicPlaying, setMusicPlaying] = useState(false)
-  const [musicTrackId, setMusicTrackId] = useState<(typeof MUSIC_LIBRARY)[number]['id']>(MUSIC_LIBRARY[0].id)
+  const [musicTrackId, setMusicTrackId] = useState(FALLBACK_MUSIC_LIBRARY[0].id)
+  const [musicProgressSeconds, setMusicProgressSeconds] = useState(0)
   const [musicSearchKeyword, setMusicSearchKeyword] = useState('')
   const [assistantScenarioId, setAssistantScenarioId] = useState<NaviAssistantScenarioId>('drowsiness-rest-area')
   const [assistantStepIndex, setAssistantStepIndex] = useState(0)
@@ -1023,6 +1042,26 @@ export function NavigationShell({
   const routeSearchEditorTimerRef = useRef<number | undefined>(undefined)
   const debouncedOriginKeyword = useDebouncedValue(originKeyword.trim(), SEARCH_DEBOUNCE_MS)
   const debouncedDestinationKeyword = useDebouncedValue(destinationKeyword.trim(), SEARCH_DEBOUNCE_MS)
+  const debouncedMusicSearchKeyword = useDebouncedValue(musicSearchKeyword.trim(), SEARCH_DEBOUNCE_MS)
+  const assistantMusicRecommendationVisible = useMemo(() => {
+    const scenario = NAVI_ASSISTANT_SCENARIOS.find((item) => item.id === assistantScenarioId) ?? NAVI_ASSISTANT_SCENARIOS[0]
+    const step = scenario.steps[Math.min(assistantStepIndex, scenario.steps.length - 1)]
+
+    return Boolean(step.recommendations?.some((recommendation) => recommendation.type === 'music'))
+  }, [assistantScenarioId, assistantStepIndex])
+  const musicMood = useMemo<MusicMood>(() => {
+    const eventId = demoScenarioState?.scenarioEvent?.id
+
+    if (eventId?.startsWith('drowsy_music') || assistantScenarioId === 'fatigue-music') {
+      return 'bright'
+    }
+
+    if (eventId?.startsWith('device_music') || eventId === 'device_first_detection' || eventId === 'device_repeated_detection') {
+      return 'calm'
+    }
+
+    return 'drive'
+  }, [demoScenarioState?.scenarioEvent?.id])
   const addressQueryCoordinate = useMemo(
     () => currentPosition ? roundCoordinate(currentPosition, ADDRESS_COORDINATE_PRECISION) : undefined,
     [currentPosition],
@@ -1040,6 +1079,36 @@ export function NavigationShell({
     queryKey: ['bootstrap'],
     queryFn: ({ signal }) => getBootstrap(undefined, signal),
   })
+  const musicRecommendationsQuery = useQuery({
+    queryKey: ['music-recommendations', musicMood, debouncedMusicSearchKeyword],
+    queryFn: ({ signal }) => getMusicRecommendations(
+      { mood: musicMood, keyword: debouncedMusicSearchKeyword, limit: 10 },
+      undefined,
+      signal,
+    ),
+    enabled: profileSetupComplete && (
+      musicModalOpen
+      || musicPlaying
+      || assistantMusicRecommendationVisible
+      || demoScenarioState?.scenario?.scenarioId === 'device_operation'
+    ),
+    placeholderData: keepPreviousData,
+  })
+  const musicTracks = useMemo<UiMusicTrack[]>(() => (
+    musicRecommendationsQuery.data?.length
+      ? musicRecommendationsQuery.data.map((track, index) => ({
+        ...track,
+        coverTone: FALLBACK_MUSIC_LIBRARY[index % FALLBACK_MUSIC_LIBRARY.length].coverTone,
+      }))
+      : FALLBACK_MUSIC_LIBRARY
+  ), [musicRecommendationsQuery.data])
+  const musicRecommendationsLoading = musicRecommendationsQuery.isFetching && !musicRecommendationsQuery.data?.length
+  const selectedMusicTrack = useMemo(
+    () => musicTracks.find((track) => track.id === musicTrackId) ?? musicTracks[0] ?? FALLBACK_MUSIC_LIBRARY[0],
+    [musicTrackId, musicTracks],
+  )
+  const selectedMusicTrackId = selectedMusicTrack.id
+  const selectedMusicDurationSeconds = selectedMusicTrack.durationSeconds
   const savedPlacesQuery = useQuery({
     queryKey: ['saved-places', selectedProfileId],
     queryFn: ({ signal }) => listSavedPlaces(selectedProfileId!, undefined, signal),
@@ -1951,6 +2020,7 @@ export function NavigationShell({
 
     demoMusicEventAppliedRef.current = event.id
     setMusicTrackId('soft-focus')
+    setMusicProgressSeconds(0)
     setMusicPlaying(true)
     setMusicModalOpen(false)
   }, [demoScenarioState?.scenarioEvent])
@@ -1961,6 +2031,7 @@ export function NavigationShell({
     if (eventId === 'device_music_panel_opened') {
       setMusicSearchKeyword('')
       setMusicTrackId('drive-neon')
+      setMusicProgressSeconds(0)
       setMusicPlaying(false)
       setMusicModalOpen(true)
       return
@@ -1969,6 +2040,7 @@ export function NavigationShell({
     if (eventId === 'device_first_detection') {
       setMusicSearchKeyword('Soft')
       setMusicTrackId('drive-neon')
+      setMusicProgressSeconds(0)
       setMusicPlaying(false)
       setMusicModalOpen(true)
       return
@@ -1977,6 +2049,7 @@ export function NavigationShell({
     if (eventId === 'device_repeated_detection') {
       setMusicSearchKeyword('Soft')
       setMusicTrackId('soft-focus')
+      setMusicProgressSeconds(0)
       setMusicPlaying(false)
       setMusicModalOpen(true)
       return
@@ -1985,6 +2058,7 @@ export function NavigationShell({
     if (eventId === 'device_music_approved') {
       setMusicSearchKeyword('Soft')
       setMusicTrackId('soft-focus')
+      setMusicProgressSeconds(0)
       setMusicPlaying(false)
       setMusicModalOpen(true)
       return
@@ -1993,6 +2067,7 @@ export function NavigationShell({
     if (eventId === 'device_music_preview') {
       setMusicSearchKeyword('Soft')
       setMusicTrackId('soft-focus')
+      setMusicProgressSeconds(0)
       setMusicPlaying(false)
       setMusicModalOpen(true)
       return
@@ -2001,6 +2076,7 @@ export function NavigationShell({
     if (eventId === 'device_music_selected') {
       setMusicSearchKeyword('Soft')
       setMusicTrackId('soft-focus')
+      setMusicProgressSeconds(0)
       setMusicPlaying(true)
       setMusicModalOpen(true)
       return
@@ -2012,6 +2088,32 @@ export function NavigationShell({
 
     setMusicSearchKeyword('')
   }, [demoScenarioState?.scenarioEvent?.id])
+
+  useEffect(() => {
+    setMusicProgressSeconds(0)
+  }, [selectedMusicTrackId])
+
+  useEffect(() => {
+    if (!musicPlaying || musicModalOpen) {
+      return undefined
+    }
+
+    const timer = window.setInterval(() => {
+      setMusicProgressSeconds((currentSeconds) => {
+        const durationSeconds = Math.max(1, selectedMusicDurationSeconds)
+        const nextSeconds = currentSeconds + 1
+
+        if (nextSeconds < durationSeconds) {
+          return nextSeconds
+        }
+
+        setMusicTrackId((currentTrackId) => getNextMusicTrackId(musicTracks, currentTrackId))
+        return 0
+      })
+    }, 1_000)
+
+    return () => window.clearInterval(timer)
+  }, [musicModalOpen, musicPlaying, musicTracks, selectedMusicDurationSeconds])
 
   const advanceActiveDemoScenario = useCallback(() => {
     setDemoScenarioState((currentState) => {
@@ -2178,6 +2280,8 @@ export function NavigationShell({
               assistantStep={visibleAssistantStep}
               hidden={Boolean(activeSidePanel || (musicModalOpen && demoScenarioState?.scenario?.scenarioId !== 'device_operation'))}
               motionTiming={motionTiming}
+              musicRecommendationLoading={musicRecommendationsLoading}
+              musicRecommendationTrack={selectedMusicTrack}
               onClose={resetAssistantScenario}
               onWakeCall={() => {
                 selectAssistantScenario('route-search-voice')
@@ -2185,7 +2289,8 @@ export function NavigationShell({
               }}
               onRecommendationAction={(recommendation) => {
                 if (recommendation.type === 'music') {
-                  setMusicTrackId('soft-focus')
+                  setMusicTrackId(selectedMusicTrack.id)
+                  setMusicProgressSeconds(0)
                   setMusicPlaying(true)
                   setMusicModalOpen(false)
                 }
@@ -2331,7 +2436,8 @@ export function NavigationShell({
               activeRoute={Boolean(activeRoute)}
               motionTiming={motionTiming}
               musicPlaying={musicPlaying && !musicModalOpen}
-              selectedTrack={MUSIC_LIBRARY.find((track) => track.id === musicTrackId) ?? MUSIC_LIBRARY[0]}
+              progressSeconds={musicProgressSeconds}
+              selectedTrack={selectedMusicTrack}
               onClose={() => setMusicPlaying(false)}
               onTogglePlay={() => setMusicPlaying((playing) => !playing)}
             />
@@ -2364,11 +2470,15 @@ export function NavigationShell({
                     motionTiming={motionTiming}
                     musicSearchKeyword={musicSearchKeyword}
                     musicPlaying={musicPlaying}
-                    selectedTrack={MUSIC_LIBRARY.find((track) => track.id === musicTrackId) ?? MUSIC_LIBRARY[0]}
+                    selectedTrack={selectedMusicTrack}
+                    tracks={musicTracks}
+                    loading={musicRecommendationsLoading}
+                    error={musicRecommendationsQuery.isError}
                     onClose={() => setMusicModalOpen(false)}
                     onPickTrack={(trackId) => setMusicTrackId(trackId)}
                     onSearchKeywordChange={setMusicSearchKeyword}
                     onStartPlayback={() => {
+                      setMusicProgressSeconds(0)
                       setMusicPlaying(true)
                       setMusicModalOpen(false)
                     }}
@@ -3609,6 +3719,8 @@ export function DriverVideoPanel({
 function NaviOrbControl({
   assistantStep,
   hidden,
+  musicRecommendationLoading,
+  musicRecommendationTrack,
   motionTiming,
   onClose,
   onRecommendationAction,
@@ -3618,6 +3730,8 @@ function NaviOrbControl({
 }: {
   assistantStep: NaviAssistantStep
   hidden: boolean
+  musicRecommendationLoading: boolean
+  musicRecommendationTrack: UiMusicTrack
   motionTiming: MotionTiming
   onClose: () => void
   onRecommendationAction: (recommendation: NaviAssistantRecommendation) => void
@@ -3862,6 +3976,8 @@ function NaviOrbControl({
               {assistantStep.recommendations?.length ? (
                 <AssistantRecommendationList
                   motionTiming={motionTiming}
+                  musicRecommendationLoading={musicRecommendationLoading}
+                  musicRecommendationTrack={musicRecommendationTrack}
                   onRecommendationAction={onRecommendationAction}
                   recommendations={assistantStep.recommendations}
                 />
@@ -3977,10 +4093,14 @@ function AssistantUserText({
 }
 
 function AssistantRecommendationList({
+  musicRecommendationLoading,
+  musicRecommendationTrack,
   motionTiming,
   onRecommendationAction,
   recommendations,
 }: {
+  musicRecommendationLoading: boolean
+  musicRecommendationTrack: UiMusicTrack
   motionTiming: MotionTiming
   onRecommendationAction: (recommendation: NaviAssistantRecommendation) => void
   recommendations: NaviAssistantRecommendation[]
@@ -4064,7 +4184,7 @@ function AssistantRecommendationList({
                   />
                 )
               ) : item.type === 'music' ? (
-                <AssistantMusicRecommendationCard />
+                <AssistantMusicRecommendationCard loading={musicRecommendationLoading} track={musicRecommendationTrack} />
               ) : item.title.includes('보낼 메시지') ? (
                 <AssistantMessagePreviewCard recommendation={item} />
               ) : completedRecommendation ? (
@@ -4096,24 +4216,23 @@ function AssistantRecommendationList({
   )
 }
 
-function AssistantMusicRecommendationCard() {
-  const track = MUSIC_LIBRARY.find((item) => item.id === 'soft-focus') ?? MUSIC_LIBRARY[0]
+function AssistantMusicRecommendationCard({
+  loading,
+  track,
+}: {
+  loading: boolean
+  track: UiMusicTrack
+}) {
+  if (loading) {
+    return <MusicRecommendationLoadingCard />
+  }
 
   return (
     <div
       className="grid min-h-[4.75rem] grid-cols-[3.25rem_minmax(0,1fr)_auto] items-center gap-3 rounded-2xl border border-[var(--nav-border)] bg-white px-3 py-2 text-left shadow-[0_10px_24px_rgb(15_23_42/0.06)]"
       data-testid="navi-assistant-music-recommendation-card"
     >
-      <span
-        aria-hidden="true"
-        className={[
-          'relative grid size-13 shrink-0 place-items-center overflow-hidden rounded-xl bg-gradient-to-br text-white shadow-[inset_0_-18px_30px_rgb(0_0_0/0.18)]',
-          track.coverTone,
-        ].join(' ')}
-      >
-        <MusicNotes className="size-5" weight="bold" />
-        <span className="absolute inset-x-2 bottom-2 h-1 rounded-full bg-white/40" />
-      </span>
+      <MusicCover track={track} className="size-13 rounded-xl" iconClassName="size-5" />
       <span className="min-w-0">
         <span className="block truncate text-sm font-bold text-[var(--nav-ink)]">{track.title}</span>
         <span className="mt-0.5 block truncate text-xs font-semibold text-[var(--nav-muted)]">{track.artist}</span>
@@ -4121,6 +4240,25 @@ function AssistantMusicRecommendationCard() {
       </span>
       <span className="grid justify-items-end">
         <span className="text-xs font-bold text-[var(--nav-ink)]">{track.duration}</span>
+      </span>
+    </div>
+  )
+}
+
+function MusicRecommendationLoadingCard() {
+  return (
+    <div
+      aria-label="추천 음악을 불러오는 중"
+      className="flex min-h-[4.75rem] items-center gap-3 rounded-2xl border border-[var(--nav-border)] bg-white px-3 py-2 text-left shadow-[0_10px_24px_rgb(15_23_42/0.06)]"
+      data-testid="music-recommendation-loading"
+      role="status"
+    >
+      <span className="grid size-13 shrink-0 place-items-center rounded-xl bg-[var(--nav-primary-soft)] text-[var(--nav-primary)]">
+        <CircleNotch className="size-5 animate-spin" weight="bold" />
+      </span>
+      <span className="min-w-0">
+        <span className="block truncate text-sm font-bold text-[var(--nav-ink)]">추천 음악을 찾는 중</span>
+        <span className="mt-0.5 block truncate text-xs font-semibold text-[var(--nav-muted)]">실제 음악 정보를 불러오고 있습니다.</span>
       </span>
     </div>
   )
@@ -6972,6 +7110,9 @@ function MusicPopover({
   musicSearchKeyword,
   musicPlaying,
   selectedTrack,
+  tracks,
+  loading,
+  error,
   onClose,
   onPickTrack,
   onSearchKeywordChange,
@@ -6980,13 +7121,16 @@ function MusicPopover({
   motionTiming: MotionTiming
   musicSearchKeyword: string
   musicPlaying: boolean
-  selectedTrack: (typeof MUSIC_LIBRARY)[number]
+  selectedTrack: UiMusicTrack
+  tracks: UiMusicTrack[]
+  loading: boolean
+  error: boolean
   onClose: () => void
-  onPickTrack: (trackId: (typeof MUSIC_LIBRARY)[number]['id']) => void
+  onPickTrack: (trackId: string) => void
   onSearchKeywordChange: (value: string) => void
   onStartPlayback: () => void
 }) {
-  const filteredTracks = MUSIC_LIBRARY.filter((track) => {
+  const filteredTracks = tracks.filter((track) => {
     const keyword = musicSearchKeyword.trim().toLowerCase()
 
     if (!keyword) {
@@ -7067,10 +7211,14 @@ function MusicPopover({
         <motion.div className="grid gap-2" variants={{ hidden: { opacity: 0, y: 8 }, visible: { opacity: 1, y: 0 } }}>
           <div className="flex items-center justify-between">
             <span className="text-sm font-bold">추천 트랙</span>
-            <span className="text-xs font-semibold text-[var(--nav-muted)]">{filteredTracks.length}곡</span>
+            <span className="text-xs font-semibold text-[var(--nav-muted)]">
+              {loading ? '불러오는 중' : `${filteredTracks.length}곡`}
+            </span>
           </div>
           <div className="grid max-h-[18rem] gap-1 overflow-auto pr-1">
-            {filteredTracks.map((track) => {
+            {loading ? (
+              <MusicRecommendationLoadingCard />
+            ) : filteredTracks.length ? filteredTracks.map((track) => {
               const active = track.id === selectedTrack.id
 
               return (
@@ -7086,16 +7234,7 @@ function MusicPopover({
                   onClick={() => onPickTrack(track.id)}
                   type="button"
                 >
-                  <span
-                    aria-hidden="true"
-                    className={[
-                      'relative grid size-13 shrink-0 place-items-center overflow-hidden rounded-xl bg-gradient-to-br text-white shadow-[inset_0_-18px_30px_rgb(0_0_0/0.18)]',
-                      track.coverTone,
-                    ].join(' ')}
-                  >
-                    <MusicNotes className="size-5" weight="bold" />
-                    <span className="absolute inset-x-2 bottom-2 h-1 rounded-full bg-white/40" />
-                  </span>
+                  <MusicCover track={track} className="size-13 rounded-xl" iconClassName="size-5" />
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-bold text-[var(--nav-ink)]">{track.title}</span>
                     <span className="mt-0.5 block truncate text-xs font-semibold text-[var(--nav-muted)]">{track.artist}</span>
@@ -7106,8 +7245,15 @@ function MusicPopover({
                   </span>
                 </button>
               )
-            })}
+            }) : (
+              <div className="rounded-2xl border border-dashed border-[var(--nav-border)] px-3 py-6 text-center text-sm font-semibold text-[var(--nav-muted)]">
+                검색 결과가 없습니다.
+              </div>
+            )}
           </div>
+          {error ? (
+            <p className="text-xs font-semibold text-[var(--nav-muted)]">추천을 불러오지 못해 기본 목록을 표시합니다.</p>
+          ) : null}
         </motion.div>
         <motion.div className="flex gap-2" variants={{ hidden: { opacity: 0, y: 8 }, visible: { opacity: 1, y: 0 } }}>
           <button
@@ -7135,6 +7281,7 @@ function MiniPlayer({
   activeRoute,
   motionTiming,
   musicPlaying,
+  progressSeconds,
   selectedTrack,
   onClose,
   onTogglePlay,
@@ -7142,7 +7289,8 @@ function MiniPlayer({
   activeRoute: boolean
   motionTiming: MotionTiming
   musicPlaying: boolean
-  selectedTrack: (typeof MUSIC_LIBRARY)[number]
+  progressSeconds: number
+  selectedTrack: UiMusicTrack
   onClose: () => void
   onTogglePlay: () => void
 }) {
@@ -7152,6 +7300,10 @@ function MiniPlayer({
 
   const bottom = activeRoute ? MUSIC_MINI_PLAYER_GUIDANCE_BOTTOM : MUSIC_MINI_PLAYER_IDLE_BOTTOM
   const isPlaying = musicPlaying
+  const boundedProgressSeconds = Math.min(progressSeconds, selectedTrack.durationSeconds)
+  const progressPercent = selectedTrack.durationSeconds > 0
+    ? Math.min(100, Math.max(0, (boundedProgressSeconds / selectedTrack.durationSeconds) * 100))
+    : 0
 
   return (
     <motion.div
@@ -7164,23 +7316,15 @@ function MiniPlayer({
       transition={motionTiming}
     >
       <div className="pointer-events-auto grid min-h-[2.75rem] grid-cols-[2.125rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-full border border-[rgb(16_24_40/0.07)] bg-white/94 px-2 py-1 shadow-[0_10px_24px_rgb(15_23_42/0.12)] backdrop-blur-md">
-        <div
-          aria-hidden="true"
-          className={[
-            'grid size-[2.125rem] shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br text-white shadow-[inset_0_-12px_20px_rgb(0_0_0/0.18)]',
-            selectedTrack.coverTone,
-          ].join(' ')}
-        >
-          <MusicNotes className="size-4" weight="bold" />
-        </div>
+        <MusicCover track={selectedTrack} className="size-[2.125rem] rounded-full" iconClassName="size-4" />
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-2">
             <div className="min-w-0 flex-1 truncate text-sm font-bold text-[var(--nav-ink)]">{selectedTrack.title}</div>
-            <div className="shrink-0 text-[11px] font-semibold text-[var(--nav-muted)]">0:42 / {selectedTrack.duration}</div>
+            <div className="shrink-0 text-[11px] font-semibold text-[var(--nav-muted)]">{formatMusicDuration(boundedProgressSeconds)} / {selectedTrack.duration}</div>
           </div>
           <div className="mt-0.5 min-w-0 truncate text-xs font-medium text-[var(--nav-muted)]">{selectedTrack.artist}</div>
           <div className="mt-1 h-0.5 overflow-hidden rounded-full bg-[var(--nav-border)]">
-            <div className="h-full w-[32%] rounded-full bg-[var(--nav-primary)]" />
+            <div className="h-full rounded-full bg-[var(--nav-primary)]" style={{ width: `${progressPercent}%` }} />
           </div>
         </div>
         <div className="flex items-center gap-1">
@@ -7203,6 +7347,39 @@ function MiniPlayer({
         </div>
       </div>
     </motion.div>
+  )
+}
+
+function MusicCover({
+  track,
+  className,
+  iconClassName,
+}: {
+  track: UiMusicTrack
+  className: string
+  iconClassName: string
+}) {
+  return (
+    <span
+      aria-hidden="true"
+      className={[
+        'relative grid shrink-0 place-items-center overflow-hidden bg-gradient-to-br text-white shadow-[inset_0_-18px_30px_rgb(0_0_0/0.18)]',
+        track.coverTone,
+        className,
+      ].join(' ')}
+    >
+      {track.coverUrl ? (
+        <img
+          alt=""
+          className="absolute inset-0 size-full object-cover"
+          draggable={false}
+          src={track.coverUrl}
+        />
+      ) : null}
+      <span className="absolute inset-0 bg-black/10" />
+      <MusicNotes className={['relative z-10', iconClassName].join(' ')} weight="bold" />
+      <span className="absolute inset-x-2 bottom-2 h-1 rounded-full bg-white/40" />
+    </span>
   )
 }
 
@@ -8509,6 +8686,25 @@ function formatMeters(distanceMeters: number) {
 
 function formatRouteOptionDuration(durationSeconds: number) {
   return `${Math.max(1, Math.round(durationSeconds / 60))}분`
+}
+
+function formatMusicDuration(durationSeconds: number) {
+  const safeSeconds = Math.max(0, Math.floor(durationSeconds))
+  const minutes = Math.floor(safeSeconds / 60)
+  const seconds = safeSeconds % 60
+
+  return `${minutes}:${String(seconds).padStart(2, '0')}`
+}
+
+function getNextMusicTrackId(tracks: UiMusicTrack[], currentTrackId: string) {
+  if (!tracks.length) {
+    return currentTrackId
+  }
+
+  const currentIndex = tracks.findIndex((track) => track.id === currentTrackId)
+  const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % tracks.length : 0
+
+  return tracks[nextIndex]?.id ?? currentTrackId
 }
 
 function formatRouteOptionDistance(distanceMeters: number) {
