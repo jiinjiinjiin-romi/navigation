@@ -387,13 +387,11 @@ describe('NavigationShell', () => {
     const phoneScenario = getDemoScenarios().find((scenario) => scenario.scenarioId === 'phone_usage')
     const deviceScenario = getDemoScenarios().find((scenario) => scenario.scenarioId === 'device_operation')
     const routeEvent = drowsyScenario?.events.find((event) => event.id === 'drowsy_rest_area_guidance_started')
-    const phoneAssistEvent = phoneScenario?.events.find((event) => event.id === 'phone_assist_offer')
     const phonePreviewEvent = phoneScenario?.events.find((event) => event.id === 'phone_message_preview')
     const deviceAssistEvent = deviceScenario?.events.find((event) => event.id === 'device_music_offer')
     const musicEvent = deviceScenario?.events.find((event) => event.id === 'device_music_preview')
 
     expect(routeEvent).toBeDefined()
-    expect(phoneAssistEvent).toBeDefined()
     expect(phonePreviewEvent).toBeDefined()
     expect(deviceAssistEvent).toBeDefined()
     expect(musicEvent).toBeDefined()
@@ -403,12 +401,6 @@ describe('NavigationShell', () => {
       scenario: drowsyScenario!,
       setupEvent: null,
       scenarioEvent: routeEvent!,
-    }, '민준')
-    const phoneAssistStep = createDemoAssistantStep({
-      phase: 'scenario',
-      scenario: phoneScenario!,
-      setupEvent: null,
-      scenarioEvent: phoneAssistEvent!,
     }, '민준')
     const phonePreviewStep = createDemoAssistantStep({
       phase: 'scenario',
@@ -432,11 +424,8 @@ describe('NavigationShell', () => {
     expect(routeStep.recommendations).toEqual([
       expect.objectContaining({ type: 'place', title: '경로 변경 완료' }),
     ])
-    expect(phoneAssistStep.recommendations).toEqual([
-      expect.objectContaining({ type: 'action', title: '메시지 대행' }),
-    ])
     expect(phonePreviewStep.recommendations).toEqual([
-      expect.objectContaining({ type: 'action', title: '메시지 초안' }),
+      expect.objectContaining({ type: 'action', title: '지우에게 보낼 메시지', action: '보내기' }),
     ])
     expect(deviceAssistStep.recommendations).toEqual([
       expect.objectContaining({ type: 'action', title: '음악 설정 대행' }),
@@ -444,6 +433,23 @@ describe('NavigationShell', () => {
     expect(musicStep.recommendations).toEqual([
       expect.objectContaining({ type: 'music', title: '조용한 플레이리스트' }),
     ])
+  })
+
+  it('does not show a duplicate recommendation card for the phone assist offer prompt', () => {
+    const phoneScenario = getDemoScenarios().find((scenario) => scenario.scenarioId === 'phone_usage')
+    const phoneAssistEvent = phoneScenario?.events.find((event) => event.id === 'phone_assist_offer')
+
+    expect(phoneAssistEvent).toBeDefined()
+
+    const phoneAssistStep = createDemoAssistantStep({
+      phase: 'scenario',
+      scenario: phoneScenario!,
+      setupEvent: null,
+      scenarioEvent: phoneAssistEvent!,
+    }, '민준')
+
+    expect(phoneAssistStep.text).toBe('지금 확인하려는 내용, 제가 대신 처리해드릴까요?')
+    expect(phoneAssistStep.recommendations).toBeUndefined()
   })
 
   it('skips silent demo presenter states instead of rendering an empty panel across scenarios', () => {
@@ -827,6 +833,71 @@ describe('NavigationShell', () => {
     expect(screen.queryByTestId('demo-scenario-presenter-panel')).not.toBeInTheDocument()
   })
 
+  it('starts the mini player when a demo music scenario reaches the music started step', async () => {
+    mockedSearchPlaces.mockResolvedValue([
+      {
+        id: 'seoul-forest-parking',
+        name: '서울숲 주차장',
+        address: '서울 성동구 뚝섬로 273',
+        coordinate: { lat: 37.5446, lng: 127.0374 },
+      },
+    ])
+    mockedGetRoute.mockResolvedValue({
+      coordinates: [
+        { lat: 37.5665, lng: 126.978 },
+        { lat: 37.5446, lng: 127.0374 },
+      ],
+      summary: {
+        distanceMeters: 8200,
+        durationSeconds: 1140,
+      },
+      maneuvers: [],
+    })
+    const queryClient = new QueryClient()
+    const clickPresenterNext = async () => {
+      const nextButton = screen.getByRole('button', { name: /다음/ })
+
+      await waitFor(() => expect(nextButton).not.toBeDisabled())
+      fireEvent.click(nextButton)
+    }
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: /민준 프로필 선택/ }))
+    fireEvent.click(screen.getByRole('button', { name: '민준(으)로 시작' }))
+    fireEvent.click(await screen.findByTestId('demo-scenario-card-device_operation'))
+
+    await screen.findByTestId('demo-scenario-presenter-panel')
+    await clickPresenterNext()
+    await clickPresenterNext()
+    await clickPresenterNext()
+    await clickPresenterNext()
+    await clickPresenterNext()
+    await clickPresenterNext()
+
+    await screen.findByText('오디오 조작 주의')
+    await clickPresenterNext()
+    await clickPresenterNext()
+    await clickPresenterNext()
+    fireEvent.click(await screen.findByRole('button', { name: '음악 말하기' }))
+    await clickPresenterNext()
+    fireEvent.click(await screen.findByRole('button', { name: '음악 재생' }))
+
+    expect(screen.queryByTestId('music-mini-player')).not.toBeInTheDocument()
+
+    await clickPresenterNext()
+
+    const miniPlayer = await screen.findByTestId('music-mini-player')
+
+    expect(miniPlayer).toBeInTheDocument()
+    expect(within(miniPlayer).getByText('Soft Focus')).toBeInTheDocument()
+    expect(within(miniPlayer).getByText('Evening Route')).toBeInTheDocument()
+  })
+
   it('keeps profile cards on one horizontal scroll row', async () => {
     mockedGetBootstrap.mockResolvedValueOnce({
       account: {
@@ -1204,7 +1275,7 @@ describe('NavigationShell', () => {
     expect(screen.getByText('1 / 8')).toBeInTheDocument()
   })
 
-  it('starts the mini player from a music assistant recommendation', async () => {
+  it('renders a music assistant recommendation without an inline play action', async () => {
     const queryClient = new QueryClient()
 
     render(
@@ -1227,13 +1298,7 @@ describe('NavigationShell', () => {
     expect(screen.getByText('Evening Route')).toBeInTheDocument()
     expect(screen.getByText('Bright Pop Drive')).toBeInTheDocument()
     expect(screen.getByText('3:08')).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: '재생' }))
-
-    const miniPlayer = screen.getByTestId('music-mini-player')
-    expect(miniPlayer).toBeInTheDocument()
-    expect(within(miniPlayer).getByText('Soft Focus')).toBeInTheDocument()
-    expect(within(miniPlayer).getByText('Evening Route')).toBeInTheDocument()
+    expect(within(screen.getByTestId('navi-assistant-music-recommendation-card')).queryByRole('button', { name: '재생' })).not.toBeInTheDocument()
   })
 
   it('keeps assistant speech reveal timing deterministic without audio playback', () => {

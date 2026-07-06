@@ -116,7 +116,45 @@ describe('demo scenario engine', () => {
     const scenarioText = JSON.stringify(getDemoScenario('device_operation'))
 
     expect(scenarioText).not.toMatch(/세종대학교|목적지 설정|목적지 음성|목적지 후보|내비 목적지/)
-    expect(scenarioText).toContain('음악')
+      expect(scenarioText).toContain('음악')
+  })
+
+  it('asks for a message recipient before showing the phone scenario message preview', () => {
+    const scenario = getDemoScenario('phone_usage')
+    let state = createInitialDemoScenarioState('phone_usage')
+
+    while (state.scenarioEvent?.id !== 'phone_assist_offer') {
+      state = advanceDemoScenario(state)
+    }
+
+    state = respondToDemoScenario(state, 'ASSIST_MESSAGE')
+    expect(state.scenarioEvent).toMatchObject({
+      id: 'phone_assist_approved',
+      eventType: 'USER_RESPONSE',
+      userSpeech: '응, 해줘',
+    })
+
+    state = advanceDemoScenario(state)
+    expect(state.scenarioEvent).toMatchObject({
+      id: 'phone_recipient_prompt',
+      eventType: 'AGENT_MESSAGE',
+      romiMessage: '문자를 누구에게 보낼까요?',
+      requiresResponse: true,
+    })
+
+    state = respondToDemoScenario(state, 'SEND_TO_JIWOO')
+    expect(state.scenarioEvent).toMatchObject({
+      id: 'phone_recipient_selected',
+      eventType: 'USER_RESPONSE',
+      userSpeech: '지우에게 보내줘',
+    })
+
+    state = advanceDemoScenario(state)
+    expect(state.scenarioEvent).toMatchObject({
+      id: 'phone_message_preview',
+      romiMessage: '지우에게 “운전 중이라 조금 뒤에 연락할게.” 이렇게 보낼까요?',
+    })
+    expect(scenario.events.find((event) => event.id === 'phone_message_preview')).toBeDefined()
   })
 
   it('does not expose focus driving mode as a demo scenario step', () => {

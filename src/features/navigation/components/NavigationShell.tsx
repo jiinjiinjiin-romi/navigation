@@ -920,6 +920,7 @@ export function NavigationShell({
   const [demoSimulationStartPending, setDemoSimulationStartPending] = useState(false)
   const [demoCompleted, setDemoCompleted] = useState(false)
   const demoEndedEventAppliedRef = useRef<string | null>(null)
+  const demoMusicEventAppliedRef = useRef<string | null>(null)
   const [profileSetupView, setProfileSetupView] = useState<ProfileSetupView>('list')
   const [selectedProfileId, setSelectedProfileId] = useState<string | undefined>(initialSelectedProfileId)
   const [editingProfileId, setEditingProfileId] = useState<string>()
@@ -1804,6 +1805,25 @@ export function NavigationShell({
     completeDemoDrive()
   }, [completeDemoDrive, demoScenarioState?.scenarioEvent])
 
+  useEffect(() => {
+    const event = demoScenarioState?.scenarioEvent
+    const shouldStartMusic = event?.id === 'drowsy_music_started' || event?.id === 'device_music_started'
+
+    if (!shouldStartMusic) {
+      demoMusicEventAppliedRef.current = null
+      return
+    }
+
+    if (demoMusicEventAppliedRef.current === event.id) {
+      return
+    }
+
+    demoMusicEventAppliedRef.current = event.id
+    setMusicTrackId('soft-focus')
+    setMusicPlaying(true)
+    setMusicModalOpen(false)
+  }, [demoScenarioState?.scenarioEvent])
+
   const advanceActiveDemoScenario = useCallback(() => {
     setDemoScenarioState((currentState) => {
       if (!currentState) {
@@ -2326,7 +2346,7 @@ export function NavigationShell({
         <div className="col-start-2 row-start-2 self-start rounded-[1.1rem] border border-white/70 bg-white p-4 text-[var(--nav-ink)] shadow-[0_18px_46px_rgb(0_0_0/0.24)]">
           <p className="text-sm font-bold">데모 준비</p>
           <p className="mt-1 text-xs font-semibold leading-5 text-[var(--nav-muted)]">
-            프로필 선택 후 왼쪽 화면에서 데모를 선택합니다.
+            프로필을 선택하면 대표 위험행동을 확인할 수 있어요.
           </p>
         </div>
       )}
@@ -3721,11 +3741,9 @@ function AssistantRecommendationList({
                   />
                 )
               ) : item.type === 'music' ? (
-                <AssistantMusicRecommendationCard
-                  onAction={() => onRecommendationAction(item)}
-                />
+                <AssistantMusicRecommendationCard />
               ) : completedRecommendation ? (
-                <AssistantCompletionCard />
+                <AssistantCompletionCard recommendation={item} />
               ) : (
                 <>
                   <div className="grid size-10 shrink-0 place-items-center rounded-full bg-[var(--nav-primary-soft)] text-[var(--nav-primary)]">
@@ -3753,11 +3771,7 @@ function AssistantRecommendationList({
   )
 }
 
-function AssistantMusicRecommendationCard({
-  onAction,
-}: {
-  onAction: () => void
-}) {
+function AssistantMusicRecommendationCard() {
   const track = MUSIC_LIBRARY.find((item) => item.id === 'soft-focus') ?? MUSIC_LIBRARY[0]
 
   return (
@@ -3780,16 +3794,8 @@ function AssistantMusicRecommendationCard({
         <span className="mt-0.5 block truncate text-xs font-semibold text-[var(--nav-muted)]">{track.artist}</span>
         <span className="mt-1 block truncate text-[11px] font-medium text-[var(--nav-subtle)]">{track.album}</span>
       </span>
-      <span className="grid justify-items-end gap-2">
+      <span className="grid justify-items-end">
         <span className="text-xs font-bold text-[var(--nav-ink)]">{track.duration}</span>
-        <button
-          className="inline-flex h-8 items-center gap-1.5 rounded-full bg-[var(--nav-primary)] px-3 text-xs font-bold text-white transition hover:bg-[var(--nav-primary-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
-          onClick={onAction}
-          type="button"
-        >
-          <Play className="size-3.5" weight="fill" />
-          재생
-        </button>
       </span>
     </div>
   )
@@ -3831,7 +3837,17 @@ function AssistantSelectedRouteCard({
   )
 }
 
-function AssistantCompletionCard() {
+function AssistantCompletionCard({
+  recommendation,
+}: {
+  recommendation: Extract<NaviAssistantRecommendation, { type: 'action' }>
+}) {
+  const message = recommendation.title.includes('경로')
+    || recommendation.meta.includes('경로')
+    || recommendation.detail.includes('경로')
+    ? '안내 경로가 적용되었습니다.'
+    : recommendation.detail
+
   return (
     <div
       className="flex items-center gap-2 px-1 py-0.5 text-left"
@@ -3842,7 +3858,7 @@ function AssistantCompletionCard() {
         <Check className="size-4" weight="bold" />
       </span>
       <span className="min-w-0">
-        <span className="block truncate text-sm font-bold leading-5 text-[var(--nav-ink)]">안내 경로가 적용되었습니다.</span>
+        <span className="block truncate text-sm font-bold leading-5 text-[var(--nav-ink)]">{message}</span>
       </span>
     </div>
   )
@@ -4060,7 +4076,7 @@ function getDemoScenarioRecommendations(
         type: 'place',
         title: '가까운 휴게소 추천',
         meta: '경로에서 가까운 휴게소',
-        detail: '경로에서 가까운 휴게소로 안내할 수 있습니다.',
+        detail: '경로에서 가까운 휴게소를 찾았어요.',
         action: '안내 시작',
       },
     ]
@@ -4072,7 +4088,7 @@ function getDemoScenarioRecommendations(
         type: 'place',
         title: '경로 변경 완료',
         meta: '군자 휴게소',
-        detail: '경로에서 가까운 휴게소로 안내 중입니다.',
+        detail: '가까운 휴게소로 경로를 바꿨어요.',
         action: '확인',
       },
     ]
@@ -4084,7 +4100,7 @@ function getDemoScenarioRecommendations(
         type: 'action',
         title: '창문 살짝 열기',
         meta: '환기 보조',
-        detail: '실내 공기 환기를 시작한 것으로 표시합니다.',
+        detail: '창문을 살짝 열어 차 안 공기를 환기합니다.',
         action: '확인',
       },
     ]
@@ -4096,20 +4112,8 @@ function getDemoScenarioRecommendations(
         type: 'music',
         title: '조용한 플레이리스트',
         meta: '음악 추천',
-        detail: '운전에 방해되지 않는 음악을 추천합니다.',
+        detail: '운전에 방해되지 않는 음악을 골랐어요.',
         action: '재생',
-      },
-    ]
-  }
-
-  if (event.id === 'phone_assist_offer') {
-    return [
-      {
-        type: 'action',
-        title: '메시지 대행',
-        meta: '운전 중 응답 보조',
-        detail: '휴대폰을 보지 않고 필요한 메시지 처리를 대신 진행할 수 있습니다.',
-        action: '확인',
       },
     ]
   }
@@ -4118,10 +4122,10 @@ function getDemoScenarioRecommendations(
     return [
       {
         type: 'action',
-        title: '메시지 초안',
-        meta: '대행 처리',
+        title: '지우에게 보낼 메시지',
+        meta: '문자 초안',
         detail: '운전 중이라 조금 뒤에 연락할게.',
-        action: '확인',
+        action: '보내기',
       },
     ]
   }
@@ -4131,8 +4135,8 @@ function getDemoScenarioRecommendations(
       {
         type: 'action',
         title: '메시지 전송 완료',
-        meta: '데모 처리',
-        detail: '실제 전송 없이 전송 완료 상태만 표시합니다.',
+        meta: '문자 전송',
+        detail: '지우에게 메시지를 보냈습니다.',
         action: '확인',
       },
     ]
@@ -4144,7 +4148,7 @@ function getDemoScenarioRecommendations(
         type: 'action',
         title: '음악 설정 대행',
         meta: '화면 조작 방지',
-        detail: '주행 중 화면을 조작하지 않도록 음악 변경을 대신 진행할 수 있습니다.',
+        detail: '화면을 조작하지 않아도 원하는 음악으로 바꿔드릴게요.',
         action: '확인',
       },
     ]
