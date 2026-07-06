@@ -13,6 +13,7 @@ import {
   CloudSun,
   Clock,
   CarSimple,
+  ChatCircleText,
   ClipboardText,
   DotsThree,
   FileVideo,
@@ -25,6 +26,7 @@ import {
   PencilSimple,
   Play,
   Pause,
+  PaperPlaneTilt,
   Plus,
   Phone,
   PlugsConnected,
@@ -1778,6 +1780,8 @@ export function NavigationShell({
     setActiveField(null)
     setHighlightedIndex(0)
     setRouteSearchOpen(false)
+    setMusicPlaying(false)
+    setMusicModalOpen(false)
   }, [destination?.coordinate, stopSimulation])
 
   useEffect(() => {
@@ -3742,6 +3746,11 @@ function AssistantRecommendationList({
                 )
               ) : item.type === 'music' ? (
                 <AssistantMusicRecommendationCard />
+              ) : item.title.includes('보낼 메시지') ? (
+                <AssistantMessagePreviewCard
+                  recommendation={item}
+                  onAction={() => onRecommendationAction(item)}
+                />
               ) : completedRecommendation ? (
                 <AssistantCompletionCard recommendation={item} />
               ) : (
@@ -3797,6 +3806,40 @@ function AssistantMusicRecommendationCard() {
       <span className="grid justify-items-end">
         <span className="text-xs font-bold text-[var(--nav-ink)]">{track.duration}</span>
       </span>
+    </div>
+  )
+}
+
+function AssistantMessagePreviewCard({
+  recommendation,
+  onAction,
+}: {
+  recommendation: Extract<NaviAssistantRecommendation, { type: 'action' }>
+  onAction: () => void
+}) {
+  return (
+    <div
+      className="grid gap-3 rounded-2xl border border-[var(--nav-border)] bg-white p-4 text-left shadow-[0_10px_24px_rgb(15_23_42/0.06)]"
+      data-testid="navi-assistant-message-preview-card"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-xs font-bold text-[var(--nav-primary)]">{recommendation.meta}</div>
+          <div className="mt-1 truncate text-sm font-black text-[var(--nav-ink)]">{recommendation.title}</div>
+        </div>
+        <ChatCircleText className="size-5 shrink-0 text-[var(--nav-primary)]" weight="bold" />
+      </div>
+      <div className="rounded-xl bg-[var(--nav-panel)] px-3 py-3 text-sm font-semibold leading-5 text-[var(--nav-ink)]">
+        {recommendation.detail}
+      </div>
+      <button
+        className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-xl bg-[var(--nav-primary)] px-3 text-xs font-bold text-white transition hover:bg-[var(--nav-primary-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
+        onClick={onAction}
+        type="button"
+      >
+        <PaperPlaneTilt className="size-3.5" weight="fill" />
+        {recommendation.action}
+      </button>
     </div>
   )
 }

@@ -435,6 +435,30 @@ describe('NavigationShell', () => {
     ])
   })
 
+  it('creates phone message preview recommendation data for the message confirmation panel', () => {
+    const phoneScenario = getDemoScenarios().find((scenario) => scenario.scenarioId === 'phone_usage')
+    const phonePreviewEvent = phoneScenario?.events.find((event) => event.id === 'phone_message_preview')
+
+    expect(phonePreviewEvent).toBeDefined()
+
+    const previewStep = createDemoAssistantStep({
+      phase: 'scenario',
+      scenario: phoneScenario!,
+      setupEvent: null,
+      scenarioEvent: phonePreviewEvent!,
+    }, '민준')
+
+    expect(previewStep.recommendations).toEqual([
+      expect.objectContaining({
+        type: 'action',
+        title: '지우에게 보낼 메시지',
+        meta: '문자 초안',
+        detail: '운전 중이라 조금 뒤에 연락할게.',
+        action: '보내기',
+      }),
+    ])
+  })
+
   it('does not show a duplicate recommendation card for the phone assist offer prompt', () => {
     const phoneScenario = getDemoScenarios().find((scenario) => scenario.scenarioId === 'phone_usage')
     const phoneAssistEvent = phoneScenario?.events.find((event) => event.id === 'phone_assist_offer')
@@ -896,6 +920,11 @@ describe('NavigationShell', () => {
     expect(miniPlayer).toBeInTheDocument()
     expect(within(miniPlayer).getByText('Soft Focus')).toBeInTheDocument()
     expect(within(miniPlayer).getByText('Evening Route')).toBeInTheDocument()
+
+    await clickPresenterNext()
+
+    expect(await screen.findAllByText('오늘 주행이 끝났어요. 운전 리포트를 정리해드릴게요.')).not.toHaveLength(0)
+    expect(screen.queryByTestId('music-mini-player')).not.toBeInTheDocument()
   })
 
   it('keeps profile cards on one horizontal scroll row', async () => {
