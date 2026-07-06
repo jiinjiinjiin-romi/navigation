@@ -1710,8 +1710,14 @@ export function NavigationShell({
         setHighlightedIndex(0)
         break
       case 'DESTINATION_CANDIDATE_SHOWN':
+        stopSimulation()
+        setSelectedRouteOptionId(undefined)
+        setSimulationPosition(undefined)
+        setDestination(undefined)
+        setDestinationKeyword(DEMO_DESTINATION.query)
         setRouteSearchOpen(true)
         setActiveField('destination')
+        setHighlightedIndex(0)
         break
       case 'DESTINATION_SELECTED':
         selectPlace('destination', DEMO_DESTINATION_PLACE, { recordHistory: false })
@@ -1720,6 +1726,10 @@ export function NavigationShell({
         setRouteOptionsSearchReady(true)
         break
       case 'RECOMMENDED_ROUTE_SELECTED':
+        if (!destination || destination.id !== DEMO_DESTINATION_PLACE.id) {
+          selectPlace('destination', DEMO_DESTINATION_PLACE, { recordHistory: false })
+        }
+        setRouteOptionsSearchReady(true)
         if (activeRouteOptionId) {
           selectRouteOption(activeRouteOptionId)
         }
@@ -1729,6 +1739,8 @@ export function NavigationShell({
         setActiveField(null)
         break
       case 'SIMULATION_STARTED':
+        setRouteSearchOpen(false)
+        setActiveField(null)
         startSimulation()
         break
       default:
@@ -1736,6 +1748,7 @@ export function NavigationShell({
     }
   }, [
     activeRouteOptionId,
+    destination,
     openRouteSearchEditor,
     selectPlace,
     selectRouteOption,
@@ -1750,6 +1763,25 @@ export function NavigationShell({
     setSimulationRemainingDuration(0)
     setGuidanceDistanceUpdateKey((key) => key + 1)
   }, [destination?.coordinate, stopSimulation])
+
+  useEffect(() => {
+    if (
+      demoScenarioState?.setupEvent?.eventType !== 'RECOMMENDED_ROUTE_SELECTED' ||
+      activeRoute ||
+      !routeOptionsReady ||
+      !activeRouteOptionId
+    ) {
+      return
+    }
+
+    selectRouteOption(activeRouteOptionId)
+  }, [
+    activeRoute,
+    activeRouteOptionId,
+    demoScenarioState?.setupEvent?.eventType,
+    routeOptionsReady,
+    selectRouteOption,
+  ])
 
   const advanceActiveDemoScenario = useCallback(() => {
     setDemoScenarioState((currentState) => {
