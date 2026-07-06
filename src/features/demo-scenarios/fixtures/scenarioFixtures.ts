@@ -4,9 +4,9 @@ import type {
 } from '../types'
 
 export const DEMO_DESTINATION = {
-  name: '서울숲 주차장',
-  query: '서울숲 주차장',
-  address: '서울 성동구 뚝섬로 273',
+  name: '오씨칼국수 본점',
+  query: '오씨칼국수 본점',
+  address: '대전 동구 옛신탄진로 13',
 }
 
 export const COMMON_DRIVING_SETUP_EVENTS: DemoSetupEvent[] = [
@@ -233,13 +233,13 @@ export const DEMO_SCENARIOS: DemoScenarioDefinition[] = [
         at: 39,
         eventType: 'AGENT_MESSAGE',
         uiState: { drivingMode: 'MOVING', riskLevel: 'HIGH', visibleStatus: '위험도 높음 · 휴식 안내 필요' },
-        romiMessage: '{{profileName}}, 지금은 계속 운전하기 위험해 보여요. 가까운 휴게소로 안내해드릴까요?',
+        romiMessage: '{{profileName}}, 지금은 계속 운전하기 위험해 보여요. 신탄진 졸음쉼터로 안내해드릴까요?',
         requiresResponse: true,
         responseOptions: [
           {
-            label: '휴게소 안내',
+            label: '신탄진 졸음쉼터 안내',
             value: 'GUIDE_TO_REST_AREA',
-            asUserSpeech: '응, 안내해줘',
+            asUserSpeech: '응, 신탄진 졸음쉼터로 안내해줘',
             nextEventId: 'drowsy_rest_area_approved',
           },
         ],
@@ -253,7 +253,7 @@ export const DEMO_SCENARIOS: DemoScenarioDefinition[] = [
         eventType: 'USER_RESPONSE',
         uiState: { drivingMode: 'MOVING', riskLevel: 'HIGH', visibleStatus: '휴식 안내 승인' },
         romiMessage: null,
-        userSpeech: '응, 안내해줘',
+        userSpeech: '응, 신탄진 졸음쉼터로 안내해줘',
         requiresResponse: false,
         responseOptions: [],
         report: { include: true, eventName: '휴식 안내 승인' },
@@ -264,8 +264,8 @@ export const DEMO_SCENARIOS: DemoScenarioDefinition[] = [
         id: 'drowsy_rest_area_guidance_started',
         at: 45,
         eventType: 'ACTION_COMPLETED',
-        uiState: { drivingMode: 'MOVING', riskLevel: 'MEDIUM', visibleStatus: '가까운 휴게소로 안내 중' },
-        romiMessage: '가까운 휴게소로 안내를 시작할게요. 도착 전까지 필요한 안내만 드릴게요.',
+        uiState: { drivingMode: 'MOVING', riskLevel: 'MEDIUM', visibleStatus: '신탄진 졸음쉼터로 안내 중' },
+        romiMessage: '신탄진 졸음쉼터로 안내를 시작할게요. 도착 전까지 필요한 안내만 드릴게요.',
         requiresResponse: false,
         responseOptions: [],
         report: { include: true, eventName: '휴식 경로 안내 시작' },
@@ -500,7 +500,7 @@ export const DEMO_SCENARIOS: DemoScenarioDefinition[] = [
   {
     scenarioId: 'device_operation',
     title: '기기조작 감지',
-    description: '주행 중 화면을 만지지 않아도 Romi가 음악 변경을 도와드립니다.',
+    description: '주행 중 운전자가 음악 패널을 직접 조작하자 Romi가 음악 변경을 대신 도와드립니다.',
     durationSeconds: 70,
     tags: ['device_operation', 'audio', 'music'],
     events: [
@@ -514,13 +514,25 @@ export const DEMO_SCENARIOS: DemoScenarioDefinition[] = [
         responseOptions: [],
         report: { include: false, eventName: null },
         debugNote: null,
+        nextEventId: 'device_music_panel_opened',
+      },
+      {
+        id: 'device_music_panel_opened',
+        at: 9,
+        eventType: 'ACTION_PREVIEW',
+        uiState: { drivingMode: 'MOVING', riskLevel: 'LOW', visibleStatus: '음악 패널 조작' },
+        romiMessage: null,
+        requiresResponse: false,
+        responseOptions: [],
+        report: { include: false, eventName: null },
+        debugNote: null,
         nextEventId: 'device_first_detection',
       },
       {
         id: 'device_first_detection',
-        at: 9,
+        at: 12,
         eventType: 'DETECTION_UPDATE',
-        uiState: { drivingMode: 'MOVING', riskLevel: 'MEDIUM', visibleStatus: '오디오 조작 주의' },
+        uiState: { drivingMode: 'MOVING', riskLevel: 'MEDIUM', visibleStatus: '음악 검색 조작' },
         romiMessage: null,
         requiresResponse: false,
         responseOptions: [],
@@ -530,10 +542,10 @@ export const DEMO_SCENARIOS: DemoScenarioDefinition[] = [
       },
       {
         id: 'device_first_warning',
-        at: 12,
+        at: 15,
         eventType: 'AGENT_MESSAGE',
         uiState: { drivingMode: 'MOVING', riskLevel: 'MEDIUM', visibleStatus: '오디오 조작 주의' },
-        romiMessage: '{{profileName}}, 지금 화면 조작은 제가 도와드릴게요. 전방을 봐주세요.',
+        romiMessage: '{{profileName}}, 음악 화면을 보는 시간이 길어지고 있어요. 전방을 봐주세요.',
         requiresResponse: false,
         responseOptions: [],
         report: { include: true, eventName: '1차 기기조작 주의' },
@@ -544,7 +556,7 @@ export const DEMO_SCENARIOS: DemoScenarioDefinition[] = [
         id: 'device_repeated_detection',
         at: 24,
         eventType: 'DETECTION_UPDATE',
-        uiState: { drivingMode: 'MOVING', riskLevel: 'HIGH', visibleStatus: '오디오 조작 지속' },
+        uiState: { drivingMode: 'MOVING', riskLevel: 'HIGH', visibleStatus: '음악 후보 조작 지속' },
         romiMessage: null,
         requiresResponse: false,
         responseOptions: [],

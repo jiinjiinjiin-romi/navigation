@@ -291,7 +291,7 @@ describe('DashboardApp', () => {
     fireEvent.keyDown(periodSelect, { key: 'ArrowDown' })
     fireEvent.click(await screen.findByRole('option', { name: '오늘' }))
 
-    expect(screen.getByText('36.9km')).toBeInTheDocument()
+    expect(screen.getByText('500.4km')).toBeInTheDocument()
     expect(screen.getByText('3회 주행')).toBeInTheDocument()
   })
 })

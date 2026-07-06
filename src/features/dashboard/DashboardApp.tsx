@@ -228,21 +228,21 @@ const behaviorMetrics: BehaviorMetric[] = [
 ]
 
 const BASE_DASHBOARD_TRIPS: Trip[] = [
-  { id: 'trip-01', destination: '서울숲 주차장', origin: '세종대학교', date: '2026.07.06 08:12', startedAt: '2026-07-06T08:12:00', duration: '22분', distance: '12.3km', distanceKm: 12.3, score: 82, events: 3, hasVideo: true, averageSpeedKph: 34, routeSummary: '세종대학교 -> 서울숲 주차장 · 군자로/뚝섬로' },
-  { id: 'trip-02', destination: '서울숲 주차장', origin: '세종대학교', date: '2026.07.06 17:42', startedAt: '2026-07-06T17:42:00', duration: '22분', distance: '12.3km', distanceKm: 12.3, score: 78, events: 3, hasVideo: true, averageSpeedKph: 34, routeSummary: '세종대학교 -> 서울숲 주차장 · 휴대폰 사용 감지 데모' },
-  { id: 'trip-03', destination: '서울숲 주차장', origin: '세종대학교', date: '2026.07.06 19:10', startedAt: '2026-07-06T19:10:00', duration: '22분', distance: '12.3km', distanceKm: 12.3, score: 85, events: 3, hasVideo: true, averageSpeedKph: 34, routeSummary: '세종대학교 -> 서울숲 주차장 · 기기조작 감지 데모' },
+  { id: 'trip-01', destination: '오씨칼국수 본점', origin: '세종대학교', date: '2026.07.06 08:12', startedAt: '2026-07-06T08:12:00', duration: '2시간 18분', distance: '166.8km', distanceKm: 166.8, score: 82, events: 3, hasVideo: true, averageSpeedKph: 72, routeSummary: '세종대학교 -> 오씨칼국수 본점 · 경부고속도로/대전IC' },
+  { id: 'trip-02', destination: '오씨칼국수 본점', origin: '세종대학교', date: '2026.07.06 17:42', startedAt: '2026-07-06T17:42:00', duration: '2시간 18분', distance: '166.8km', distanceKm: 166.8, score: 78, events: 3, hasVideo: true, averageSpeedKph: 72, routeSummary: '세종대학교 -> 오씨칼국수 본점 · 휴대폰 사용 감지 데모' },
+  { id: 'trip-03', destination: '오씨칼국수 본점', origin: '세종대학교', date: '2026.07.06 19:10', startedAt: '2026-07-06T19:10:00', duration: '2시간 18분', distance: '166.8km', distanceKm: 166.8, score: 85, events: 3, hasVideo: true, averageSpeedKph: 72, routeSummary: '세종대학교 -> 오씨칼국수 본점 · 기기조작 감지 데모' },
 ]
 
 const BASE_DASHBOARD_VIDEO_EVENTS: VideoEvent[] = [
-  { id: 'event-01', tripId: 'trip-01', label: '졸음 징후 감지', time: '00:00:12', seconds: 12, type: 'DROWSINESS', riskLevel: 3, confidence: 87, corrected: true, durationSeconds: 10, speedKph: 34, road: '군자로' },
-  { id: 'event-02', tripId: 'trip-01', label: '반복 졸음 징후', time: '00:00:31', seconds: 31, type: 'DROWSINESS', riskLevel: 5, confidence: 91, corrected: true, durationSeconds: 14, speedKph: 32, road: '뚝섬로' },
-  { id: 'event-03', tripId: 'trip-01', label: '집중 운전 모드', time: '00:00:58', seconds: 58, type: 'GAZE_AWAY', riskLevel: 1, confidence: 82, corrected: true, durationSeconds: 6, speedKph: 30, road: '서울숲 진입로' },
-  { id: 'event-04', tripId: 'trip-02', label: '휴대폰 주의', time: '00:00:10', seconds: 10, type: 'PHONE_USE', riskLevel: 3, confidence: 86, corrected: false, durationSeconds: 12, speedKph: 33, road: '군자로' },
-  { id: 'event-05', tripId: 'trip-02', label: '휴대폰 사용 반복', time: '00:00:25', seconds: 25, type: 'PHONE_USE', riskLevel: 5, confidence: 92, corrected: true, durationSeconds: 17, speedKph: 31, road: '뚝섬로' },
-  { id: 'event-06', tripId: 'trip-02', label: '집중 운전 모드', time: '00:00:48', seconds: 48, type: 'GAZE_AWAY', riskLevel: 1, confidence: 80, corrected: true, durationSeconds: 5, speedKph: 30, road: '서울숲 진입로' },
-  { id: 'event-07', tripId: 'trip-03', label: '기기조작 감지', time: '00:00:09', seconds: 9, type: 'SECONDARY_TASK', riskLevel: 3, confidence: 84, corrected: false, durationSeconds: 10, speedKph: 34, road: '군자로' },
-  { id: 'event-08', tripId: 'trip-03', label: '오디오 조작 지속', time: '00:00:24', seconds: 24, type: 'SECONDARY_TASK', riskLevel: 5, confidence: 89, corrected: true, durationSeconds: 18, speedKph: 32, road: '뚝섬로' },
-  { id: 'event-09', tripId: 'trip-03', label: '집중 운전 모드', time: '00:00:48', seconds: 48, type: 'GAZE_AWAY', riskLevel: 1, confidence: 81, corrected: true, durationSeconds: 5, speedKph: 30, road: '서울숲 진입로' },
+  { id: 'event-01', tripId: 'trip-01', label: '졸음 징후 감지', time: '00:00:12', seconds: 12, type: 'DROWSINESS', riskLevel: 3, confidence: 87, corrected: true, durationSeconds: 10, speedKph: 34, road: '경부고속도로' },
+  { id: 'event-02', tripId: 'trip-01', label: '반복 졸음 징후', time: '00:00:31', seconds: 31, type: 'DROWSINESS', riskLevel: 5, confidence: 91, corrected: true, durationSeconds: 14, speedKph: 32, road: '대전IC' },
+  { id: 'event-03', tripId: 'trip-01', label: '집중 운전 모드', time: '00:00:58', seconds: 58, type: 'GAZE_AWAY', riskLevel: 1, confidence: 82, corrected: true, durationSeconds: 6, speedKph: 30, road: '옛신탄진로' },
+  { id: 'event-04', tripId: 'trip-02', label: '휴대폰 주의', time: '00:00:10', seconds: 10, type: 'PHONE_USE', riskLevel: 3, confidence: 86, corrected: false, durationSeconds: 12, speedKph: 33, road: '경부고속도로' },
+  { id: 'event-05', tripId: 'trip-02', label: '휴대폰 사용 반복', time: '00:00:25', seconds: 25, type: 'PHONE_USE', riskLevel: 5, confidence: 92, corrected: true, durationSeconds: 17, speedKph: 31, road: '대전IC' },
+  { id: 'event-06', tripId: 'trip-02', label: '집중 운전 모드', time: '00:00:48', seconds: 48, type: 'GAZE_AWAY', riskLevel: 1, confidence: 80, corrected: true, durationSeconds: 5, speedKph: 30, road: '옛신탄진로' },
+  { id: 'event-07', tripId: 'trip-03', label: '기기조작 감지', time: '00:00:09', seconds: 9, type: 'SECONDARY_TASK', riskLevel: 3, confidence: 84, corrected: false, durationSeconds: 10, speedKph: 34, road: '경부고속도로' },
+  { id: 'event-08', tripId: 'trip-03', label: '오디오 조작 지속', time: '00:00:24', seconds: 24, type: 'SECONDARY_TASK', riskLevel: 5, confidence: 89, corrected: true, durationSeconds: 18, speedKph: 32, road: '대전IC' },
+  { id: 'event-09', tripId: 'trip-03', label: '집중 운전 모드', time: '00:00:48', seconds: 48, type: 'GAZE_AWAY', riskLevel: 1, confidence: 81, corrected: true, durationSeconds: 5, speedKph: 30, road: '옛신탄진로' },
 ]
 
 const BASE_DASHBOARD_SAFETY_TREND = [
@@ -257,16 +257,16 @@ const BASE_DASHBOARD_SAFETY_TREND = [
 
 function createProfileTrip(overrides: Partial<Trip> & Pick<Trip, 'id' | 'date' | 'startedAt'>): Trip {
   return {
-    destination: '서울숲 주차장',
+    destination: '오씨칼국수 본점',
     origin: '세종대학교',
-    duration: '22분',
-    distance: '12.3km',
-    distanceKm: 12.3,
+    duration: '2시간 18분',
+    distance: '166.8km',
+    distanceKm: 166.8,
     score: 82,
     events: 3,
     hasVideo: true,
-    averageSpeedKph: 34,
-    routeSummary: '세종대학교 -> 서울숲 주차장 · 군자로/뚝섬로',
+    averageSpeedKph: 72,
+    routeSummary: '세종대학교 -> 오씨칼국수 본점 · 경부고속도로/대전IC',
     ...overrides,
   }
 }
@@ -289,9 +289,9 @@ function createDashboardDataForProfile(profile?: Profile, settings?: ProfileSett
   if (profileKind === 'mom' || isSensitiveProfile) {
     return {
       trips: [
-        createProfileTrip({ id: 'trip-01', date: '2026.07.06 08:12', startedAt: '2026-07-06T08:12:00', score: 79, events: 4, routeSummary: '세종대학교 -> 서울숲 주차장 · 민감도 높음 기준' }),
-        createProfileTrip({ id: 'trip-02', date: '2026.07.06 17:42', startedAt: '2026-07-06T17:42:00', score: 73, events: 5, routeSummary: '세종대학교 -> 서울숲 주차장 · 휴대폰 사용 반복 감지' }),
-        createProfileTrip({ id: 'trip-03', date: '2026.07.06 19:10', startedAt: '2026-07-06T19:10:00', score: 80, events: 3, routeSummary: '세종대학교 -> 서울숲 주차장 · 화면 조작 보조' }),
+        createProfileTrip({ id: 'trip-01', date: '2026.07.06 08:12', startedAt: '2026-07-06T08:12:00', score: 79, events: 4, routeSummary: '세종대학교 -> 오씨칼국수 본점 · 민감도 높음 기준' }),
+        createProfileTrip({ id: 'trip-02', date: '2026.07.06 17:42', startedAt: '2026-07-06T17:42:00', score: 73, events: 5, routeSummary: '세종대학교 -> 오씨칼국수 본점 · 휴대폰 사용 반복 감지' }),
+        createProfileTrip({ id: 'trip-03', date: '2026.07.06 19:10', startedAt: '2026-07-06T19:10:00', score: 80, events: 3, routeSummary: '세종대학교 -> 오씨칼국수 본점 · 화면 조작 보조' }),
       ],
       safetyTrend: [
         { day: '월', score: 79 },
@@ -308,9 +308,9 @@ function createDashboardDataForProfile(profile?: Profile, settings?: ProfileSett
           confidence: Math.min(99, event.confidence + 3),
           riskLevel: event.riskLevel >= 3 ? Math.min(5, event.riskLevel + 1) : event.riskLevel,
         })),
-        { id: 'mom-event-01', tripId: 'trip-01', label: '전방주시 이탈 추가 감지', time: '00:00:44', seconds: 44, type: 'GAZE_AWAY', riskLevel: 3, confidence: 86, corrected: true, durationSeconds: 8, speedKph: 31, road: '뚝섬로' },
-        { id: 'mom-event-02', tripId: 'trip-02', label: '휴대폰 재확인 시도', time: '00:00:34', seconds: 34, type: 'PHONE_USE', riskLevel: 5, confidence: 94, corrected: true, durationSeconds: 13, speedKph: 30, road: '뚝섬로' },
-        { id: 'mom-event-03', tripId: 'trip-02', label: '시선 이탈 지속', time: '00:00:41', seconds: 41, type: 'GAZE_AWAY', riskLevel: 4, confidence: 88, corrected: true, durationSeconds: 9, speedKph: 30, road: '서울숲 진입로' },
+        { id: 'mom-event-01', tripId: 'trip-01', label: '전방주시 이탈 추가 감지', time: '00:00:44', seconds: 44, type: 'GAZE_AWAY', riskLevel: 3, confidence: 86, corrected: true, durationSeconds: 8, speedKph: 31, road: '대전IC' },
+        { id: 'mom-event-02', tripId: 'trip-02', label: '휴대폰 재확인 시도', time: '00:00:34', seconds: 34, type: 'PHONE_USE', riskLevel: 5, confidence: 94, corrected: true, durationSeconds: 13, speedKph: 30, road: '대전IC' },
+        { id: 'mom-event-03', tripId: 'trip-02', label: '시선 이탈 지속', time: '00:00:41', seconds: 41, type: 'GAZE_AWAY', riskLevel: 4, confidence: 88, corrected: true, durationSeconds: 9, speedKph: 30, road: '옛신탄진로' },
       ],
     }
   }
@@ -318,9 +318,9 @@ function createDashboardDataForProfile(profile?: Profile, settings?: ProfileSett
   if (profileKind === 'jiwoo' && !isSensitiveProfile) {
     return {
       trips: [
-        createProfileTrip({ id: 'trip-01', date: '2026.07.06 08:12', startedAt: '2026-07-06T08:12:00', score: 88, events: 2, averageSpeedKph: 33, routeSummary: '세종대학교 -> 서울숲 주차장 · 빠른 교정' }),
-        createProfileTrip({ id: 'trip-02', date: '2026.07.06 17:42', startedAt: '2026-07-06T17:42:00', score: 86, events: 2, averageSpeedKph: 32, routeSummary: '세종대학교 -> 서울숲 주차장 · 알림 대행 빠른 수락' }),
-        createProfileTrip({ id: 'trip-03', date: '2026.07.06 19:10', startedAt: '2026-07-06T19:10:00', score: 90, events: 2, averageSpeedKph: 35, routeSummary: '세종대학교 -> 서울숲 주차장 · 음성 조작 우선 사용' }),
+        createProfileTrip({ id: 'trip-01', date: '2026.07.06 08:12', startedAt: '2026-07-06T08:12:00', score: 88, events: 2, averageSpeedKph: 74, routeSummary: '세종대학교 -> 오씨칼국수 본점 · 빠른 교정' }),
+        createProfileTrip({ id: 'trip-02', date: '2026.07.06 17:42', startedAt: '2026-07-06T17:42:00', score: 86, events: 2, averageSpeedKph: 73, routeSummary: '세종대학교 -> 오씨칼국수 본점 · 알림 대행 빠른 수락' }),
+        createProfileTrip({ id: 'trip-03', date: '2026.07.06 19:10', startedAt: '2026-07-06T19:10:00', score: 90, events: 2, averageSpeedKph: 75, routeSummary: '세종대학교 -> 오씨칼국수 본점 · 음성 조작 우선 사용' }),
       ],
       safetyTrend: [
         { day: '월', score: 86 },

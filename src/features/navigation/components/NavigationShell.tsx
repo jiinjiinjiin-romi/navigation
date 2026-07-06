@@ -13,7 +13,6 @@ import {
   CloudSun,
   Clock,
   CarSimple,
-  ChatCircleText,
   ClipboardText,
   DotsThree,
   FileVideo,
@@ -26,7 +25,6 @@ import {
   PencilSimple,
   Play,
   Pause,
-  PaperPlaneTilt,
   Plus,
   Phone,
   PlugsConnected,
@@ -132,7 +130,7 @@ import { TmapPanel, type MapCameraSettings } from './TmapPanel'
 type SearchFieldId = 'origin' | 'destination'
 type LocationStatus = 'checking' | 'granted' | 'denied' | 'unsupported'
 type SidePanelId = 'labels' | 'settings' | 'report' | 'connect'
-type ProfileSetupView = 'list' | 'create' | 'edit'
+type ProfileSetupView = 'list' | 'create' | 'edit' | 'calibration'
 type ProfileSettingsPageId = 'basic' | 'guidance' | 'behavior'
 type NavigationEntryMode = 'free-navigation' | 'demo-scenario'
 export type DriverVideoSource = {
@@ -144,12 +142,21 @@ export type MotionTiming = {
   duration: number
   ease?: [number, number, number, number]
 }
+type CalibrationTiming = {
+  progressIntervalMs?: number
+  progressStep?: number
+  stepCompleteDelayMs?: number
+}
 type SavedPlaceQuickItem = Place & {
   placeType: SavedPlaceType
   targetField: SearchFieldId
 }
 type RouteSearchSavedPlace = Place & {
   targetField?: SearchFieldId
+}
+type CalibrationStep = {
+  title: string
+  description: string
 }
 type ReportBehaviorType = ProfileBehaviorType
 type MockReportSession = {
@@ -285,6 +292,36 @@ const PROFILE_SETTINGS_PAGES: Array<{ id: ProfileSettingsPageId; label: string }
   { id: 'guidance', label: '안내 설정' },
   { id: 'behavior', label: '행동 민감도' },
 ]
+const CALIBRATION_STEPS: CalibrationStep[] = [
+  {
+    title: '정면을 바라봐 주세요',
+    description: '얼굴 인식을 시작합니다. 원이 채워질 때까지 잠시만 기다려 주세요.',
+  },
+  {
+    title: '얼굴을 왼쪽으로 돌려주세요',
+    description: '왼쪽 얼굴 각도와 시선 기준을 확인하고 있어요.',
+  },
+  {
+    title: '얼굴을 오른쪽으로 돌려주세요',
+    description: '오른쪽 얼굴 각도와 시선 기준을 확인하고 있어요.',
+  },
+  {
+    title: '평소 운전 자세를 유지해주세요',
+    description: '운전 중 자세와 시선 패턴을 맞추고 있어요.',
+  },
+  {
+    title: '완료되었습니다',
+    description: '이제부터 신체정보에 맞게 더 높은 정확도로 운전을 보조해드릴게요.',
+  },
+]
+const CALIBRATION_PROGRESS_INTERVAL_RANGE_MS = [180, 520] as const
+const CALIBRATION_PROGRESS_STEP_RANGE = [1, 4] as const
+const CALIBRATION_STEP_COMPLETE_DELAY_MS = 420
+
+function getRandomIntegerInRange([min, max]: readonly [number, number]) {
+  return Math.floor(Math.random() * (max - min + 1)) + min
+}
+
 const REPORT_CHART_COLORS = {
   primary: '#1746a2',
   primarySoft: '#e8eeff',
@@ -302,8 +339,8 @@ const MOCK_REPORT_DATA: MockReportData = {
     period: { start: '2026-06-30', end: '2026-07-06' },
     overview: {
       totalSessions: 3,
-      totalDrivingSeconds: 3_960,
-      totalDistanceMeters: 37_020,
+      totalDrivingSeconds: 24_840,
+      totalDistanceMeters: 500_400,
       averageSafetyScore: 82,
       behaviorEventCount: 9,
       interventionCount: 9,
@@ -433,11 +470,11 @@ const MOCK_REPORT_DATA: MockReportData = {
       {
         sessionId: 'session-1',
         startedAt: '2026-07-06T08:12:00.000000Z',
-        endedAt: '2026-07-06T08:34:00.000000Z',
-        destinationName: '서울숲 주차장',
-        durationSeconds: 1_320,
-        distanceMeters: 12_340,
-        averageSpeedKph: 34,
+        endedAt: '2026-07-06T10:30:00.000000Z',
+        destinationName: '오씨칼국수 본점',
+        durationSeconds: 8_280,
+        distanceMeters: 166_800,
+        averageSpeedKph: 72,
         safetyScore: 82,
         behaviorEventCount: 3,
         interventionCount: 3,
@@ -447,11 +484,11 @@ const MOCK_REPORT_DATA: MockReportData = {
       {
         sessionId: 'session-2',
         startedAt: '2026-07-06T17:42:00.000000Z',
-        endedAt: '2026-07-06T18:04:00.000000Z',
-        destinationName: '서울숲 주차장',
-        durationSeconds: 1_320,
-        distanceMeters: 12_340,
-        averageSpeedKph: 34,
+        endedAt: '2026-07-06T20:00:00.000000Z',
+        destinationName: '오씨칼국수 본점',
+        durationSeconds: 8_280,
+        distanceMeters: 166_800,
+        averageSpeedKph: 72,
         safetyScore: 78,
         behaviorEventCount: 3,
         interventionCount: 3,
@@ -461,11 +498,11 @@ const MOCK_REPORT_DATA: MockReportData = {
       {
         sessionId: 'session-3',
         startedAt: '2026-07-06T19:10:00.000000Z',
-        endedAt: '2026-07-06T19:32:00.000000Z',
-        destinationName: '서울숲 주차장',
-        durationSeconds: 1_320,
-        distanceMeters: 12_340,
-        averageSpeedKph: 34,
+        endedAt: '2026-07-06T21:28:00.000000Z',
+        destinationName: '오씨칼국수 본점',
+        durationSeconds: 8_280,
+        distanceMeters: 166_800,
+        averageSpeedKph: 72,
         safetyScore: 85,
         behaviorEventCount: 3,
         interventionCount: 3,
@@ -484,13 +521,13 @@ const MOCK_REPORT_DATA: MockReportData = {
       status: 'COMPLETED',
       endReason: 'USER_REQUEST',
       startedAt: '2026-07-06T08:12:00.000000Z',
-      endedAt: '2026-07-06T08:34:00.000000Z',
+      endedAt: '2026-07-06T10:30:00.000000Z',
       startLocation: { lat: 37.5502, lng: 127.073 },
-      endLocation: { lat: 37.5446, lng: 127.0374 },
-      destinationName: '서울숲 주차장',
-      distanceMeters: 12_340,
-      durationSeconds: 1_320,
-      averageSpeedKph: 34,
+      endLocation: { lat: 36.3378, lng: 127.4309 },
+      destinationName: '오씨칼국수 본점',
+      distanceMeters: 166_800,
+      durationSeconds: 8_280,
+      averageSpeedKph: 72,
       safetyScore: 82,
       summary: {
         behaviorEventCount: 3,
@@ -505,13 +542,13 @@ const MOCK_REPORT_DATA: MockReportData = {
       status: 'COMPLETED',
       endReason: 'USER_REQUEST',
       startedAt: '2026-07-06T17:42:00.000000Z',
-      endedAt: '2026-07-06T18:04:00.000000Z',
+      endedAt: '2026-07-06T20:00:00.000000Z',
       startLocation: { lat: 37.5502, lng: 127.073 },
-      endLocation: { lat: 37.5446, lng: 127.0374 },
-      destinationName: '서울숲 주차장',
-      distanceMeters: 12_340,
-      durationSeconds: 1_320,
-      averageSpeedKph: 34,
+      endLocation: { lat: 36.3378, lng: 127.4309 },
+      destinationName: '오씨칼국수 본점',
+      distanceMeters: 166_800,
+      durationSeconds: 8_280,
+      averageSpeedKph: 72,
       safetyScore: 78,
       summary: {
         behaviorEventCount: 3,
@@ -526,13 +563,13 @@ const MOCK_REPORT_DATA: MockReportData = {
       status: 'COMPLETED',
       endReason: 'USER_REQUEST',
       startedAt: '2026-07-06T19:10:00.000000Z',
-      endedAt: '2026-07-06T19:32:00.000000Z',
+      endedAt: '2026-07-06T21:28:00.000000Z',
       startLocation: { lat: 37.5502, lng: 127.073 },
-      endLocation: { lat: 37.5446, lng: 127.0374 },
-      destinationName: '서울숲 주차장',
-      distanceMeters: 12_340,
-      durationSeconds: 1_320,
-      averageSpeedKph: 34,
+      endLocation: { lat: 36.3378, lng: 127.4309 },
+      destinationName: '오씨칼국수 본점',
+      distanceMeters: 166_800,
+      durationSeconds: 8_280,
+      averageSpeedKph: 72,
       safetyScore: 85,
       summary: {
         behaviorEventCount: 3,
@@ -651,17 +688,17 @@ const MOCK_REPORT_DATA: MockReportData = {
     'session-1': [
       { lat: 37.5502, lng: 127.073, speedKph: 34, drivingState: 'MOVING', accuracyMeters: 6, source: 'SIMULATION', recordedAt: '2026-07-06T08:12:00.000000Z' },
       { lat: 37.5481, lng: 127.054, speedKph: 32, drivingState: 'MOVING', accuracyMeters: 8, source: 'SIMULATION', recordedAt: '2026-07-06T08:23:00.000000Z' },
-      { lat: 37.5446, lng: 127.0374, speedKph: 0, drivingState: 'STOPPED', accuracyMeters: 5, source: 'SIMULATION', recordedAt: '2026-07-06T08:34:00.000000Z' },
+      { lat: 36.3378, lng: 127.4309, speedKph: 0, drivingState: 'STOPPED', accuracyMeters: 5, source: 'SIMULATION', recordedAt: '2026-07-06T08:34:00.000000Z' },
     ],
     'session-2': [
       { lat: 37.5502, lng: 127.073, speedKph: 33, drivingState: 'MOVING', accuracyMeters: 7, source: 'SIMULATION', recordedAt: '2026-07-06T17:42:00.000000Z' },
       { lat: 37.5481, lng: 127.054, speedKph: 31, drivingState: 'MOVING', accuracyMeters: 9, source: 'SIMULATION', recordedAt: '2026-07-06T17:53:00.000000Z' },
-      { lat: 37.5446, lng: 127.0374, speedKph: 0, drivingState: 'STOPPED', accuracyMeters: 10, source: 'SIMULATION', recordedAt: '2026-07-06T18:04:00.000000Z' },
+      { lat: 36.3378, lng: 127.4309, speedKph: 0, drivingState: 'STOPPED', accuracyMeters: 10, source: 'SIMULATION', recordedAt: '2026-07-06T18:04:00.000000Z' },
     ],
     'session-3': [
       { lat: 37.5502, lng: 127.073, speedKph: 34, drivingState: 'MOVING', accuracyMeters: 6, source: 'SIMULATION', recordedAt: '2026-07-06T19:10:00.000000Z' },
       { lat: 37.5481, lng: 127.054, speedKph: 32, drivingState: 'MOVING', accuracyMeters: 7, source: 'SIMULATION', recordedAt: '2026-07-06T19:21:00.000000Z' },
-      { lat: 37.5446, lng: 127.0374, speedKph: 0, drivingState: 'STOPPED', accuracyMeters: 5, source: 'SIMULATION', recordedAt: '2026-07-06T19:32:00.000000Z' },
+      { lat: 36.3378, lng: 127.4309, speedKph: 0, drivingState: 'STOPPED', accuracyMeters: 5, source: 'SIMULATION', recordedAt: '2026-07-06T19:32:00.000000Z' },
     ],
   },
 }
@@ -734,10 +771,10 @@ type NaviAssistantScenarioId = AiaiScenarioId
 const NAVI_ASSISTANT_SCENARIOS: NaviAssistantScenario[] = createNaviAssistantScenarios()
 const DEMO_SCENARIO_DEFINITIONS = getDemoScenarios()
 const DEMO_DESTINATION_PLACE: Place = {
-  id: 'demo-destination-seoul-forest-parking',
+  id: 'demo-destination-ossi-kalguksu',
   name: DEMO_DESTINATION.name,
   address: DEMO_DESTINATION.address,
-  coordinate: { lat: 37.5446, lng: 127.0374 },
+  coordinate: { lat: 36.3378, lng: 127.4309 },
 }
 const DRIVER_VIDEO_MIME_TYPES = new Set([
   'video/mp4',
@@ -906,14 +943,19 @@ const DEBUG_DRIVING_ASSIST_SEQUENCE = ([
 ] satisfies DrivingAssistInfo[]).map((assist) => ({ speedLimitKph: 30, ...assist }))
 
 export function NavigationShell({
+  calibrationTiming,
   initialProfileSetupComplete = false,
   initialSelectedProfileId,
 }: {
+  calibrationTiming?: CalibrationTiming
   initialProfileSetupComplete?: boolean
   initialSelectedProfileId?: string
 } = {}) {
   const shouldReduceMotion = useReducedMotion()
   const queryClient = useQueryClient()
+  const calibrationProgressIntervalMs = calibrationTiming?.progressIntervalMs
+  const calibrationProgressStep = calibrationTiming?.progressStep
+  const calibrationStepCompleteDelayMs = calibrationTiming?.stepCompleteDelayMs ?? CALIBRATION_STEP_COMPLETE_DELAY_MS
   const [profileSetupComplete, setProfileSetupComplete] = useState(initialProfileSetupComplete)
   const [navigationEntryMode, setNavigationEntryMode] = useState<NavigationEntryMode | null>(
     initialProfileSetupComplete ? 'free-navigation' : null,
@@ -927,6 +969,10 @@ export function NavigationShell({
   const [selectedProfileId, setSelectedProfileId] = useState<string | undefined>(initialSelectedProfileId)
   const [editingProfileId, setEditingProfileId] = useState<string>()
   const [profileForm, setProfileForm] = useState<ProfileCreateRequest>(DEFAULT_PROFILE_CREATE_REQUEST)
+  const [calibratingProfileId, setCalibratingProfileId] = useState<string>()
+  const [calibratingProfileName, setCalibratingProfileName] = useState('새 운전자')
+  const [calibrationStepIndex, setCalibrationStepIndex] = useState(0)
+  const [calibrationProgress, setCalibrationProgress] = useState(0)
   const [now, setNow] = useState(() => new Date())
   const [originKeyword, setOriginKeyword] = useState(DEFAULT_CURRENT_LOCATION_PLACE.name)
   const [destinationKeyword, setDestinationKeyword] = useState('')
@@ -1033,7 +1079,11 @@ export function NavigationShell({
     mutationFn: (payload: ProfileCreateRequest) => createProfile(payload),
     onSuccess: async (profile) => {
       setSelectedProfileId(profile.id)
-      setProfileSetupView('list')
+      setCalibratingProfileId(profile.id)
+      setCalibratingProfileName(profile.displayName || '새 운전자')
+      setCalibrationStepIndex(0)
+      setCalibrationProgress(0)
+      setProfileSetupView('calibration')
       setEditingProfileId(undefined)
       setProfileForm(DEFAULT_PROFILE_CREATE_REQUEST)
       await queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
@@ -1052,10 +1102,24 @@ export function NavigationShell({
   const deleteProfileMutation = useMutation({
     mutationFn: (profileId: string) => deleteProfile(profileId),
     onSuccess: async (_, profileId) => {
+      await queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
       if (selectedProfileId === profileId) {
         setSelectedProfileId(undefined)
       }
-      await queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
+      setCalibratingProfileId(undefined)
+      setCalibratingProfileName('새 운전자')
+      setCalibrationStepIndex(0)
+      setCalibrationProgress(0)
+      setProfileSetupComplete(false)
+      setNavigationEntryMode(null)
+      setDemoScenarioState(null)
+      setDemoSimulationStartPending(false)
+      setDemoCompleted(false)
+      setActiveSidePanel(null)
+      setReportFullscreenOpen(false)
+      setProfileSetupView('list')
+      setEditingProfileId(undefined)
+      setProfileForm(DEFAULT_PROFILE_CREATE_REQUEST)
     },
   })
   const selectProfileMutation = useMutation({
@@ -1064,6 +1128,69 @@ export function NavigationShell({
       setProfileSetupComplete(true)
     },
   })
+  const selectProfileAfterCalibration = selectProfileMutation.mutate
+  const completeCalibration = useCallback(() => {
+    if (!calibratingProfileId) {
+      return
+    }
+
+    selectProfileAfterCalibration(calibratingProfileId, {
+      onSuccess: () => {
+        setNavigationEntryMode(null)
+        setProfileSetupView('list')
+        setCalibratingProfileId(undefined)
+        setCalibrationStepIndex(0)
+        setCalibrationProgress(0)
+      },
+    })
+  }, [calibratingProfileId, selectProfileAfterCalibration])
+
+  useEffect(() => {
+    if (profileSetupView !== 'calibration' || calibrationProgress >= 100 || selectProfileMutation.isPending) {
+      return undefined
+    }
+
+    const nextDelayMs = calibrationProgressIntervalMs ?? getRandomIntegerInRange(CALIBRATION_PROGRESS_INTERVAL_RANGE_MS)
+    const timeoutId = window.setTimeout(() => {
+      const progressStep = calibrationProgressStep ?? getRandomIntegerInRange(CALIBRATION_PROGRESS_STEP_RANGE)
+
+      setCalibrationProgress((currentProgress) => Math.min(100, currentProgress + progressStep))
+    }, nextDelayMs)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [
+    calibrationProgress,
+    calibrationProgressIntervalMs,
+    calibrationProgressStep,
+    calibrationStepIndex,
+    profileSetupView,
+    selectProfileMutation.isPending,
+  ])
+
+  useEffect(() => {
+    if (profileSetupView !== 'calibration' || calibrationProgress < 100 || selectProfileMutation.isPending) {
+      return undefined
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      if (calibrationStepIndex < CALIBRATION_STEPS.length - 1) {
+        setCalibrationStepIndex((currentStepIndex) => currentStepIndex + 1)
+        setCalibrationProgress(0)
+        return
+      }
+
+      completeCalibration()
+    }, calibrationStepCompleteDelayMs)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [
+    calibrationProgress,
+    calibrationStepIndex,
+    calibrationStepCompleteDelayMs,
+    completeCalibration,
+    profileSetupView,
+    selectProfileMutation.isPending,
+  ])
 
   const originSearch = useQuery({
     queryKey: ['places', debouncedOriginKeyword],
@@ -1828,6 +1955,64 @@ export function NavigationShell({
     setMusicModalOpen(false)
   }, [demoScenarioState?.scenarioEvent])
 
+  useEffect(() => {
+    const eventId = demoScenarioState?.scenarioEvent?.id
+
+    if (eventId === 'device_music_panel_opened') {
+      setMusicSearchKeyword('')
+      setMusicTrackId('drive-neon')
+      setMusicPlaying(false)
+      setMusicModalOpen(true)
+      return
+    }
+
+    if (eventId === 'device_first_detection') {
+      setMusicSearchKeyword('Soft')
+      setMusicTrackId('drive-neon')
+      setMusicPlaying(false)
+      setMusicModalOpen(true)
+      return
+    }
+
+    if (eventId === 'device_repeated_detection') {
+      setMusicSearchKeyword('Soft')
+      setMusicTrackId('soft-focus')
+      setMusicPlaying(false)
+      setMusicModalOpen(true)
+      return
+    }
+
+    if (eventId === 'device_music_approved') {
+      setMusicSearchKeyword('Soft')
+      setMusicTrackId('soft-focus')
+      setMusicPlaying(false)
+      setMusicModalOpen(true)
+      return
+    }
+
+    if (eventId === 'device_music_preview') {
+      setMusicSearchKeyword('Soft')
+      setMusicTrackId('soft-focus')
+      setMusicPlaying(false)
+      setMusicModalOpen(true)
+      return
+    }
+
+    if (eventId === 'device_music_selected') {
+      setMusicSearchKeyword('Soft')
+      setMusicTrackId('soft-focus')
+      setMusicPlaying(true)
+      setMusicModalOpen(true)
+      return
+    }
+
+    if (eventId !== 'device_music_started') {
+      return
+    }
+
+    setMusicSearchKeyword('')
+  }, [demoScenarioState?.scenarioEvent?.id])
+
   const advanceActiveDemoScenario = useCallback(() => {
     setDemoScenarioState((currentState) => {
       if (!currentState) {
@@ -1991,7 +2176,7 @@ export function NavigationShell({
             />
             <NaviOrbControl
               assistantStep={visibleAssistantStep}
-              hidden={Boolean(activeSidePanel || musicModalOpen)}
+              hidden={Boolean(activeSidePanel || (musicModalOpen && demoScenarioState?.scenario?.scenarioId !== 'device_operation'))}
               motionTiming={motionTiming}
               onClose={resetAssistantScenario}
               onWakeCall={() => {
@@ -2145,7 +2330,7 @@ export function NavigationShell({
             <MiniPlayer
               activeRoute={Boolean(activeRoute)}
               motionTiming={motionTiming}
-              musicPlaying={musicPlaying}
+              musicPlaying={musicPlaying && !musicModalOpen}
               selectedTrack={MUSIC_LIBRARY.find((track) => track.id === musicTrackId) ?? MUSIC_LIBRARY[0]}
               onClose={() => setMusicPlaying(false)}
               onTogglePlay={() => setMusicPlaying((playing) => !playing)}
@@ -2264,6 +2449,10 @@ export function NavigationShell({
             <NavigationProfileSetup
               createError={createProfileMutation.isError}
               creating={createProfileMutation.isPending}
+              calibrationError={selectProfileMutation.isError}
+              calibrationProgress={calibrationProgress}
+              calibrationStepIndex={calibrationStepIndex}
+              calibratingProfileName={calibratingProfileName}
               deleteError={deleteProfileMutation.isError}
               deletingProfileId={deleteProfileMutation.variables}
               editing={updateProfileMutation.isPending}
@@ -2361,6 +2550,10 @@ export function NavigationShell({
 function NavigationProfileSetup({
   createError,
   creating,
+  calibrationError,
+  calibrationProgress,
+  calibrationStepIndex,
+  calibratingProfileName,
   deleteError,
   deletingProfileId,
   editing,
@@ -2387,6 +2580,10 @@ function NavigationProfileSetup({
 }: {
   createError: boolean
   creating: boolean
+  calibrationError: boolean
+  calibrationProgress: number
+  calibrationStepIndex: number
+  calibratingProfileName: string
   deleteError: boolean
   deletingProfileId?: string
   editing: boolean
@@ -2437,7 +2634,15 @@ function NavigationProfileSetup({
           profileSetupView !== 'list' ? 'h-full min-h-0' : 'justify-center',
         ].join(' ')}
       >
-        {profileSetupView !== 'list' ? (
+        {profileSetupView === 'calibration' ? (
+          <ProfileCalibrationFlow
+            error={calibrationError}
+            motionTiming={motionTiming}
+            profileName={calibratingProfileName}
+            progress={calibrationProgress}
+            stepIndex={calibrationStepIndex}
+          />
+        ) : profileSetupView !== 'list' ? (
           <ProfileSettingsForm
             deleteError={deleteError}
             deleting={Boolean(selectedProfile && deletingProfileId === selectedProfile.id)}
@@ -2610,6 +2815,111 @@ function NavigationProfileSetup({
         )}
       </div>
     </motion.section>
+  )
+}
+
+function ProfileCalibrationFlow({
+  error,
+  motionTiming,
+  profileName,
+  progress,
+  stepIndex,
+}: {
+  error: boolean
+  motionTiming: MotionTiming
+  profileName: string
+  progress: number
+  stepIndex: number
+}) {
+  const activeStep = CALIBRATION_STEPS[stepIndex] ?? CALIBRATION_STEPS[0]
+  const completed = stepIndex === CALIBRATION_STEPS.length - 1 && progress >= 100
+  const progressOffset = 339.292 - (339.292 * progress) / 100
+
+  return (
+    <motion.div
+      aria-label="운전자 Calibration"
+      className="flex h-full min-h-0 w-full max-w-3xl flex-col overflow-hidden rounded-[1.1rem] bg-white text-center shadow-[var(--nav-shadow-panel)] ring-1 ring-[rgb(16_24_40/0.06)]"
+      data-testid="profile-calibration-flow"
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={motionTiming}
+    >
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-8 py-8 max-sm:px-5">
+        <p className="text-sm font-bold text-[var(--nav-primary)]">{profileName} 프로필</p>
+        <h2 className="mt-2 text-2xl font-black tracking-normal text-[var(--nav-ink)]">
+          Romi가 개인화 맞춤 설정을 준비하고 있어요
+        </h2>
+        <p className="mt-3 max-w-[34rem] text-sm font-semibold leading-6 text-[var(--nav-muted)]">
+          평소 자세와 시선 패턴을 확인해 {profileName}님에게 맞는 보조 방식을 적용합니다.
+        </p>
+
+        <div className="mt-8 grid w-full max-w-[36rem] place-items-center rounded-3xl bg-[var(--nav-panel)] px-6 py-8">
+          <div className="relative grid size-40 place-items-center">
+            <svg aria-hidden="true" className="absolute inset-0 size-full -rotate-90" viewBox="0 0 120 120">
+              <circle
+                cx="60"
+                cy="60"
+                fill="none"
+                r="54"
+                stroke="rgb(228 231 236)"
+                strokeWidth="8"
+              />
+              <circle
+                cx="60"
+                cy="60"
+                fill="none"
+                r="54"
+                stroke="var(--nav-primary)"
+                strokeDasharray="339.292"
+                strokeDashoffset={progressOffset}
+                strokeLinecap="round"
+                strokeWidth="8"
+              />
+            </svg>
+            <div className="grid size-28 place-items-center rounded-full bg-white shadow-[0_12px_28px_rgb(15_23_42/0.10)]">
+              {completed ? (
+                <Check className="size-10 text-[var(--nav-primary)]" weight="bold" />
+              ) : (
+                <span className="text-3xl font-black text-[var(--nav-ink)]">{progress}%</span>
+              )}
+            </div>
+          </div>
+
+          <h3 className="mt-6 text-xl font-black text-[var(--nav-ink)]">{activeStep.title}</h3>
+          <p className="mt-2 max-w-[28rem] text-sm font-semibold leading-6 text-[var(--nav-muted)]">
+            {activeStep.description}
+          </p>
+        </div>
+
+        <ol className="mt-6 grid w-full max-w-[36rem] grid-cols-5 gap-2 max-sm:grid-cols-1">
+          {CALIBRATION_STEPS.map((step, index) => {
+            const stepComplete = index < stepIndex || (index === stepIndex && progress >= 100)
+            const active = index === stepIndex
+
+            return (
+              <li
+                className={[
+                  'flex min-h-11 items-center justify-center rounded-xl px-3 text-xs font-bold transition',
+                  stepComplete
+                    ? 'bg-[var(--nav-primary)] text-white'
+                    : active
+                      ? 'bg-[var(--nav-primary-soft)] text-[var(--nav-primary)]'
+                      : 'bg-white text-[var(--nav-muted)] ring-1 ring-[var(--nav-border)]',
+                ].join(' ')}
+                key={step.title}
+              >
+                {stepComplete ? <Check className="mr-1.5 size-3.5" weight="bold" /> : null}
+                {index + 1}
+              </li>
+            )
+          })}
+        </ol>
+
+        {error ? (
+          <p className="mt-5 text-sm font-bold text-[var(--nav-danger)]">프로필 적용에 실패했습니다.</p>
+        ) : null}
+      </div>
+    </motion.div>
   )
 }
 
@@ -3679,6 +3989,9 @@ function AssistantRecommendationList({
   const selectedRouteRecommendation = recommendations.length === 1
     && recommendations[0]?.type === 'place'
     && recommendations[0].title.includes('경로 변경')
+  const messagePreviewRecommendation = recommendations.length === 1
+    && recommendations[0]?.type === 'action'
+    && recommendations[0].title.includes('보낼 메시지')
   const recommendationCount = recommendations.reduce((count, item) => {
     if (item.type !== 'place') {
       return count + 1
@@ -3693,7 +4006,10 @@ function AssistantRecommendationList({
 
   return (
     <motion.div
-      className="pointer-events-auto mt-2 flex min-h-0 w-full flex-col overflow-hidden rounded-2xl bg-[var(--nav-panel)]"
+      className={[
+        'pointer-events-auto mt-2 flex min-h-0 w-full flex-col overflow-hidden rounded-2xl',
+        messagePreviewRecommendation ? 'bg-transparent' : 'bg-[var(--nav-panel)]',
+      ].join(' ')}
       data-testid="navi-assistant-recommendations"
       exit={{ opacity: 0, height: 0, y: 8 }}
       initial={{ opacity: 0, height: 0, y: 8 }}
@@ -3703,14 +4019,17 @@ function AssistantRecommendationList({
         duration: motionTiming.duration === 0 ? 0 : 0.28,
       }}
     >
-      {completedRecommendation || selectedRouteRecommendation ? null : (
+      {completedRecommendation || selectedRouteRecommendation || messagePreviewRecommendation ? null : (
         <div className="flex items-center justify-between px-4 py-3 text-left">
           <h3 className="text-sm font-bold tracking-normal">추천</h3>
           <span className="text-xs font-semibold text-[var(--nav-muted)]">{recommendationCount}개</span>
         </div>
       )}
       <div
-        className={['min-h-0 overflow-x-hidden overflow-y-auto overscroll-contain px-3', completedRecommendation || selectedRouteRecommendation ? 'py-3' : 'max-h-[16rem] pb-3'].join(' ')}
+        className={[
+          'min-h-0 overflow-x-hidden overflow-y-auto overscroll-contain',
+          completedRecommendation || selectedRouteRecommendation ? 'px-3 py-3' : messagePreviewRecommendation ? 'px-0 py-0' : 'max-h-[16rem] px-3 pb-3',
+        ].join(' ')}
         data-testid="navi-assistant-recommendations-scroll"
         onWheel={(event) => event.stopPropagation()}
       >
@@ -3747,10 +4066,7 @@ function AssistantRecommendationList({
               ) : item.type === 'music' ? (
                 <AssistantMusicRecommendationCard />
               ) : item.title.includes('보낼 메시지') ? (
-                <AssistantMessagePreviewCard
-                  recommendation={item}
-                  onAction={() => onRecommendationAction(item)}
-                />
+                <AssistantMessagePreviewCard recommendation={item} />
               ) : completedRecommendation ? (
                 <AssistantCompletionCard recommendation={item} />
               ) : (
@@ -3812,34 +4128,17 @@ function AssistantMusicRecommendationCard() {
 
 function AssistantMessagePreviewCard({
   recommendation,
-  onAction,
 }: {
   recommendation: Extract<NaviAssistantRecommendation, { type: 'action' }>
-  onAction: () => void
 }) {
   return (
     <div
-      className="grid gap-3 rounded-2xl border border-[var(--nav-border)] bg-white p-4 text-left shadow-[0_10px_24px_rgb(15_23_42/0.06)]"
+      className="rounded-2xl bg-white px-4 py-3 text-left shadow-[0_10px_24px_rgb(15_23_42/0.06)]"
       data-testid="navi-assistant-message-preview-card"
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-xs font-bold text-[var(--nav-primary)]">{recommendation.meta}</div>
-          <div className="mt-1 truncate text-sm font-black text-[var(--nav-ink)]">{recommendation.title}</div>
-        </div>
-        <ChatCircleText className="size-5 shrink-0 text-[var(--nav-primary)]" weight="bold" />
-      </div>
-      <div className="rounded-xl bg-[var(--nav-panel)] px-3 py-3 text-sm font-semibold leading-5 text-[var(--nav-ink)]">
+      <p className="text-sm font-semibold leading-5 text-[var(--nav-ink)]">
         {recommendation.detail}
-      </div>
-      <button
-        className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-xl bg-[var(--nav-primary)] px-3 text-xs font-bold text-white transition hover:bg-[var(--nav-primary-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
-        onClick={onAction}
-        type="button"
-      >
-        <PaperPlaneTilt className="size-3.5" weight="fill" />
-        {recommendation.action}
-      </button>
+      </p>
     </div>
   )
 }
@@ -3957,13 +4256,13 @@ function AssistantRouteRecommendationCard({
 }
 
 function getRouteRecommendationDisplay(recommendation: Extract<NaviAssistantRecommendation, { type: 'place' }>) {
-  if (recommendation.detail.includes('휴게소') || recommendation.detail.includes('경로 인근')) {
+  if (recommendation.detail.includes('휴게소') || recommendation.detail.includes('졸음쉼터') || recommendation.detail.includes('경로 인근')) {
     return {
       primaryAction: '경유지 추가',
       options: [
-        { label: '추천 경로', destinationLabel: '군자 휴게소', durationValue: '12', durationUnit: '분', distanceLabel: '8.6km', tollLabel: '통행료 0원', active: true },
-        { label: '최단 거리 경로', destinationLabel: '구리 휴게소', durationValue: '15', durationUnit: '분', distanceLabel: '7.9km', tollLabel: '통행료 0원', active: false },
-        { label: '고속도로 우선 경로', destinationLabel: '별내 휴게소', durationValue: '11', durationUnit: '분', distanceLabel: '10.4km', tollLabel: '통행료 1,200원', active: false },
+        { label: '추천 경로', destinationLabel: '신탄진 졸음쉼터(부산방향)', durationValue: '18', durationUnit: '분', distanceLabel: '21.4km', tollLabel: '통행료 0원', active: true },
+        { label: '휴게소 경유', destinationLabel: '죽암휴게소(부산방향)', durationValue: '27', durationUnit: '분', distanceLabel: '34.8km', tollLabel: '통행료 0원', active: false },
+        { label: '장거리 휴식', destinationLabel: '망향휴게소(부산방향)', durationValue: '42', durationUnit: '분', distanceLabel: '63.1km', tollLabel: '통행료 0원', active: false },
       ],
     }
   }
@@ -3982,21 +4281,19 @@ function getRouteRecommendationDisplay(recommendation: Extract<NaviAssistantReco
   return {
     primaryAction: '안내 시작',
     options: [
-      { label: '추천 경로', destinationLabel: '중랑 졸음쉼터', durationValue: '4', durationUnit: '분', distanceLabel: '2.4km', tollLabel: '통행료 0원', active: true },
-      { label: '최단 거리 경로', destinationLabel: '군자 졸음쉼터', durationValue: '6', durationUnit: '분', distanceLabel: '2.1km', tollLabel: '통행료 0원', active: false },
-      { label: '정체 회피 경로', destinationLabel: '사가정 졸음쉼터', durationValue: '7', durationUnit: '분', distanceLabel: '3.2km', tollLabel: '통행료 0원', active: false },
+      { label: '추천 경로', destinationLabel: '신탄진 졸음쉼터(부산방향)', durationValue: '18', durationUnit: '분', distanceLabel: '21.4km', tollLabel: '통행료 0원', active: true },
+      { label: '휴게소 경유', destinationLabel: '죽암휴게소(부산방향)', durationValue: '27', durationUnit: '분', distanceLabel: '34.8km', tollLabel: '통행료 0원', active: false },
+      { label: '장거리 휴식', destinationLabel: '망향휴게소(부산방향)', durationValue: '42', durationUnit: '분', distanceLabel: '63.1km', tollLabel: '통행료 0원', active: false },
     ],
   }
 }
 
-function getSelectedRouteDisplay(recommendation: Extract<NaviAssistantRecommendation, { type: 'place' }>) {
-  const restStopRoute = recommendation.detail.includes('휴게소') || recommendation.detail.includes('경로에서 가까운 휴게소')
-
+function getSelectedRouteDisplay(_recommendation: Extract<NaviAssistantRecommendation, { type: 'place' }>) {
   return {
-    destinationLabel: restStopRoute ? '군자 휴게소' : '중랑 졸음쉼터',
-    durationValue: restStopRoute ? '12' : '4',
+    destinationLabel: '신탄진 졸음쉼터(부산방향)',
+    durationValue: '18',
     durationUnit: '분',
-    distanceLabel: restStopRoute ? '8.6km' : '2.4km',
+    distanceLabel: '21.4km',
     tollLabel: '통행료 0원',
     primaryAction: '안내 중',
   }
@@ -4006,11 +4303,11 @@ function getRouteDestinationLabel(recommendation: Extract<NaviAssistantRecommend
   const source = `${recommendation.title} ${recommendation.detail}`
 
   if (source.includes('졸음쉼터')) {
-    return '중랑 졸음쉼터'
+    return '신탄진 졸음쉼터(부산방향)'
   }
 
   if (source.includes('휴게소')) {
-    return '군자 휴게소'
+    return '죽암휴게소(부산방향)'
   }
 
   const destinationMatch = source.match(/([^\s.]+?)(?:로|으로) 안내/)
@@ -4117,9 +4414,9 @@ function getDemoScenarioRecommendations(
     return [
       {
         type: 'place',
-        title: '가까운 휴게소 추천',
-        meta: '경로에서 가까운 휴게소',
-        detail: '경로에서 가까운 휴게소를 찾았어요.',
+        title: '신탄진 졸음쉼터 안내',
+        meta: '경부고속도로 부산방향',
+        detail: '경로에서 가까운 신탄진 졸음쉼터를 찾았어요.',
         action: '안내 시작',
       },
     ]
@@ -4130,8 +4427,8 @@ function getDemoScenarioRecommendations(
       {
         type: 'place',
         title: '경로 변경 완료',
-        meta: '군자 휴게소',
-        detail: '가까운 휴게소로 경로를 바꿨어요.',
+        meta: '신탄진 졸음쉼터(부산방향)',
+        detail: '신탄진 졸음쉼터로 경로를 바꿨어요.',
         action: '확인',
       },
     ]
@@ -4180,18 +4477,6 @@ function getDemoScenarioRecommendations(
         title: '메시지 전송 완료',
         meta: '문자 전송',
         detail: '지우에게 메시지를 보냈습니다.',
-        action: '확인',
-      },
-    ]
-  }
-
-  if (event.id === 'device_music_offer') {
-    return [
-      {
-        type: 'action',
-        title: '음악 설정 대행',
-        meta: '화면 조작 방지',
-        detail: '화면을 조작하지 않아도 원하는 음악으로 바꿔드릴게요.',
         action: '확인',
       },
     ]

@@ -382,7 +382,7 @@ describe('NavigationShell', () => {
     })
   })
 
-  it('attaches recommendation cards to demo route and music action responses', () => {
+  it('attaches recommendation cards only to demo action detail responses', () => {
     const drowsyScenario = getDemoScenarios().find((scenario) => scenario.scenarioId === 'drowsy_driver')
     const phoneScenario = getDemoScenarios().find((scenario) => scenario.scenarioId === 'phone_usage')
     const deviceScenario = getDemoScenarios().find((scenario) => scenario.scenarioId === 'device_operation')
@@ -427,9 +427,7 @@ describe('NavigationShell', () => {
     expect(phonePreviewStep.recommendations).toEqual([
       expect.objectContaining({ type: 'action', title: '지우에게 보낼 메시지', action: '보내기' }),
     ])
-    expect(deviceAssistStep.recommendations).toEqual([
-      expect.objectContaining({ type: 'action', title: '음악 설정 대행' }),
-    ])
+    expect(deviceAssistStep.recommendations).toBeUndefined()
     expect(musicStep.recommendations).toEqual([
       expect.objectContaining({ type: 'music', title: '조용한 플레이리스트' }),
     ])
@@ -860,20 +858,20 @@ describe('NavigationShell', () => {
   it('starts the mini player when a demo music scenario reaches the music started step', async () => {
     mockedSearchPlaces.mockResolvedValue([
       {
-        id: 'seoul-forest-parking',
-        name: '서울숲 주차장',
-        address: '서울 성동구 뚝섬로 273',
-        coordinate: { lat: 37.5446, lng: 127.0374 },
+        id: 'ossi-kalguksu',
+        name: '오씨칼국수 본점',
+        address: '대전 동구 옛신탄진로 13',
+        coordinate: { lat: 36.3378, lng: 127.4309 },
       },
     ])
     mockedGetRoute.mockResolvedValue({
       coordinates: [
-        { lat: 37.5665, lng: 126.978 },
-        { lat: 37.5446, lng: 127.0374 },
+        { lat: 37.5502, lng: 127.073 },
+        { lat: 36.3378, lng: 127.4309 },
       ],
       summary: {
-        distanceMeters: 8200,
-        durationSeconds: 1140,
+        distanceMeters: 166_800,
+        durationSeconds: 8_280,
       },
       maneuvers: [],
     })
@@ -903,14 +901,49 @@ describe('NavigationShell', () => {
     await clickPresenterNext()
     await clickPresenterNext()
 
-    await screen.findByText('오디오 조작 주의')
+    await screen.findByText('음악 패널 조작')
+    let musicPopover = await screen.findByTestId('music-popover')
+    expect(within(musicPopover).getByLabelText('음악 검색')).toHaveValue('')
+    expect(within(musicPopover).getByText('Drive Neon')).toBeInTheDocument()
+
     await clickPresenterNext()
+    await screen.findByText('음악 검색 조작')
+    musicPopover = await screen.findByTestId('music-popover')
+    expect(within(musicPopover).getByLabelText('음악 검색')).toHaveValue('Soft')
+    expect(within(musicPopover).getByText('Soft Focus')).toBeInTheDocument()
+
     await clickPresenterNext()
+    expect(await screen.findByTestId('navi-assistant-speech-text')).toHaveAttribute(
+      'aria-label',
+      '민준, 음악 화면을 보는 시간이 길어지고 있어요. 전방을 봐주세요.',
+    )
+    expect(screen.getByTestId('music-popover')).toBeInTheDocument()
+
     await clickPresenterNext()
+    await screen.findByText('음악 후보 조작 지속')
+    musicPopover = await screen.findByTestId('music-popover')
+    expect(within(musicPopover).getByRole('button', { name: /Soft Focus/ })).toHaveAttribute('aria-pressed', 'true')
+
+    await clickPresenterNext()
+    expect(await screen.findByTestId('navi-assistant-speech-text')).toHaveAttribute(
+      'aria-label',
+      '음악은 제가 대신 바꿔드릴까요?',
+    )
     fireEvent.click(await screen.findByRole('button', { name: '음악 말하기' }))
+
+    musicPopover = await screen.findByTestId('music-popover')
+    expect(within(musicPopover).getByLabelText('음악 검색')).toHaveValue('Soft')
+    expect(within(musicPopover).getByText('Soft Focus')).toBeInTheDocument()
+
     await clickPresenterNext()
+
+    musicPopover = await screen.findByTestId('music-popover')
+    expect(within(musicPopover).getByRole('button', { name: /Soft Focus/ })).toHaveAttribute('aria-pressed', 'true')
+
     fireEvent.click(await screen.findByRole('button', { name: '음악 재생' }))
 
+    musicPopover = await screen.findByTestId('music-popover')
+    expect(within(musicPopover).getByText('재생 중')).toBeInTheDocument()
     expect(screen.queryByTestId('music-mini-player')).not.toBeInTheDocument()
 
     await clickPresenterNext()
@@ -1037,6 +1070,35 @@ describe('NavigationShell', () => {
         guidanceVolume: 82,
       })
     })
+    expect(await screen.findByTestId('profile-calibration-flow')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Romi가 개인화 맞춤 설정을 준비하고 있어요' })).toBeInTheDocument()
+  })
+
+  it('runs calibration automatically for a newly created profile before scenario selection', async () => {
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell calibrationTiming={{ progressIntervalMs: 1, progressStep: 100, stepCompleteDelayMs: 1 }} />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: '프로필 추가' }))
+    fireEvent.change(screen.getByLabelText('프로필 이름'), {
+      target: { value: '도현' },
+    })
+    fireEvent.change(screen.getByLabelText('호출 이름'), {
+      target: { value: '도현아' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '프로필 저장' }))
+
+    expect(await screen.findByTestId('profile-calibration-flow')).toBeInTheDocument()
+    expect(screen.getByText('정면을 바라봐 주세요')).toBeInTheDocument()
+
+    await waitFor(() => {
+      expect(mockedSelectProfile).toHaveBeenCalledWith('profile-created')
+    })
+    expect(await screen.findByTestId('demo-scenario-selection')).toBeInTheDocument()
   })
 
   it('deletes a backend profile from the profile settings screen', async () => {
@@ -1055,6 +1117,8 @@ describe('NavigationShell', () => {
     await waitFor(() => {
       expect(mockedDeleteProfile).toHaveBeenCalledWith('profile-1')
     })
+    expect(await screen.findByRole('heading', { name: '오늘은 누가 운전할까요?' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: '프로필 설정' })).not.toBeInTheDocument()
   })
 
   it('opens a profile settings page from the selected profile edit button and updates a profile', async () => {
@@ -1240,7 +1304,7 @@ describe('NavigationShell', () => {
     expect(screen.getByRole('button', { name: 'Navi AI 에이전트 닫기' })).toBeInTheDocument()
     expect(await screen.findByTestId('navi-assistant-speech-text')).toHaveAttribute(
       'aria-label',
-      '잠시 쉬어가면 좋겠습니다. 가까운 쉼터를 찾아드릴까요?',
+      '잠시 쉬어가면 좋겠습니다. 신탄진 졸음쉼터를 찾아드릴까요?',
     )
     expect(screen.getByTestId('voice-orb')).toHaveAttribute('data-state', 'speaking')
     expect(screen.getByTestId('voice-wave')).toHaveAttribute('data-active', 'true')
@@ -1252,7 +1316,7 @@ describe('NavigationShell', () => {
     expect(screen.queryByTestId('voice-wave')).not.toBeInTheDocument()
     expect(await screen.findByTestId('navi-assistant-user-text')).toHaveAttribute(
       'aria-label',
-      '가까운 졸음쉼터로 안내해줘',
+      '신탄진 졸음쉼터로 안내해줘',
     )
 
     fireEvent.click(screen.getByRole('button', { name: '다음 AI 시나리오 단계' }))
@@ -1265,17 +1329,17 @@ describe('NavigationShell', () => {
     expect(screen.queryByText('추천 경로')).not.toBeInTheDocument()
     expect(screen.queryByText('최단 거리 경로')).not.toBeInTheDocument()
     expect(screen.queryByText('정체 회피 경로')).not.toBeInTheDocument()
-    const recommendedRouteButton = screen.getByRole('button', { name: '중랑 졸음쉼터 안내 시작' })
+    const recommendedRouteButton = screen.getByRole('button', { name: '신탄진 졸음쉼터(부산방향) 경유지 추가' })
     expect(recommendedRouteButton).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '군자 졸음쉼터 안내 시작' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '사가정 졸음쉼터 안내 시작' })).toBeInTheDocument()
-    expect(within(recommendedRouteButton).getByText('4')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '죽암휴게소(부산방향) 경유지 추가' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '망향휴게소(부산방향) 경유지 추가' })).toBeInTheDocument()
+    expect(within(recommendedRouteButton).getByText('18')).toBeInTheDocument()
     expect(within(recommendedRouteButton).getByText('분')).toBeInTheDocument()
-    expect(within(recommendedRouteButton).getByText('2.4km')).toBeInTheDocument()
+    expect(within(recommendedRouteButton).getByText('21.4km')).toBeInTheDocument()
     expect(screen.getAllByText('통행료 0원')).toHaveLength(3)
-    expect(screen.getByText('중랑 졸음쉼터')).toBeInTheDocument()
-    expect(screen.getByText('군자 졸음쉼터')).toBeInTheDocument()
-    expect(screen.getByText('사가정 졸음쉼터')).toBeInTheDocument()
+    expect(screen.getByText('신탄진 졸음쉼터(부산방향)')).toBeInTheDocument()
+    expect(screen.getByText('죽암휴게소(부산방향)')).toBeInTheDocument()
+    expect(screen.getByText('망향휴게소(부산방향)')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '다음 AI 시나리오 단계' }))
     fireEvent.click(screen.getByRole('button', { name: '다음 AI 시나리오 단계' }))
@@ -1284,9 +1348,9 @@ describe('NavigationShell', () => {
     expect(screen.queryByText('추천')).not.toBeInTheDocument()
     expect(screen.queryByText('1개')).not.toBeInTheDocument()
     expect(screen.queryByTestId('navi-assistant-route-recommendation')).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '군자 졸음쉼터 안내 시작' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '사가정 졸음쉼터 안내 시작' })).not.toBeInTheDocument()
-    expect(within(selectedRouteCard).getByText('중랑 졸음쉼터')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '죽암휴게소(부산방향) 경유지 추가' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '망향휴게소(부산방향) 경유지 추가' })).not.toBeInTheDocument()
+    expect(within(selectedRouteCard).getByText('신탄진 졸음쉼터(부산방향)')).toBeInTheDocument()
     expect(within(selectedRouteCard).getByText('안내 중')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '다음 AI 시나리오 단계' }))
@@ -1539,7 +1603,7 @@ describe('NavigationShell', () => {
     const averageScoreValue = screen.getAllByText('82점').find((element) => element.classList.contains('text-2xl'))!
     expect(averageScoreValue).toHaveClass('text-2xl')
     expect(averageScoreValue).not.toHaveClass('text-3xl')
-    const totalDistanceValue = screen.getAllByText('37.0 km').find((element) => element.classList.contains('text-2xl'))!
+    const totalDistanceValue = screen.getAllByText('500.4 km').find((element) => element.classList.contains('text-2xl'))!
     expect(totalDistanceValue).toHaveClass('whitespace-nowrap')
     expect(totalDistanceValue).not.toHaveClass('truncate')
     expect(totalDistanceValue.parentElement).toHaveClass('flex-1')

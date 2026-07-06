@@ -36,18 +36,18 @@ describe('aiai scenario adapter', () => {
     expect(scenario?.steps[1]).toMatchObject({
       mode: 'assistant-speaking',
       orbState: 'speaking',
-      text: '잠시 쉬어가면 좋겠습니다. 가까운 쉼터를 찾아드릴까요?',
+      text: '잠시 쉬어가면 좋겠습니다. 신탄진 졸음쉼터를 찾아드릴까요?',
     })
     expect(scenario?.steps[2]).toMatchObject({
       mode: 'user-listening',
       orbState: 'listening',
-      userText: '가까운 졸음쉼터로 안내해줘',
+      userText: '신탄진 졸음쉼터로 안내해줘',
     })
     expect(scenario?.steps[3]).toMatchObject({
       mode: 'recommendation',
       recommendations: [
         expect.objectContaining({
-          detail: '가장 가까운 졸음쉼터를 찾았습니다. 현재 경로에서 2.4km 거리이고 4분 뒤 도착할 수 있습니다.',
+          detail: '신탄진 졸음쉼터를 찾았습니다. 현재 경로에서 21.4km 거리이고 18분 뒤 도착할 수 있습니다.',
         }),
       ],
     })
