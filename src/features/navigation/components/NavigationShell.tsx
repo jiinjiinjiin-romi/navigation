@@ -572,7 +572,7 @@ const MOCK_REPORT_DATA: MockReportData = {
         averageConfidence: 0.91,
         maximumConfidence: 0.94,
         resolutionReason: 'BEHAVIOR_CORRECTED',
-        interventionText: '휴식 경로 안내 후 집중 운전 모드 전환',
+        interventionText: '휴식 경로 안내 후 위험 상황 완화',
         corrected: true,
       },
     ],
@@ -606,7 +606,7 @@ const MOCK_REPORT_DATA: MockReportData = {
         averageConfidence: 0.92,
         maximumConfidence: 0.95,
         resolutionReason: 'BEHAVIOR_CORRECTED',
-        interventionText: '메시지 대행 승인 후 집중 운전 모드 전환',
+        interventionText: '메시지 대행 승인 후 전방주시 복귀',
         corrected: true,
       },
     ],
@@ -917,6 +917,9 @@ export function NavigationShell({
     initialProfileSetupComplete ? 'free-navigation' : null,
   )
   const [demoScenarioState, setDemoScenarioState] = useState<DemoScenarioControllerState | null>(null)
+  const [demoSimulationStartPending, setDemoSimulationStartPending] = useState(false)
+  const [demoCompleted, setDemoCompleted] = useState(false)
+  const demoEndedEventAppliedRef = useRef<string | null>(null)
   const [profileSetupView, setProfileSetupView] = useState<ProfileSetupView>('list')
   const [selectedProfileId, setSelectedProfileId] = useState<string | undefined>(initialSelectedProfileId)
   const [editingProfileId, setEditingProfileId] = useState<string>()
@@ -1143,6 +1146,7 @@ export function NavigationShell({
     () => activeRoute ? createRouteSimulationPlan(activeRoute) : undefined,
     [activeRoute],
   )
+  const demoSetupActive = navigationEntryMode === 'demo-scenario' && demoScenarioState?.phase === 'setup'
   const routeSelectionMode = Boolean(origin && destination && !selectedRouteOptionId)
   const routeSelectionModeRef = useRef(routeSelectionMode)
   const hasRouteSearchDraftMismatch = routeSelectionMode && routeSearchOpen && (
@@ -1554,6 +1558,7 @@ export function NavigationShell({
       routeSelectionMode &&
       !hasRouteSearchDraftMismatch &&
       !routeOptionsQuery.isFetching &&
+      !demoSetupActive &&
       routeOptionsReady &&
       routeOptions?.length === 1
     ) {
@@ -1566,6 +1571,7 @@ export function NavigationShell({
     routeOptionsQuery.isFetching,
     routeSelectionMode,
     selectRouteOption,
+    demoSetupActive,
   ])
 
   const selectPlace = (field: SearchFieldId, place: Place, options: { recordHistory?: boolean } = {}) => {
@@ -1730,9 +1736,6 @@ export function NavigationShell({
           selectPlace('destination', DEMO_DESTINATION_PLACE, { recordHistory: false })
         }
         setRouteOptionsSearchReady(true)
-        if (activeRouteOptionId) {
-          selectRouteOption(activeRouteOptionId)
-        }
         break
       case 'GUIDANCE_STARTED':
         setRouteSearchOpen(false)
@@ -1741,7 +1744,10 @@ export function NavigationShell({
       case 'SIMULATION_STARTED':
         setRouteSearchOpen(false)
         setActiveField(null)
-        startSimulation()
+        if (activeRouteOptionId) {
+          selectRouteOption(activeRouteOptionId)
+          setDemoSimulationStartPending(true)
+        }
         break
       default:
         break
@@ -1758,30 +1764,45 @@ export function NavigationShell({
 
   const completeDemoDrive = useCallback(() => {
     stopSimulation()
-    setSimulationPosition(destination?.coordinate ?? DEMO_DESTINATION_PLACE.coordinate)
+    const destinationCoordinate = destination?.coordinate ?? DEMO_DESTINATION_PLACE.coordinate
+    setCurrentPosition(destinationCoordinate)
+    setSimulationPosition(destinationCoordinate)
     setSimulationRemainingDistance(0)
     setSimulationRemainingDuration(0)
     setGuidanceDistanceUpdateKey((key) => key + 1)
+    guidanceDistanceDisplayRef.current.clear()
+    setSelectedRouteOptionId(undefined)
+    setDestination(undefined)
+    setDestinationKeyword('')
+    setActiveField(null)
+    setHighlightedIndex(0)
+    setRouteSearchOpen(false)
   }, [destination?.coordinate, stopSimulation])
 
   useEffect(() => {
-    if (
-      demoScenarioState?.setupEvent?.eventType !== 'RECOMMENDED_ROUTE_SELECTED' ||
-      activeRoute ||
-      !routeOptionsReady ||
-      !activeRouteOptionId
-    ) {
+    if (!demoSimulationStartPending || !activeRoute) {
       return
     }
 
-    selectRouteOption(activeRouteOptionId)
-  }, [
-    activeRoute,
-    activeRouteOptionId,
-    demoScenarioState?.setupEvent?.eventType,
-    routeOptionsReady,
-    selectRouteOption,
-  ])
+    setDemoSimulationStartPending(false)
+    startSimulation()
+  }, [activeRoute, demoSimulationStartPending, startSimulation])
+
+  useEffect(() => {
+    const event = demoScenarioState?.scenarioEvent
+
+    if (event?.eventType !== 'SESSION_ENDED') {
+      demoEndedEventAppliedRef.current = null
+      return
+    }
+
+    if (demoEndedEventAppliedRef.current === event.id) {
+      return
+    }
+
+    demoEndedEventAppliedRef.current = event.id
+    completeDemoDrive()
+  }, [completeDemoDrive, demoScenarioState?.scenarioEvent])
 
   const advanceActiveDemoScenario = useCallback(() => {
     setDemoScenarioState((currentState) => {
@@ -1789,20 +1810,18 @@ export function NavigationShell({
         return currentState
       }
 
-      const nextState = advanceDemoScenario(currentState)
+      const nextState = advanceDemoScenarioForPresenter(currentState)
       applyDemoSetupSideEffects(nextState)
-      if (nextState.phase === 'ended' || nextState.scenarioEvent?.eventType === 'SESSION_ENDED') {
-        completeDemoDrive()
-        if (nextState.scenarioEvent?.eventType === 'SESSION_ENDED') {
-          return {
-            ...nextState,
-            phase: 'ended',
-          }
-        }
+      if (shouldOpenDemoReport(nextState)) {
+        setNavigationEntryMode('free-navigation')
+        setActiveSidePanel('report')
+        setReportFullscreenOpen(false)
+        setDemoCompleted(true)
+        return null
       }
       return nextState
     })
-  }, [applyDemoSetupSideEffects, completeDemoDrive])
+  }, [applyDemoSetupSideEffects])
 
   const respondActiveDemoScenario = useCallback((responseValue: string) => {
     setDemoScenarioState((currentState) => (
@@ -1817,12 +1836,14 @@ export function NavigationShell({
 
     endGuidance()
     setDemoScenarioState(createInitialDemoScenarioState(demoScenarioState.scenario.scenarioId))
+    setDemoCompleted(false)
   }, [demoScenarioState, endGuidance])
 
   const exitActiveDemoScenario = useCallback(() => {
     endGuidance()
     setDemoScenarioState(null)
     setNavigationEntryMode(null)
+    setDemoCompleted(false)
   }, [endGuidance])
 
   useEffect(() => {
@@ -2071,6 +2092,7 @@ export function NavigationShell({
               <DrivingHud
                 assist={debugDrivingAssist ?? drivingAssist}
                 guidance={maneuverGuidance}
+                hideActions={demoActive || demoCompleted}
                 motionTiming={motionTiming}
                 simulationRunning={simulationRunning}
                 onToggleSimulation={simulationRunning ? stopSimulation : startSimulation}
@@ -2154,10 +2176,12 @@ export function NavigationShell({
               onStartFreeNavigation={() => {
                 setNavigationEntryMode('free-navigation')
                 setDemoScenarioState(null)
+                setDemoCompleted(false)
               }}
               onStartScenario={(scenarioId) => {
                 setNavigationEntryMode('demo-scenario')
                 setDemoScenarioState(createInitialDemoScenarioState(scenarioId))
+                setDemoCompleted(false)
               }}
             />
           ) : null}
@@ -2277,6 +2301,15 @@ export function NavigationShell({
           onNext={advanceActiveDemoScenario}
           onReset={resetActiveDemoScenario}
           onRespond={respondActiveDemoScenario}
+        />
+      ) : demoCompleted ? (
+        <DemoScenarioCompletedPanel
+          motionTiming={motionTiming}
+          onBackToScenarios={() => {
+            setActiveSidePanel(null)
+            setNavigationEntryMode(null)
+            setDemoCompleted(false)
+          }}
         />
       ) : navigationEntryMode === 'free-navigation' ? (
         <NaviAssistantDebugPanel
@@ -3927,12 +3960,13 @@ function getRouteDestinationLabel(recommendation: Extract<NaviAssistantRecommend
   return destination || recommendation.meta
 }
 
-function createDemoAssistantStep(
+export function createDemoAssistantStep(
   state: DemoScenarioControllerState,
   profileName: string | null,
 ): NaviAssistantStep {
   const setupEvent = state.setupEvent
   const scenarioEvent = state.scenarioEvent
+  const recommendations = scenarioEvent ? getDemoScenarioRecommendations(scenarioEvent) : undefined
 
   if (setupEvent) {
     return {
@@ -3961,11 +3995,12 @@ function createDemoAssistantStep(
       id: scenarioEvent.id,
       label: scenarioEvent.uiState.visibleStatus,
       mode: 'assistant-speaking',
-      orbState: scenarioEvent.eventType === 'ACTION_COMPLETED' || scenarioEvent.eventType === 'FOCUS_MODE_ENABLED'
+      orbState: scenarioEvent.eventType === 'ACTION_COMPLETED'
         ? 'success'
         : 'speaking',
       energy: scenarioEvent.uiState.riskLevel === 'HIGH' ? 0.86 : 0.64,
       text: personalizeDemoRomiMessage(scenarioEvent.romiMessage, profileName),
+      recommendations,
     }
   }
 
@@ -3976,6 +4011,146 @@ function createDemoAssistantStep(
     orbState: 'idle',
     energy: 0,
   }
+}
+
+export function advanceDemoScenarioForPresenter(
+  state: DemoScenarioControllerState,
+): DemoScenarioControllerState {
+  let nextState = advanceDemoScenario(state)
+  let guard = 0
+
+  while (shouldSkipDemoPresenterState(nextState) && guard < 20) {
+    nextState = advanceDemoScenario(nextState)
+    guard += 1
+  }
+
+  return nextState
+}
+
+export function shouldCompleteDemoScenario(state: DemoScenarioControllerState) {
+  return state.phase === 'ended' || state.scenarioEvent?.eventType === 'REPORT_READY'
+}
+
+export function shouldEndDemoDrive(state: DemoScenarioControllerState) {
+  return state.phase === 'ended' || state.scenarioEvent?.eventType === 'SESSION_ENDED'
+}
+
+export function shouldOpenDemoReport(state: DemoScenarioControllerState) {
+  return state.phase === 'ended' || state.scenarioEvent?.eventType === 'REPORT_READY'
+}
+
+function shouldSkipDemoPresenterState(state: DemoScenarioControllerState) {
+  const event = state.scenarioEvent
+
+  return Boolean(
+    event &&
+      !event.requiresResponse &&
+      !event.userSpeech &&
+      !event.romiMessage &&
+      ['정상 주행', '상태 확인 중'].includes(event.uiState.visibleStatus),
+  )
+}
+
+function getDemoScenarioRecommendations(
+  event: NonNullable<DemoScenarioControllerState['scenarioEvent']>,
+): NaviAssistantRecommendation[] | undefined {
+  if (event.id === 'drowsy_rest_area_offer') {
+    return [
+      {
+        type: 'place',
+        title: '가까운 휴게소 추천',
+        meta: '경로에서 가까운 휴게소',
+        detail: '경로에서 가까운 휴게소로 안내할 수 있습니다.',
+        action: '안내 시작',
+      },
+    ]
+  }
+
+  if (event.id === 'drowsy_rest_area_guidance_started') {
+    return [
+      {
+        type: 'place',
+        title: '경로 변경 완료',
+        meta: '군자 휴게소',
+        detail: '경로에서 가까운 휴게소로 안내 중입니다.',
+        action: '확인',
+      },
+    ]
+  }
+
+  if (event.id === 'drowsy_window_started') {
+    return [
+      {
+        type: 'action',
+        title: '창문 살짝 열기',
+        meta: '환기 보조',
+        detail: '실내 공기 환기를 시작한 것으로 표시합니다.',
+        action: '확인',
+      },
+    ]
+  }
+
+  if (event.id === 'drowsy_music_started' || event.id === 'device_music_preview' || event.id === 'device_music_started') {
+    return [
+      {
+        type: 'music',
+        title: '조용한 플레이리스트',
+        meta: '음악 추천',
+        detail: '운전에 방해되지 않는 음악을 추천합니다.',
+        action: '재생',
+      },
+    ]
+  }
+
+  if (event.id === 'phone_assist_offer') {
+    return [
+      {
+        type: 'action',
+        title: '메시지 대행',
+        meta: '운전 중 응답 보조',
+        detail: '휴대폰을 보지 않고 필요한 메시지 처리를 대신 진행할 수 있습니다.',
+        action: '확인',
+      },
+    ]
+  }
+
+  if (event.id === 'phone_message_preview') {
+    return [
+      {
+        type: 'action',
+        title: '메시지 초안',
+        meta: '대행 처리',
+        detail: '운전 중이라 조금 뒤에 연락할게.',
+        action: '확인',
+      },
+    ]
+  }
+
+  if (event.id === 'phone_message_sent') {
+    return [
+      {
+        type: 'action',
+        title: '메시지 전송 완료',
+        meta: '데모 처리',
+        detail: '실제 전송 없이 전송 완료 상태만 표시합니다.',
+        action: '확인',
+      },
+    ]
+  }
+
+  if (event.id === 'device_music_offer') {
+    return [
+      {
+        type: 'action',
+        title: '음악 설정 대행',
+        meta: '화면 조작 방지',
+        detail: '주행 중 화면을 조작하지 않도록 음악 변경을 대신 진행할 수 있습니다.',
+        action: '확인',
+      },
+    ]
+  }
+
+  return undefined
 }
 
 export function personalizeDemoRomiMessage(message: string, profileName: string | null): string {
@@ -4084,6 +4259,7 @@ function DemoScenarioPresenterPanel({
       ? personalizeDemoRomiMessage(currentScenarioEvent.romiMessage, profileName)
       : undefined)
   const currentRiskLevel = currentScenarioEvent?.uiState.riskLevel ?? 'LOW'
+  const showCurrentStepSummary = shouldShowDemoPresenterStepSummary(state)
   const nextDisabled = isDemoPresenterNextDisabled(state, routeOptionsReady, routeReady)
   const waitingText = getDemoPresenterWaitingText(state, routeOptionsReady, routeReady)
 
@@ -4104,23 +4280,25 @@ function DemoScenarioPresenterPanel({
           </p>
         </div>
 
-        <div className="rounded-xl bg-[var(--nav-panel)] p-3">
-          <div className="flex items-center justify-between gap-2">
-            <div className="text-xs font-bold text-[var(--nav-muted)]">현재 단계</div>
-            <span className={getDemoRiskBadgeClassName(currentRiskLevel)}>
-              {formatDemoRiskLevel(currentRiskLevel)}
-            </span>
+        {showCurrentStepSummary ? (
+          <div className="rounded-xl bg-[var(--nav-panel)] p-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-xs font-bold text-[var(--nav-muted)]">현재 단계</div>
+              <span className={getDemoRiskBadgeClassName(currentRiskLevel)}>
+                {formatDemoRiskLevel(currentRiskLevel)}
+              </span>
+            </div>
+            <div className="mt-2 text-base font-bold leading-6">{currentTitle}</div>
+            {currentDescription ? (
+              <p className="mt-2 text-sm font-semibold leading-6 text-[var(--nav-muted)]">
+                {currentDescription}
+              </p>
+            ) : null}
+            {waitingText ? (
+              <p className="mt-2 text-xs font-bold text-[var(--nav-primary)]">{waitingText}</p>
+            ) : null}
           </div>
-          <div className="mt-2 text-base font-bold leading-6">{currentTitle}</div>
-          {currentDescription ? (
-            <p className="mt-2 text-sm font-semibold leading-6 text-[var(--nav-muted)]">
-              {currentDescription}
-            </p>
-          ) : null}
-          {waitingText ? (
-            <p className="mt-2 text-xs font-bold text-[var(--nav-primary)]">{waitingText}</p>
-          ) : null}
-        </div>
+        ) : null}
 
         {currentScenarioEvent?.requiresResponse ? (
           <div className="grid gap-2">
@@ -4181,6 +4359,19 @@ function getDemoScenarioProgressLabel(state: DemoScenarioControllerState) {
   return `${Math.max(1, index + 1)} / ${state.scenario.events.length}`
 }
 
+function shouldShowDemoPresenterStepSummary(state: DemoScenarioControllerState) {
+  if (state.setupEvent) {
+    return true
+  }
+
+  const scenarioEvent = state.scenarioEvent
+  if (!scenarioEvent) {
+    return true
+  }
+
+  return !['정상 주행', '상태 확인 중'].includes(scenarioEvent.uiState.visibleStatus)
+}
+
 function isDemoPresenterNextDisabled(
   state: DemoScenarioControllerState,
   routeOptionsReady: boolean,
@@ -4194,6 +4385,7 @@ function isDemoPresenterNextDisabled(
     case 'ROUTE_CANDIDATES_LOADED':
       return !routeOptionsReady
     case 'RECOMMENDED_ROUTE_SELECTED':
+      return !routeOptionsReady
     case 'GUIDANCE_STARTED':
       return !routeReady
     default:
@@ -4211,8 +4403,7 @@ function getDemoPresenterWaitingText(
   }
 
   if (
-    (state.setupEvent?.eventType === 'RECOMMENDED_ROUTE_SELECTED' ||
-      state.setupEvent?.eventType === 'GUIDANCE_STARTED') &&
+    state.setupEvent?.eventType === 'GUIDANCE_STARTED' &&
     !routeReady
   ) {
     return '추천 경로 선택이 완료될 때까지 기다려주세요.'
@@ -4345,6 +4536,42 @@ function NaviAssistantDebugPanel({
             <ArrowCounterClockwise className="size-4" weight="bold" />
           </button>
         </div>
+      </div>
+    </motion.section>
+  )
+}
+
+function DemoScenarioCompletedPanel({
+  motionTiming,
+  onBackToScenarios,
+}: {
+  motionTiming: MotionTiming
+  onBackToScenarios: () => void
+}) {
+  return (
+    <motion.section
+      aria-label="데모 완료 패널"
+      className="col-start-2 row-start-2 self-start rounded-[1.1rem] border border-white/70 bg-white p-4 text-[var(--nav-ink)] shadow-[0_18px_46px_rgb(0_0_0/0.24)]"
+      data-testid="demo-scenario-completed-panel"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={motionTiming}
+    >
+      <div className="flex flex-col gap-4">
+        <div className="border-b border-[var(--nav-border)] pb-3">
+          <p className="text-sm font-bold">운전 리포트 확인</p>
+          <p className="mt-1 text-xs font-semibold leading-5 text-[var(--nav-muted)]">
+            오른쪽 리포트 패널에서 오늘 주행 결과를 확인합니다.
+          </p>
+        </div>
+
+        <button
+          className="flex h-11 items-center justify-center rounded-xl border border-[var(--nav-border)] bg-white px-3 text-sm font-bold text-[var(--nav-muted)] transition hover:bg-[var(--nav-panel)] hover:text-[var(--nav-ink)]"
+          onClick={onBackToScenarios}
+          type="button"
+        >
+          데모 선택으로
+        </button>
       </div>
     </motion.section>
   )
@@ -7362,6 +7589,7 @@ function RouteSearchLoadingModal({
 function DrivingHud({
   assist,
   guidance,
+  hideActions = false,
   motionTiming,
   onEndGuidance,
   simulationRunning,
@@ -7369,6 +7597,7 @@ function DrivingHud({
 }: {
   assist?: DrivingAssistInfo
   guidance?: ManeuverGuidance
+  hideActions?: boolean
   motionTiming: MotionTiming
   onEndGuidance: () => void
   simulationRunning: boolean
@@ -7417,35 +7646,37 @@ function DrivingHud({
         <DrivingAssistOverlay assist={assist} motionTiming={motionTiming} />
       ) : null}
 
-      <motion.div
-        className="absolute bottom-17 right-28 flex items-center gap-3 max-sm:bottom-16 max-sm:right-20"
-        initial={{ opacity: 0, y: 22 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={motionTiming}
-      >
-        <motion.button
-          className="pointer-events-auto inline-flex h-11 items-center gap-2 rounded-full bg-[var(--nav-primary)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--nav-primary-hover)] max-sm:px-3"
-          onClick={onToggleSimulation}
-          type="button"
-          whileTap={motionTiming.duration === 0 ? undefined : { scale: 0.97 }}
+      {hideActions ? null : (
+        <motion.div
+          className="absolute bottom-17 right-28 flex items-center gap-3 max-sm:bottom-16 max-sm:right-20"
+          initial={{ opacity: 0, y: 22 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={motionTiming}
         >
-          {simulationRunning ? (
-            <Stop className="h-4 w-4" weight="fill" />
-          ) : (
-            <Play className="h-4 w-4" weight="fill" />
-          )}
-          <span>{simulationRunning ? '시뮬레이션 중지' : '시뮬레이션 시작'}</span>
-        </motion.button>
-        <motion.button
-          className="pointer-events-auto inline-flex h-11 items-center gap-2 rounded-full bg-white/95 px-4 text-sm font-semibold text-[var(--nav-ink)] shadow-[0_4px_10px_rgba(15,23,42,0.14)] transition hover:bg-white max-sm:px-3"
-          onClick={onEndGuidance}
-          type="button"
-          whileTap={motionTiming.duration === 0 ? undefined : { scale: 0.97 }}
-        >
-          <X className="h-4 w-4" weight="bold" />
-          <span>길안내 종료</span>
-        </motion.button>
-      </motion.div>
+          <motion.button
+            className="pointer-events-auto inline-flex h-11 items-center gap-2 rounded-full bg-[var(--nav-primary)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--nav-primary-hover)] max-sm:px-3"
+            onClick={onToggleSimulation}
+            type="button"
+            whileTap={motionTiming.duration === 0 ? undefined : { scale: 0.97 }}
+          >
+            {simulationRunning ? (
+              <Stop className="h-4 w-4" weight="fill" />
+            ) : (
+              <Play className="h-4 w-4" weight="fill" />
+            )}
+            <span>{simulationRunning ? '시뮬레이션 중지' : '시뮬레이션 시작'}</span>
+          </motion.button>
+          <motion.button
+            className="pointer-events-auto inline-flex h-11 items-center gap-2 rounded-full bg-white/95 px-4 text-sm font-semibold text-[var(--nav-ink)] shadow-[0_4px_10px_rgba(15,23,42,0.14)] transition hover:bg-white max-sm:px-3"
+            onClick={onEndGuidance}
+            type="button"
+            whileTap={motionTiming.duration === 0 ? undefined : { scale: 0.97 }}
+          >
+            <X className="h-4 w-4" weight="bold" />
+            <span>길안내 종료</span>
+          </motion.button>
+        </motion.div>
+      )}
 
     </motion.div>
   )

@@ -124,8 +124,12 @@ export function validateDemoScenarioDefinition(scenario: DemoScenarioDefinition)
         return
       }
 
+      if (nextEvent.eventType !== 'USER_RESPONSE') {
+        errors.push(`${event.id}: option ${option.value} must point to USER_RESPONSE`)
+      }
+
       if (nextEvent.userSpeech !== option.asUserSpeech) {
-        errors.push(`${event.id}: option ${option.value} speech does not match target event`)
+        errors.push(`${event.id}: option ${option.value} speech does not match target USER_RESPONSE`)
       }
     })
   })

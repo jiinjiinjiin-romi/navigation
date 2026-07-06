@@ -4,12 +4,23 @@ import { useEffect } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  advanceDemoScenarioForPresenter,
+  createDemoAssistantStep,
   getAssistantSpeechCharacterDelaySeconds,
   getAssistantVisibleOrbState,
   isAssistantVoiceWaveVisible,
   NavigationShell,
   personalizeDemoRomiMessage,
+  shouldCompleteDemoScenario,
+  shouldEndDemoDrive,
+  shouldOpenDemoReport,
 } from './NavigationShell'
+import {
+  advanceDemoScenario,
+  createInitialDemoScenarioState,
+  getDemoScenarios,
+  respondToDemoScenario,
+} from '@/features/demo-scenarios'
 import {
   createProfile,
   DEFAULT_BEHAVIOR_WARNING_SENSITIVITY,
@@ -306,6 +317,191 @@ describe('NavigationShell', () => {
     expect(
       personalizeDemoRomiMessage('{{profileName}}, 전방을 봐주세요.', '지우'),
     ).toBe('지우, 전방을 봐주세요.')
+  })
+
+  it('shows user response before the next Romi response in a drowsy branch', () => {
+    let state = createInitialDemoScenarioState('drowsy_driver')
+
+    while (state.scenarioEvent?.id !== 'drowsy_first_warning') {
+      state = advanceDemoScenario(state)
+    }
+
+    state = respondToDemoScenario(state, 'OPEN_WINDOW')
+
+    const userStep = createDemoAssistantStep(state, '민준')
+
+    expect(userStep.userText).toBe('창문 살짝 열어줘')
+    expect(userStep.text).toBeUndefined()
+    expect(userStep.mode).toBe('user-listening')
+
+    state = advanceDemoScenario(state)
+
+    const romiStep = createDemoAssistantStep(state, '민준')
+
+    expect(romiStep.userText).toBeUndefined()
+    expect(romiStep.text).toBe('창문을 살짝 열게요. 그래도 피곤한 모습이 반복되면 바로 알려드릴게요.')
+    expect(romiStep.mode).toBe('assistant-speaking')
+  })
+
+  it('preserves user speech before the next Romi response for every demo response branch', () => {
+    getDemoScenarios().forEach((scenario) => {
+      scenario.events
+        .filter((event) => event.requiresResponse)
+        .forEach((event) => {
+          event.responseOptions.forEach((option) => {
+            const state = respondToDemoScenario(
+              {
+                phase: 'scenario',
+                scenario,
+                setupEvent: null,
+                scenarioEvent: event,
+              },
+              option.value,
+            )
+            const targetEvent = state.scenarioEvent
+            const userStep = createDemoAssistantStep(state, '민준')
+
+            expect(targetEvent?.userSpeech, `${scenario.scenarioId}:${event.id}:${option.value}`).toBe(option.asUserSpeech)
+            expect(targetEvent?.eventType, `${scenario.scenarioId}:${event.id}:${option.value}`).toBe('USER_RESPONSE')
+            expect(userStep.userText, `${scenario.scenarioId}:${event.id}:${option.value}`).toBe(option.asUserSpeech)
+            expect(userStep.text, `${scenario.scenarioId}:${event.id}:${option.value}`).toBeUndefined()
+
+            const nextState = advanceDemoScenario(state)
+            const nextEvent = nextState.scenarioEvent
+            const romiStep = createDemoAssistantStep(nextState, '민준')
+
+            if (nextEvent?.romiMessage) {
+              expect(romiStep.userText, `${scenario.scenarioId}:${event.id}:${option.value}`).toBeUndefined()
+              expect(romiStep.text, `${scenario.scenarioId}:${event.id}:${option.value}`).toBe(
+                personalizeDemoRomiMessage(nextEvent.romiMessage, '민준'),
+              )
+              expect(romiStep.mode, `${scenario.scenarioId}:${event.id}:${option.value}`).toBe('assistant-speaking')
+            }
+          })
+        })
+    })
+  })
+
+  it('attaches recommendation cards to demo route and music action responses', () => {
+    const drowsyScenario = getDemoScenarios().find((scenario) => scenario.scenarioId === 'drowsy_driver')
+    const phoneScenario = getDemoScenarios().find((scenario) => scenario.scenarioId === 'phone_usage')
+    const deviceScenario = getDemoScenarios().find((scenario) => scenario.scenarioId === 'device_operation')
+    const routeEvent = drowsyScenario?.events.find((event) => event.id === 'drowsy_rest_area_guidance_started')
+    const phoneAssistEvent = phoneScenario?.events.find((event) => event.id === 'phone_assist_offer')
+    const phonePreviewEvent = phoneScenario?.events.find((event) => event.id === 'phone_message_preview')
+    const deviceAssistEvent = deviceScenario?.events.find((event) => event.id === 'device_music_offer')
+    const musicEvent = deviceScenario?.events.find((event) => event.id === 'device_music_preview')
+
+    expect(routeEvent).toBeDefined()
+    expect(phoneAssistEvent).toBeDefined()
+    expect(phonePreviewEvent).toBeDefined()
+    expect(deviceAssistEvent).toBeDefined()
+    expect(musicEvent).toBeDefined()
+
+    const routeStep = createDemoAssistantStep({
+      phase: 'scenario',
+      scenario: drowsyScenario!,
+      setupEvent: null,
+      scenarioEvent: routeEvent!,
+    }, '민준')
+    const phoneAssistStep = createDemoAssistantStep({
+      phase: 'scenario',
+      scenario: phoneScenario!,
+      setupEvent: null,
+      scenarioEvent: phoneAssistEvent!,
+    }, '민준')
+    const phonePreviewStep = createDemoAssistantStep({
+      phase: 'scenario',
+      scenario: phoneScenario!,
+      setupEvent: null,
+      scenarioEvent: phonePreviewEvent!,
+    }, '민준')
+    const deviceAssistStep = createDemoAssistantStep({
+      phase: 'scenario',
+      scenario: deviceScenario!,
+      setupEvent: null,
+      scenarioEvent: deviceAssistEvent!,
+    }, '민준')
+    const musicStep = createDemoAssistantStep({
+      phase: 'scenario',
+      scenario: deviceScenario!,
+      setupEvent: null,
+      scenarioEvent: musicEvent!,
+    }, '민준')
+
+    expect(routeStep.recommendations).toEqual([
+      expect.objectContaining({ type: 'place', title: '경로 변경 완료' }),
+    ])
+    expect(phoneAssistStep.recommendations).toEqual([
+      expect.objectContaining({ type: 'action', title: '메시지 대행' }),
+    ])
+    expect(phonePreviewStep.recommendations).toEqual([
+      expect.objectContaining({ type: 'action', title: '메시지 초안' }),
+    ])
+    expect(deviceAssistStep.recommendations).toEqual([
+      expect.objectContaining({ type: 'action', title: '음악 설정 대행' }),
+    ])
+    expect(musicStep.recommendations).toEqual([
+      expect.objectContaining({ type: 'music', title: '조용한 플레이리스트' }),
+    ])
+  })
+
+  it('skips silent demo presenter states instead of rendering an empty panel across scenarios', () => {
+    getDemoScenarios().forEach((scenario) => {
+      const startedEvent = scenario.events.find((event) => event.id.endsWith('_session_started'))
+
+      expect(startedEvent, scenario.scenarioId).toBeDefined()
+
+      const firstVisibleState = advanceDemoScenarioForPresenter({
+        phase: 'scenario',
+        scenario,
+        setupEvent: null,
+        scenarioEvent: startedEvent!,
+      })
+
+      expect(firstVisibleState.scenarioEvent?.uiState.visibleStatus, scenario.scenarioId).not.toBe('정상 주행')
+      expect(firstVisibleState.scenarioEvent?.id, scenario.scenarioId).not.toBe(startedEvent?.id)
+    })
+
+    const drowsyScenario = getDemoScenarios().find((scenario) => scenario.scenarioId === 'drowsy_driver')
+    const monitoringEvent = drowsyScenario?.events.find((event) => event.id === 'drowsy_monitoring_resumed')
+
+    expect(monitoringEvent).toBeDefined()
+
+    const repeatedDetectionState = advanceDemoScenarioForPresenter({
+      phase: 'scenario',
+      scenario: drowsyScenario!,
+      setupEvent: null,
+      scenarioEvent: monitoringEvent!,
+    })
+
+    expect(repeatedDetectionState.scenarioEvent?.id).toBe('drowsy_repeated_detection')
+  })
+
+  it('keeps the drive-end message visible before opening the report panel across scenarios', () => {
+    getDemoScenarios().forEach((scenario) => {
+      const endingSourceEvent = [...scenario.events].reverse().find((event) => event.nextEventId?.endsWith('_session_ended'))
+
+      expect(endingSourceEvent, scenario.scenarioId).toBeDefined()
+
+      const endedState = advanceDemoScenarioForPresenter({
+        phase: 'scenario',
+        scenario,
+        setupEvent: null,
+        scenarioEvent: endingSourceEvent!,
+      })
+      const reportReadyState = advanceDemoScenarioForPresenter(endedState)
+
+      expect(endedState.scenarioEvent?.eventType, scenario.scenarioId).toBe('SESSION_ENDED')
+      expect(endedState.scenarioEvent?.romiMessage, scenario.scenarioId).toBe('오늘 주행이 끝났어요. 운전 리포트를 정리해드릴게요.')
+      expect(shouldEndDemoDrive(endedState), scenario.scenarioId).toBe(true)
+      expect(shouldCompleteDemoScenario(endedState), scenario.scenarioId).toBe(false)
+      expect(shouldOpenDemoReport(endedState), scenario.scenarioId).toBe(false)
+      expect(reportReadyState.scenarioEvent?.eventType, scenario.scenarioId).toBe('REPORT_READY')
+      expect(shouldEndDemoDrive(reportReadyState), scenario.scenarioId).toBe(false)
+      expect(shouldCompleteDemoScenario(reportReadyState), scenario.scenarioId).toBe(true)
+      expect(shouldOpenDemoReport(reportReadyState), scenario.scenarioId).toBe(true)
+    })
   })
 
   const mockGeolocationSuccess = (latitude = 37.5665, longitude = 126.978) => {

@@ -28,6 +28,13 @@ describe('demo scenario engine', () => {
     const setupEvents = getCommonDrivingSetupEvents()
     let state = createInitialDemoScenarioState('phone_usage')
 
+    expect(setupEvents.map((event) => event.id)).toContain('setup_recommended_route_selected')
+    expect(setupEvents.map((event) => event.id)).toContain('setup_destination_selected')
+    expect(setupEvents.findIndex((event) => event.id === 'setup_destination_selected')).toBeLessThan(
+      setupEvents.findIndex((event) => event.id === 'setup_recommended_route_selected'),
+    )
+    expect(setupEvents[setupEvents.length - 1]?.id).toBe('setup_simulation_started')
+
     expect(state.phase).toBe('setup')
     expect(state.setupEvent?.id).toBe(setupEvents[0]?.id)
 
@@ -73,7 +80,36 @@ describe('demo scenario engine', () => {
 
     state = advanceDemoScenario(state)
 
-    expect(state.scenarioEvent?.id).toBe('drowsy_monitoring_resumed')
+    expect(state.scenarioEvent?.id).toBe('drowsy_window_started')
+    expect(state.scenarioEvent?.romiMessage).toBe('창문을 살짝 열게요. 그래도 피곤한 모습이 반복되면 바로 알려드릴게요.')
+  })
+
+  it('keeps every response branch split into user speech and the next Romi step', () => {
+    getDemoScenarios().forEach((scenario) => {
+      scenario.events
+        .filter((event) => event.requiresResponse)
+        .forEach((event) => {
+          event.responseOptions.forEach((option) => {
+            const userState = respondToDemoScenario(
+              {
+                phase: 'scenario',
+                scenario,
+                setupEvent: null,
+                scenarioEvent: event,
+              },
+              option.value,
+            )
+            const userEvent = userState.scenarioEvent
+            const nextState = advanceDemoScenario(userState)
+
+            expect(userEvent?.eventType, `${scenario.scenarioId}:${event.id}:${option.value}`).toBe('USER_RESPONSE')
+            expect(userEvent?.userSpeech, `${scenario.scenarioId}:${event.id}:${option.value}`).toBe(option.asUserSpeech)
+            expect(userEvent?.romiMessage, `${scenario.scenarioId}:${event.id}:${option.value}`).toBeNull()
+            expect(nextState.scenarioEvent?.id, `${scenario.scenarioId}:${event.id}:${option.value}`).not.toBe(userEvent?.id)
+            expect(nextState.scenarioEvent?.romiMessage, `${scenario.scenarioId}:${event.id}:${option.value}`).toBeTruthy()
+          })
+        })
+    })
   })
 
   it('does not use destination setup as the device operation scenario content', () => {
@@ -81,6 +117,12 @@ describe('demo scenario engine', () => {
 
     expect(scenarioText).not.toMatch(/세종대학교|목적지 설정|목적지 음성|목적지 후보|내비 목적지/)
     expect(scenarioText).toContain('음악')
+  })
+
+  it('does not expose focus driving mode as a demo scenario step', () => {
+    const scenarioText = JSON.stringify(getDemoScenarios())
+
+    expect(scenarioText).not.toMatch(/집중 운전 모드|FOCUS_MODE_ENABLED|focus_mode/)
   })
 
   it('can complete every scenario with its first available response path', () => {

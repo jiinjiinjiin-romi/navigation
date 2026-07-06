@@ -12,7 +12,6 @@ export type DemoEventType =
   | 'RISK_UPDATED'
   | 'ACTION_PREVIEW'
   | 'ACTION_COMPLETED'
-  | 'FOCUS_MODE_ENABLED'
   | 'SESSION_ENDED'
   | 'REPORT_READY'
 
