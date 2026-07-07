@@ -1,10 +1,10 @@
 export {
   AIAI_SCENARIO_IDS,
-  createNaviAssistantScenarios,
+  createRoadieAssistantScenarios,
 } from './scenarioAdapter'
 export type {
   AiaiScenarioId,
-  NaviAssistantRecommendation,
-  NaviAssistantScenario,
-  NaviAssistantStep,
+  RoadieAssistantRecommendation,
+  RoadieAssistantScenario,
+  RoadieAssistantStep,
 } from './types'

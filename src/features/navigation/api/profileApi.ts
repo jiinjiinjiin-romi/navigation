@@ -75,7 +75,7 @@ export interface ProfileSelectResponse {
 
 export const DEFAULT_PROFILE_CREATE_REQUEST: ProfileCreateRequest = {
   displayName: '새 운전자',
-  agentCallName: '나비',
+  agentCallName: '로디',
   reportEmail: null,
   agentPersonality: 'FRIENDLY',
   behaviorWarningSensitivity: DEFAULT_BEHAVIOR_WARNING_SENSITIVITY,

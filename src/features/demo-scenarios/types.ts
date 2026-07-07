@@ -1,4 +1,4 @@
-export type DemoScenarioId = 'drowsy_driver' | 'phone_usage' | 'device_operation'
+export type DemoScenarioId = string
 
 export type DemoRiskLevel = 'LOW' | 'MEDIUM' | 'HIGH'
 
@@ -49,7 +49,7 @@ export interface DemoScenarioEvent {
   at: number
   eventType: DemoEventType
   uiState: DemoUiState
-  romiMessage: string | null
+  roadieMessage: string | null
   userSpeech?: string
   requiresResponse: boolean
   responseOptions: DemoResponseOption[]
@@ -65,6 +65,7 @@ export interface DemoScenarioEnding {
 }
 
 export interface DemoScenarioDefinition {
+  id: DemoScenarioId
   scenarioId: DemoScenarioId
   title: string
   description: string

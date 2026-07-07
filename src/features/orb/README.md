@@ -1,6 +1,6 @@
-# Navi Orb
+# ROADIE Orb
 
-Internal visual state module for the Navi assistant orb.
+Internal visual state module for the ROADIE assistant orb.
 
 ## Import
 
@@ -37,7 +37,7 @@ Props:
 - `idle`: standby with no voice energy.
 - `listening`: wake call or user speech capture; pass mic energy.
 - `thinking`: route lookup, action resolving, or assistant reasoning.
-- `speaking`: Navi spoken prompt or response; pass TTS energy when available.
+- `speaking`: ROADIE spoken prompt or response; pass TTS energy when available.
 - `success`: completed action.
 - `error`: failure, blocked permission, or unsafe action.
 

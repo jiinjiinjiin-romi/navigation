@@ -13,7 +13,7 @@ const bootstrapResponse = {
     {
       id: 'profile-1',
       displayName: '민준',
-      agentCallName: '나비',
+      agentCallName: '로디',
       profileImageUrl: null,
       reportEmail: null,
       agentPersonality: 'FRIENDLY',

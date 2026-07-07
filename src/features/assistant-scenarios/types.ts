@@ -27,7 +27,7 @@ export interface AiaiScenarioDefinition {
   steps: AiaiScenarioStep[]
 }
 
-export type NaviAssistantRecommendation =
+export type RoadieAssistantRecommendation =
   | {
     type: 'place'
     title: string
@@ -50,7 +50,7 @@ export type NaviAssistantRecommendation =
     action: string
   }
 
-export interface NaviAssistantStep {
+export interface RoadieAssistantStep {
   id: string
   label: string
   mode: 'idle' | 'assistant-speaking' | 'user-listening' | 'thinking' | 'recommendation'
@@ -59,11 +59,11 @@ export interface NaviAssistantStep {
   statusLabel?: string
   text?: string
   userText?: string
-  recommendations?: NaviAssistantRecommendation[]
+  recommendations?: RoadieAssistantRecommendation[]
 }
 
-export interface NaviAssistantScenario {
+export interface RoadieAssistantScenario {
   id: AiaiScenarioId
   title: string
-  steps: NaviAssistantStep[]
+  steps: RoadieAssistantStep[]
 }

@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react'
 
 /**
- * Visual assistant states supported by the Navi orb.
+ * Visual assistant states supported by the ROADIE orb.
  * Keep detailed behavior notes in docs/assistant/orb.md.
  */
 export type OrbAssistantState =
@@ -13,7 +13,7 @@ export type OrbAssistantState =
   | 'error'
 
 /**
- * Color palettes tuned for assistant surfaces in the Navi app.
+ * Color palettes tuned for assistant surfaces in the ROADIE app.
  */
 export type OrbColorTheme = 'aurora' | 'ocean' | 'violet' | 'daylight'
 

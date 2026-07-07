@@ -22,7 +22,7 @@ const dashboardProfiles: Profile[] = [
   {
     id: 'profile-dad',
     displayName: '아빠',
-    agentCallName: '나비',
+    agentCallName: '로디',
     profileImageUrl: null,
     reportEmail: 'dad@example.com',
     agentPersonality: 'FRIENDLY',
@@ -138,11 +138,11 @@ describe('DashboardApp', () => {
 
     expect(screen.getByRole('heading', { name: '운전 리포트 개요' })).toBeInTheDocument()
     expect(screen.getByText('안전 점수')).toBeInTheDocument()
-    expect(localStorage.getItem('jiin-dashboard-session')).toBe('active')
+    expect(localStorage.getItem('roadie-dashboard-session')).toBe('active')
   })
 
   test('navigates between the main dashboard sections', async () => {
-    localStorage.setItem('jiin-dashboard-session', 'active')
+    localStorage.setItem('roadie-dashboard-session', 'active')
     window.history.replaceState({}, '', '/dashboard/overview')
     render(<DashboardApp />)
 
@@ -161,7 +161,7 @@ describe('DashboardApp', () => {
   })
 
   test('updates driving video event detail when an event marker is selected', () => {
-    localStorage.setItem('jiin-dashboard-session', 'active')
+    localStorage.setItem('roadie-dashboard-session', 'active')
     window.history.replaceState({}, '', '/dashboard/analysis')
     render(<DashboardApp />)
 
@@ -178,7 +178,7 @@ describe('DashboardApp', () => {
   })
 
   test('filters behavior analytics by selected behavior type', () => {
-    localStorage.setItem('jiin-dashboard-session', 'active')
+    localStorage.setItem('roadie-dashboard-session', 'active')
     window.history.replaceState({}, '', '/dashboard/analysis')
     render(<DashboardApp />)
 
@@ -190,7 +190,7 @@ describe('DashboardApp', () => {
   })
 
   test('shows a saved state after changing navigation settings', () => {
-    localStorage.setItem('jiin-dashboard-session', 'active')
+    localStorage.setItem('roadie-dashboard-session', 'active')
     window.history.replaceState({}, '', '/dashboard/settings/navigation')
     render(<DashboardApp />)
 
@@ -209,7 +209,7 @@ describe('DashboardApp', () => {
   })
 
   test('searches favorite place addresses with navigation autocomplete', async () => {
-    localStorage.setItem('jiin-dashboard-session', 'active')
+    localStorage.setItem('roadie-dashboard-session', 'active')
     window.history.replaceState({}, '', '/dashboard/settings/navigation')
     render(<DashboardApp />)
 
@@ -252,7 +252,7 @@ describe('DashboardApp', () => {
   })
 
   test('enables notification save only after notification settings change', async () => {
-    localStorage.setItem('jiin-dashboard-session', 'active')
+    localStorage.setItem('roadie-dashboard-session', 'active')
     window.history.replaceState({}, '', '/dashboard/settings/notifications')
     render(<DashboardApp />)
 
@@ -265,7 +265,7 @@ describe('DashboardApp', () => {
   })
 
   test('keeps selected trip when switching analysis tabs', async () => {
-    localStorage.setItem('jiin-dashboard-session', 'active')
+    localStorage.setItem('roadie-dashboard-session', 'active')
     window.history.replaceState({}, '', '/dashboard/analysis')
     render(<DashboardApp />)
 
@@ -276,7 +276,7 @@ describe('DashboardApp', () => {
   })
 
   test('recalculates overview metrics when the global period changes', async () => {
-    localStorage.setItem('jiin-dashboard-session', 'active')
+    localStorage.setItem('roadie-dashboard-session', 'active')
     window.history.replaceState({}, '', '/dashboard/overview')
     render(<DashboardApp />)
 

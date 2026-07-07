@@ -10,7 +10,7 @@ import {
   getAssistantVisibleOrbState,
   isAssistantVoiceWaveVisible,
   NavigationShell,
-  personalizeDemoRomiMessage,
+  personalizeDemoRoadieMessage,
   shouldCompleteDemoScenario,
   shouldEndDemoDrive,
   shouldOpenDemoReport,
@@ -268,7 +268,7 @@ const mockProfiles: Profile[] = [
   {
     id: 'profile-1',
     displayName: '민준',
-    agentCallName: '나비',
+    agentCallName: '로디',
     profileImageUrl: '/storage/profile-images/default-family/father.svg',
     reportEmail: null,
     agentPersonality: 'FRIENDLY' as const,
@@ -285,7 +285,7 @@ const mockProfiles: Profile[] = [
   {
     id: 'profile-2',
     displayName: '서윤',
-    agentCallName: 'Navi',
+    agentCallName: '로디',
     profileImageUrl: null,
     reportEmail: 'seoyun@example.com',
     agentPersonality: 'WARM' as const,
@@ -316,16 +316,16 @@ function createMockRouteOption(route: Awaited<ReturnType<typeof mockedGetRoute>>
 }
 
 describe('NavigationShell', () => {
-  it('personalizes demo Romi messages with the selected profile name', () => {
+  it('personalizes demo 로디 messages with the selected profile name', () => {
     expect(
-      personalizeDemoRomiMessage('{{profileName}}, 지금 눈이 조금 무거워 보여요.', '아빠'),
+      personalizeDemoRoadieMessage('{{profileName}}, 지금 눈이 조금 무거워 보여요.', '아빠'),
     ).toBe('아빠, 지금 눈이 조금 무거워 보여요.')
     expect(
-      personalizeDemoRomiMessage('{{profileName}}, 전방을 봐주세요.', '지우'),
+      personalizeDemoRoadieMessage('{{profileName}}, 전방을 봐주세요.', '지우'),
     ).toBe('지우, 전방을 봐주세요.')
   })
 
-  it('shows user response before the next Romi response in a drowsy branch', () => {
+  it('shows user response before the next 로디 response in a drowsy branch', () => {
     let state = createInitialDemoScenarioState('drowsy_driver')
 
     while (state.scenarioEvent?.id !== 'drowsy_first_warning') {
@@ -349,7 +349,7 @@ describe('NavigationShell', () => {
     expect(romiStep.mode).toBe('assistant-speaking')
   })
 
-  it('preserves user speech before the next Romi response for every demo response branch', () => {
+  it('preserves user speech before the next 로디 response for every demo response branch', () => {
     getDemoScenarios().forEach((scenario) => {
       scenario.events
         .filter((event) => event.requiresResponse)
@@ -376,10 +376,10 @@ describe('NavigationShell', () => {
             const nextEvent = nextState.scenarioEvent
             const romiStep = createDemoAssistantStep(nextState, '민준')
 
-            if (nextEvent?.romiMessage) {
+            if (nextEvent?.roadieMessage) {
               expect(romiStep.userText, `${scenario.scenarioId}:${event.id}:${option.value}`).toBeUndefined()
               expect(romiStep.text, `${scenario.scenarioId}:${event.id}:${option.value}`).toBe(
-                personalizeDemoRomiMessage(nextEvent.romiMessage, '민준'),
+                personalizeDemoRoadieMessage(nextEvent.roadieMessage, '민준'),
               )
               expect(romiStep.mode, `${scenario.scenarioId}:${event.id}:${option.value}`).toBe('assistant-speaking')
             }
@@ -527,7 +527,7 @@ describe('NavigationShell', () => {
       const reportReadyState = advanceDemoScenarioForPresenter(endedState)
 
       expect(endedState.scenarioEvent?.eventType, scenario.scenarioId).toBe('SESSION_ENDED')
-      expect(endedState.scenarioEvent?.romiMessage, scenario.scenarioId).toBe('오늘 주행이 끝났어요. 운전 리포트를 정리해드릴게요.')
+      expect(endedState.scenarioEvent?.roadieMessage, scenario.scenarioId).toBe('오늘 주행이 끝났어요. 운전 리포트를 정리해드릴게요.')
       expect(shouldEndDemoDrive(endedState), scenario.scenarioId).toBe(true)
       expect(shouldCompleteDemoScenario(endedState), scenario.scenarioId).toBe(false)
       expect(shouldOpenDemoReport(endedState), scenario.scenarioId).toBe(false)
@@ -602,7 +602,7 @@ describe('NavigationShell', () => {
       {
         id: 'itunes-drive-neon',
         title: 'Drive Neon',
-        artist: 'Navi Session',
+        artist: 'ROADIE Session',
         album: 'City Pulse',
         duration: '3:24',
         durationSeconds: 204,
@@ -837,11 +837,11 @@ describe('NavigationShell', () => {
     expect(avatars[0]).toHaveAttribute('data-variant', 'beam')
     expect(avatars[0]).toHaveAttribute('data-size', '176')
     expect(avatars[0]).toHaveAttribute('data-square', 'true')
-    expect(screen.queryByText('나비')).not.toBeInTheDocument()
-    expect(screen.queryByText('Navi')).not.toBeInTheDocument()
+    expect(screen.queryByText('로디')).not.toBeInTheDocument()
+    expect(screen.queryByText('로디')).not.toBeInTheDocument()
     expect(screen.queryByRole('img')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: '프로필 추가' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Navi 시작' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '로디 시작' })).toBeDisabled()
     expect(screen.getByRole('button', { name: '프로필 수정' })).toBeDisabled()
     expect(screen.queryByRole('button', { name: '민준 프로필 메뉴' })).not.toBeInTheDocument()
 
@@ -944,7 +944,7 @@ describe('NavigationShell', () => {
     expect(within(musicPopover).getByText('Soft Focus')).toBeInTheDocument()
 
     await clickPresenterNext()
-    expect(await screen.findByTestId('navi-assistant-speech-text')).toHaveAttribute(
+    expect(await screen.findByTestId('roadie-assistant-speech-text')).toHaveAttribute(
       'aria-label',
       '민준, 음악 화면을 보는 시간이 길어지고 있어요. 전방을 봐주세요.',
     )
@@ -956,7 +956,7 @@ describe('NavigationShell', () => {
     expect(within(musicPopover).getByRole('button', { name: /Soft Focus/ })).toHaveAttribute('aria-pressed', 'true')
 
     await clickPresenterNext()
-    expect(await screen.findByTestId('navi-assistant-speech-text')).toHaveAttribute(
+    expect(await screen.findByTestId('roadie-assistant-speech-text')).toHaveAttribute(
       'aria-label',
       '음악은 제가 대신 바꿔드릴까요?',
     )
@@ -1102,7 +1102,7 @@ describe('NavigationShell', () => {
       })
     })
     expect(await screen.findByTestId('profile-calibration-flow')).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Romi가 개인화 맞춤 설정을 준비하고 있어요' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '로디가 개인화 맞춤 설정을 준비하고 있어요' })).toBeInTheDocument()
   })
 
   it('runs calibration automatically for a newly created profile before scenario selection', async () => {
@@ -1166,7 +1166,7 @@ describe('NavigationShell', () => {
 
     expect(screen.getByRole('heading', { name: '프로필 설정' })).toBeInTheDocument()
     expect(screen.getByLabelText('프로필 이름')).toHaveValue('민준')
-    expect(screen.getByLabelText('호출 이름')).toHaveValue('나비')
+    expect(screen.getByLabelText('호출 이름')).toHaveValue('로디')
     expect(screen.queryByLabelText('Agent 성격')).not.toBeInTheDocument()
 
     fireEvent.change(screen.getByLabelText('프로필 이름'), {
@@ -1177,7 +1177,7 @@ describe('NavigationShell', () => {
     await waitFor(() => {
       expect(mockedUpdateProfile).toHaveBeenCalledWith('profile-1', {
         displayName: '민준 수정',
-        agentCallName: '나비',
+        agentCallName: '로디',
         reportEmail: null,
         agentPersonality: 'FRIENDLY',
         behaviorWarningSensitivity: DEFAULT_BEHAVIOR_WARNING_SENSITIVITY,
@@ -1200,7 +1200,7 @@ describe('NavigationShell', () => {
     const stage = screen.getByTestId('navigation-stage')
     const videoPanel = screen.getByTestId('driver-video-panel')
     const viewport = screen.getByTestId('navigation-viewport')
-    const debugPanel = screen.getByTestId('navi-assistant-debug-panel')
+    const debugPanel = screen.getByTestId('roadie-assistant-debug-panel')
 
     expect(stage).toHaveClass('grid')
     expect(stage).toHaveClass('grid-cols-[minmax(0,1fr)_24rem]')
@@ -1292,7 +1292,7 @@ describe('NavigationShell', () => {
     inputClick.mockRestore()
   })
 
-  it('renders the Navi assistant orb with the internal VoiceOrb contract', () => {
+  it('renders the 로디 assistant orb with the internal VoiceOrb contract', () => {
     const queryClient = new QueryClient()
 
     render(
@@ -1301,14 +1301,14 @@ describe('NavigationShell', () => {
       </QueryClientProvider>,
     )
 
-    expect(screen.getByRole('button', { name: 'Navi 호출' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Navi 호출' })).toHaveClass('right-0')
+    expect(screen.getByRole('button', { name: '로디 호출' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '로디 호출' })).toHaveClass('right-0')
     expect(screen.getByTestId('voice-orb')).toHaveAttribute('data-state', 'idle')
     expect(screen.getByTestId('voice-orb')).toHaveAttribute('data-energy', '0')
     expect(screen.getByTestId('voice-orb')).toHaveAttribute('data-color-theme', 'daylight')
   })
 
-  it('steps through the dummy Navi assistant scenario without auto-playing it', async () => {
+  it('steps through the dummy 로디 assistant scenario without auto-playing it', async () => {
     const queryClient = new QueryClient()
 
     render(
@@ -1317,23 +1317,23 @@ describe('NavigationShell', () => {
       </QueryClientProvider>,
     )
 
-    expect(screen.getByTestId('navi-assistant-debug-panel')).toBeInTheDocument()
+    expect(screen.getByTestId('roadie-assistant-debug-panel')).toBeInTheDocument()
     expect(screen.getByText('정상 주행')).toBeInTheDocument()
     expect(screen.getByText('1 / 8')).toBeInTheDocument()
-    expect(screen.queryByTestId('navi-assistant-panel')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('roadie-assistant-panel')).not.toBeInTheDocument()
     expect(screen.queryByRole('option', { name: '졸음 감지' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('option', { name: '나비야 호출' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: '로디야 호출' })).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '다음 AI 시나리오 단계' }))
 
-    expect(screen.getByTestId('navi-assistant-panel')).toBeInTheDocument()
-    expect(screen.getByTestId('navi-assistant-panel')).toHaveClass('overflow-visible')
-    expect(screen.getByTestId('navi-assistant-panel')).toHaveClass('pointer-events-none')
-    expect(screen.getByTestId('navi-assistant-aura')).toHaveClass('navi-assistant-aura')
-    expect(screen.getByTestId('navi-assistant-orb-slot')).toHaveClass('absolute')
-    expect(screen.getByTestId('navi-assistant-content')).toHaveClass('pt-[12rem]')
-    expect(screen.getByRole('button', { name: 'Navi AI 에이전트 닫기' })).toBeInTheDocument()
-    expect(await screen.findByTestId('navi-assistant-speech-text')).toHaveAttribute(
+    expect(screen.getByTestId('roadie-assistant-panel')).toBeInTheDocument()
+    expect(screen.getByTestId('roadie-assistant-panel')).toHaveClass('overflow-visible')
+    expect(screen.getByTestId('roadie-assistant-panel')).toHaveClass('pointer-events-none')
+    expect(screen.getByTestId('roadie-assistant-aura')).toHaveClass('roadie-assistant-aura')
+    expect(screen.getByTestId('roadie-assistant-orb-slot')).toHaveClass('absolute')
+    expect(screen.getByTestId('roadie-assistant-content')).toHaveClass('pt-[12rem]')
+    expect(screen.getByRole('button', { name: '로디 AI 에이전트 닫기' })).toBeInTheDocument()
+    expect(await screen.findByTestId('roadie-assistant-speech-text')).toHaveAttribute(
       'aria-label',
       '잠시 쉬어가면 좋겠습니다. 신탄진 졸음쉼터를 찾아드릴까요?',
     )
@@ -1345,17 +1345,17 @@ describe('NavigationShell', () => {
     fireEvent.click(screen.getByRole('button', { name: '다음 AI 시나리오 단계' }))
     expect(screen.getByText('듣는 중...')).toBeInTheDocument()
     expect(screen.queryByTestId('voice-wave')).not.toBeInTheDocument()
-    expect(await screen.findByTestId('navi-assistant-user-text')).toHaveAttribute(
+    expect(await screen.findByTestId('roadie-assistant-user-text')).toHaveAttribute(
       'aria-label',
       '신탄진 졸음쉼터로 안내해줘',
     )
 
     fireEvent.click(screen.getByRole('button', { name: '다음 AI 시나리오 단계' }))
-    expect(screen.getByTestId('navi-assistant-recommendations')).toBeInTheDocument()
-    expect(screen.getByTestId('navi-assistant-recommendations')).toHaveClass('pointer-events-auto')
-    expect(screen.getByTestId('navi-assistant-recommendations-scroll')).toHaveClass('max-h-[16rem]')
-    expect(screen.getByTestId('navi-assistant-recommendations-scroll')).toHaveClass('overscroll-contain')
-    expect(screen.getByTestId('navi-assistant-route-recommendation')).toBeInTheDocument()
+    expect(screen.getByTestId('roadie-assistant-recommendations')).toBeInTheDocument()
+    expect(screen.getByTestId('roadie-assistant-recommendations')).toHaveClass('pointer-events-auto')
+    expect(screen.getByTestId('roadie-assistant-recommendations-scroll')).toHaveClass('max-h-[16rem]')
+    expect(screen.getByTestId('roadie-assistant-recommendations-scroll')).toHaveClass('overscroll-contain')
+    expect(screen.getByTestId('roadie-assistant-route-recommendation')).toBeInTheDocument()
     expect(await screen.findByTestId('voice-wave')).toHaveAttribute('data-active', 'true')
     expect(screen.queryByText('추천 경로')).not.toBeInTheDocument()
     expect(screen.queryByText('최단 거리 경로')).not.toBeInTheDocument()
@@ -1374,18 +1374,18 @@ describe('NavigationShell', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '다음 AI 시나리오 단계' }))
     fireEvent.click(screen.getByRole('button', { name: '다음 AI 시나리오 단계' }))
-    const selectedRouteCard = screen.getByTestId('navi-assistant-selected-route-card')
+    const selectedRouteCard = screen.getByTestId('roadie-assistant-selected-route-card')
     expect(selectedRouteCard).toBeInTheDocument()
     expect(screen.queryByText('추천')).not.toBeInTheDocument()
     expect(screen.queryByText('1개')).not.toBeInTheDocument()
-    expect(screen.queryByTestId('navi-assistant-route-recommendation')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('roadie-assistant-route-recommendation')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '죽암휴게소(부산방향) 경유지 추가' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '망향휴게소(부산방향) 경유지 추가' })).not.toBeInTheDocument()
     expect(within(selectedRouteCard).getByText('신탄진 졸음쉼터(부산방향)')).toBeInTheDocument()
     expect(within(selectedRouteCard).getByText('안내 중')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '다음 AI 시나리오 단계' }))
-    const completionCard = screen.getByTestId('navi-assistant-completion-card')
+    const completionCard = screen.getByTestId('roadie-assistant-completion-card')
     expect(completionCard).toBeInTheDocument()
     expect(screen.queryByText('추천')).not.toBeInTheDocument()
     expect(screen.queryByText('1개')).not.toBeInTheDocument()
@@ -1395,7 +1395,7 @@ describe('NavigationShell', () => {
     expect(within(completionCard).getByText('안내 경로가 적용되었습니다.')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'AI 시나리오 초기화' }))
-    expect(screen.queryByTestId('navi-assistant-panel')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('roadie-assistant-panel')).not.toBeInTheDocument()
     expect(screen.getByText('1 / 8')).toBeInTheDocument()
   })
 
@@ -1428,14 +1428,14 @@ describe('NavigationShell', () => {
     fireEvent.click(screen.getByRole('button', { name: '다음 AI 시나리오 단계' }))
     fireEvent.click(screen.getByRole('button', { name: '다음 AI 시나리오 단계' }))
 
-    expect(screen.getByTestId('navi-assistant-recommendations')).toBeInTheDocument()
+    expect(screen.getByTestId('roadie-assistant-recommendations')).toBeInTheDocument()
     expect(await screen.findByText('Bright Road')).toBeInTheDocument()
-    expect(screen.getByTestId('navi-assistant-music-recommendation-card')).toBeInTheDocument()
+    expect(screen.getByTestId('roadie-assistant-music-recommendation-card')).toBeInTheDocument()
     expect(screen.queryByText('음악 추천 열기')).not.toBeInTheDocument()
     expect(screen.getByText('Real Artist')).toBeInTheDocument()
     expect(screen.getByText('Morning Drive')).toBeInTheDocument()
     expect(screen.getByText('2:58')).toBeInTheDocument()
-    expect(within(screen.getByTestId('navi-assistant-music-recommendation-card')).queryByRole('button', { name: '재생' })).not.toBeInTheDocument()
+    expect(within(screen.getByTestId('roadie-assistant-music-recommendation-card')).queryByRole('button', { name: '재생' })).not.toBeInTheDocument()
   })
 
   it('shows a spinner instead of fallback music while assistant recommendation is loading', async () => {
@@ -1480,7 +1480,7 @@ describe('NavigationShell', () => {
     expect(isAssistantVoiceWaveVisible(agentStep)).toBe(true)
   })
 
-  it('closes the expanded Navi assistant panel back to the floating orb', () => {
+  it('closes the expanded 로디 assistant panel back to the floating orb', () => {
     const queryClient = new QueryClient()
 
     render(
@@ -1490,12 +1490,12 @@ describe('NavigationShell', () => {
     )
 
     fireEvent.click(screen.getByRole('button', { name: '다음 AI 시나리오 단계' }))
-    expect(screen.getByTestId('navi-assistant-panel')).toBeInTheDocument()
+    expect(screen.getByTestId('roadie-assistant-panel')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Navi AI 에이전트 닫기' }))
+    fireEvent.click(screen.getByRole('button', { name: '로디 AI 에이전트 닫기' }))
 
-    expect(screen.queryByTestId('navi-assistant-panel')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Navi 호출' })).toBeInTheDocument()
+    expect(screen.queryByTestId('roadie-assistant-panel')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '로디 호출' })).toBeInTheDocument()
     expect(screen.getByTestId('voice-orb')).toHaveAttribute('data-state', 'idle')
   })
 
@@ -1559,7 +1559,7 @@ describe('NavigationShell', () => {
 
     expect(await screen.findByRole('dialog', { name: '설정' })).toBeInTheDocument()
     expect(screen.getByTestId('settings-drawer')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Navi 호출' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '로디 호출' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: '설정' })).toHaveAttribute('aria-expanded', 'true')
     expect(await screen.findByText('민준')).toBeInTheDocument()
     expect(screen.queryByText('백엔드 사용자')).not.toBeInTheDocument()
@@ -2137,7 +2137,7 @@ describe('NavigationShell', () => {
     expect(screen.getByText('12.8 km')).toBeInTheDocument()
   })
 
-  it('shows a Navi thinking modal while route candidates are loading', async () => {
+  it('shows a 로디 thinking modal while route candidates are loading', async () => {
     let resolveRouteOptions!: (options: Awaited<ReturnType<typeof getRouteOptions>>) => void
     mockedGetRouteOptions.mockReturnValue(new Promise((resolve) => {
       resolveRouteOptions = resolve

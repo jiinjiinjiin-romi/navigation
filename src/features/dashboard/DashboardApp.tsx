@@ -66,7 +66,7 @@ import {
 import { searchPlaces } from '../navigation/api/tmapApi'
 import type { Place } from '../navigation/types'
 
-const SESSION_KEY = 'jiin-dashboard-session'
+const SESSION_KEY = 'roadie-dashboard-session'
 
 type DashboardPath =
   | '/dashboard/login'
@@ -367,7 +367,7 @@ const DEFAULT_DASHBOARD_STATE: DashboardState = {
 
 const DEFAULT_PROFILE_SETTINGS: ProfileSettings = {
   displayName: '안정현',
-  callName: '나비야',
+  callName: '로디야',
   reportEmail: 'driver@example.com',
   agentPersonality: 'friendly',
   preferences: { mapMode: '2D', guidanceVolume: 72, ttsSpeed: 1.05, warningMode: 'balanced' },
@@ -868,7 +868,7 @@ function DashboardBrand({ inverted = false }: { inverted?: boolean }) {
         <SteeringWheel className="size-6" weight="fill" />
       </div>
       <div>
-        <div className={cn('text-base font-semibold tracking-normal', inverted ? 'text-white' : 'text-gray-900')}>JIIN</div>
+        <div className={cn('text-base font-semibold tracking-normal', inverted ? 'text-white' : 'text-gray-900')}>ROADIE</div>
         <div className={cn('text-xs font-medium', inverted ? 'text-white/60' : 'text-gray-500')}>운전자 대시보드</div>
       </div>
     </div>
@@ -1783,7 +1783,7 @@ function NavigationSettingsPage({ favoritePlaces, notify, profileSettings, setFa
           <Panel title="프로필과 안내" icon={<UserCircle className="size-5" weight="bold" />}>
             <div className="grid gap-3 md:grid-cols-2">
               <TextField label="프로필 이름" value={draft.displayName} onChange={(value) => setDraft((current) => ({ ...current, displayName: value }))} />
-              <TextField label="Navi 호출명" value={draft.callName} onChange={(value) => setDraft((current) => ({ ...current, callName: value }))} />
+              <TextField label="로디 호출명" value={draft.callName} onChange={(value) => setDraft((current) => ({ ...current, callName: value }))} />
               <TextField label="리포트 이메일" value={draft.reportEmail} onChange={(value) => setDraft((current) => ({ ...current, reportEmail: value }))} />
               <SelectControl label="Agent 성격" value={draft.agentPersonality} onChange={(value) => setDraft((current) => ({ ...current, agentPersonality: value as ProfileSettings['agentPersonality'] }))} options={[['friendly', '친근함'], ['formal', '정중함'], ['warm', '부드러움'], ['concise', '간결함']]} />
             </div>

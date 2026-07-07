@@ -1,18 +1,18 @@
 import { AIAI_SCENARIO_IDS, debugScenarios } from './debugScenarios'
 import type {
   AiaiScenarioStep,
-  NaviAssistantScenario,
-  NaviAssistantStep,
+  RoadieAssistantScenario,
+  RoadieAssistantStep,
 } from './types'
 
 export { AIAI_SCENARIO_IDS }
 
-export function createNaviAssistantScenarios(): NaviAssistantScenario[] {
+export function createRoadieAssistantScenarios(): RoadieAssistantScenario[] {
   return debugScenarios.map((scenario) => ({
     id: scenario.id,
     title: createVisibleScenarioTitle(scenario.title),
     steps: getVisibleScenarioSteps(scenario.steps).map(({ step, sourceIndex }) => (
-      createNaviAssistantStep(step, sourceIndex)
+      createRoadieAssistantStep(step, sourceIndex)
     )),
   }))
 }
@@ -34,10 +34,10 @@ function isDetectionOnlyStep(step: AiaiScenarioStep) {
   return Boolean(step.detectionEvent && !step.agentSpeech && !step.userSpeech && !step.actionLabel)
 }
 
-function createNaviAssistantStep(
+function createRoadieAssistantStep(
   step: AiaiScenarioStep,
   index: number,
-): NaviAssistantStep {
+): RoadieAssistantStep {
   const successKeywords = ['완료', '재생', '전송 완료', '경로 시작', '차량 제어', '음성 안내 강화']
   const successText = `${step.title} ${step.actionLabel ?? ''}`
   const isSuccessStep = successKeywords.some((keyword) => successText.includes(keyword))

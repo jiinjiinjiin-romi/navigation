@@ -59,11 +59,11 @@ import {
 import { VoiceOrb } from '@/features/orb'
 import type { OrbAssistantState, OrbColorTheme } from '@/features/orb'
 import {
-  createNaviAssistantScenarios,
+  createRoadieAssistantScenarios,
   type AiaiScenarioId,
-  type NaviAssistantRecommendation,
-  type NaviAssistantScenario,
-  type NaviAssistantStep,
+  type RoadieAssistantRecommendation,
+  type RoadieAssistantScenario,
+  type RoadieAssistantStep,
 } from '@/features/assistant-scenarios'
 import {
   DEMO_DESTINATION,
@@ -730,10 +730,10 @@ const SIMULATION_UI_UPDATE_INTERVAL_MS = 200
 const GUIDANCE_DISTANCE_UPDATE_INTERVAL_MS = 500
 const NAVI_ORB_THEME: OrbColorTheme = 'daylight'
 const NAVI_ORB_CONTROL_SIZE = 132
-const NAVI_ASSISTANT_PANEL_ORB_SIZE = 132
-const NAVI_ASSISTANT_CONTENT_REVEAL_DELAY_SECONDS = 0.52
-const NAVI_ASSISTANT_TEXT_STAGGER_SECONDS = 0.018
-const NAVI_ASSISTANT_USER_WORD_STAGGER_SECONDS = 0.08
+const ROADIE_ASSISTANT_PANEL_ORB_SIZE = 132
+const ROADIE_ASSISTANT_CONTENT_REVEAL_DELAY_SECONDS = 0.52
+const ROADIE_ASSISTANT_TEXT_STAGGER_SECONDS = 0.018
+const ROADIE_ASSISTANT_USER_WORD_STAGGER_SECONDS = 0.08
 const DRIVING_ASSIST_DEBUG_QUERY_PARAM = 'debugSigns'
 const DRIVING_ASSIST_DEBUG_SEQUENCE_INTERVAL_MS = 1400
 const DEFAULT_CURRENT_LOCATION_PLACE: Place = {
@@ -751,7 +751,7 @@ const FALLBACK_MUSIC_LIBRARY: UiMusicTrack[] = [
   {
     id: 'drive-neon',
     title: 'Drive Neon',
-    artist: 'Navi Session',
+    artist: 'ROADIE Session',
     album: 'City Pulse',
     duration: '3:24',
     durationSeconds: 204,
@@ -785,8 +785,8 @@ const FALLBACK_MUSIC_LIBRARY: UiMusicTrack[] = [
     coverTone: 'from-[#101828] via-[#475467] to-[#6d5df6]',
   },
 ]
-type NaviAssistantScenarioId = AiaiScenarioId
-const NAVI_ASSISTANT_SCENARIOS: NaviAssistantScenario[] = createNaviAssistantScenarios()
+type RoadieAssistantScenarioId = AiaiScenarioId
+const ROADIE_ASSISTANT_SCENARIOS: RoadieAssistantScenario[] = createRoadieAssistantScenarios()
 const DEMO_SCENARIO_DEFINITIONS = getDemoScenarios()
 const DEMO_DESTINATION_PLACE: Place = {
   id: 'demo-destination-ossi-kalguksu',
@@ -831,17 +831,17 @@ function getDriverVideoMimeType(file: File) {
 }
 
 export function getAssistantSpeechCharacterDelaySeconds(index: number) {
-  return index * NAVI_ASSISTANT_TEXT_STAGGER_SECONDS
+  return index * ROADIE_ASSISTANT_TEXT_STAGGER_SECONDS
 }
 
 export function getAssistantVisibleOrbState(
-  assistantStep: Pick<NaviAssistantStep, 'orbState'>,
+  assistantStep: Pick<RoadieAssistantStep, 'orbState'>,
 ): OrbAssistantState {
   return assistantStep.orbState
 }
 
 export function isAssistantVoiceWaveVisible(
-  assistantStep: Pick<NaviAssistantStep, 'orbState' | 'statusLabel'>,
+  assistantStep: Pick<RoadieAssistantStep, 'orbState' | 'statusLabel'>,
 ) {
   return getAssistantVisibleOrbState(assistantStep) === 'speaking' && !assistantStep.statusLabel
 }
@@ -1011,7 +1011,7 @@ export function NavigationShell({
   const [musicTrackId, setMusicTrackId] = useState(FALLBACK_MUSIC_LIBRARY[0].id)
   const [musicProgressSeconds, setMusicProgressSeconds] = useState(0)
   const [musicSearchKeyword, setMusicSearchKeyword] = useState('')
-  const [assistantScenarioId, setAssistantScenarioId] = useState<NaviAssistantScenarioId>('drowsiness-rest-area')
+  const [assistantScenarioId, setAssistantScenarioId] = useState<RoadieAssistantScenarioId>('drowsiness-rest-area')
   const [assistantStepIndex, setAssistantStepIndex] = useState(0)
   const [driverVideo, setDriverVideo] = useState<DriverVideoSource | null>(null)
   const [driverVideoError, setDriverVideoError] = useState(false)
@@ -1044,7 +1044,7 @@ export function NavigationShell({
   const debouncedDestinationKeyword = useDebouncedValue(destinationKeyword.trim(), SEARCH_DEBOUNCE_MS)
   const debouncedMusicSearchKeyword = useDebouncedValue(musicSearchKeyword.trim(), SEARCH_DEBOUNCE_MS)
   const assistantMusicRecommendationVisible = useMemo(() => {
-    const scenario = NAVI_ASSISTANT_SCENARIOS.find((item) => item.id === assistantScenarioId) ?? NAVI_ASSISTANT_SCENARIOS[0]
+    const scenario = ROADIE_ASSISTANT_SCENARIOS.find((item) => item.id === assistantScenarioId) ?? ROADIE_ASSISTANT_SCENARIOS[0]
     const step = scenario.steps[Math.min(assistantStepIndex, scenario.steps.length - 1)]
 
     return Boolean(step.recommendations?.some((recommendation) => recommendation.type === 'music'))
@@ -1497,7 +1497,7 @@ export function NavigationShell({
   const routeSearchSavedPlaces: RouteSearchSavedPlace[] = savedPlaceQuickItems
   const showSuggestions = Boolean(activeField && activePlaces.length > 0)
   const assistantScenario = useMemo(
-    () => NAVI_ASSISTANT_SCENARIOS.find((scenario) => scenario.id === assistantScenarioId) ?? NAVI_ASSISTANT_SCENARIOS[0],
+    () => ROADIE_ASSISTANT_SCENARIOS.find((scenario) => scenario.id === assistantScenarioId) ?? ROADIE_ASSISTANT_SCENARIOS[0],
     [assistantScenarioId],
   )
   const assistantStep = assistantScenario.steps[
@@ -1581,7 +1581,7 @@ export function NavigationShell({
     )
   }, [])
 
-  const selectAssistantScenario = useCallback((scenarioId: NaviAssistantScenarioId) => {
+  const selectAssistantScenario = useCallback((scenarioId: RoadieAssistantScenarioId) => {
     setAssistantScenarioId(scenarioId)
     setAssistantStepIndex(0)
   }, [])
@@ -2276,7 +2276,7 @@ export function NavigationShell({
               }}
               onRequestLocation={requestCurrentLocation}
             />
-            <NaviOrbControl
+            <RoadieOrbControl
               assistantStep={visibleAssistantStep}
               hidden={Boolean(activeSidePanel || (musicModalOpen && demoScenarioState?.scenario?.scenarioId !== 'device_operation'))}
               motionTiming={motionTiming}
@@ -2635,7 +2635,7 @@ export function NavigationShell({
           }}
         />
       ) : navigationEntryMode === 'free-navigation' ? (
-        <NaviAssistantDebugPanel
+        <RoadieAssistantDebugPanel
           motionTiming={motionTiming}
           scenario={assistantScenario}
           scenarioId={assistantScenarioId}
@@ -2719,7 +2719,7 @@ function NavigationProfileSetup({
   onUpdateProfile: () => void
 }) {
   const canCreate = profiles.length < limit
-  const startLabel = selectedProfile ? `${selectedProfile.displayName}(으)로 시작` : 'Navi 시작'
+  const startLabel = selectedProfile ? `${selectedProfile.displayName}(으)로 시작` : '로디 시작'
   const formMode = profileSetupView === 'edit' ? 'edit' : 'create'
 
   return (
@@ -2957,7 +2957,7 @@ function ProfileCalibrationFlow({
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-8 py-8 max-sm:px-5">
         <p className="text-sm font-bold text-[var(--nav-primary)]">{profileName} 프로필</p>
         <h2 className="mt-2 text-2xl font-black tracking-normal text-[var(--nav-ink)]">
-          Romi가 개인화 맞춤 설정을 준비하고 있어요
+          로디가 개인화 맞춤 설정을 준비하고 있어요
         </h2>
         <p className="mt-3 max-w-[34rem] text-sm font-semibold leading-6 text-[var(--nav-muted)]">
           평소 자세와 시선 패턴을 확인해 {profileName}님에게 맞는 보조 방식을 적용합니다.
@@ -3102,7 +3102,7 @@ function ProfileSettingsForm({
                 {form.displayName || '새 운전자'}
               </span>
               <span className="rounded-full bg-[var(--nav-panel)] px-3 py-1 text-sm font-semibold text-[var(--nav-muted)]">
-                {form.agentCallName || '나비'}
+                {form.agentCallName || '로디'}
               </span>
             </div>
           </div>
@@ -3716,7 +3716,7 @@ export function DriverVideoPanel({
   )
 }
 
-function NaviOrbControl({
+function RoadieOrbControl({
   assistantStep,
   hidden,
   musicRecommendationLoading,
@@ -3728,13 +3728,13 @@ function NaviOrbControl({
   profileName,
   reducedMotion,
 }: {
-  assistantStep: NaviAssistantStep
+  assistantStep: RoadieAssistantStep
   hidden: boolean
   musicRecommendationLoading: boolean
   musicRecommendationTrack: UiMusicTrack
   motionTiming: MotionTiming
   onClose: () => void
-  onRecommendationAction: (recommendation: NaviAssistantRecommendation) => void
+  onRecommendationAction: (recommendation: RoadieAssistantRecommendation) => void
   onWakeCall: () => void
   profileName: string | null
   reducedMotion: boolean
@@ -3744,7 +3744,7 @@ function NaviOrbControl({
   const showVoiceWave = isAssistantVoiceWaveVisible(assistantStep)
   const contentRevealDelay = assistantStep.text || assistantStep.userText
     ? 0
-    : NAVI_ASSISTANT_CONTENT_REVEAL_DELAY_SECONDS
+    : ROADIE_ASSISTANT_CONTENT_REVEAL_DELAY_SECONDS
   const speechText = assistantStep.text ?? assistantStep.userText ?? ''
   const speakerRole = assistantStep.text ? 'assistant' : assistantStep.userText ? 'user' : null
   const audioRef = useRef<HTMLAudioElement | null>(null)
@@ -3814,12 +3814,12 @@ function NaviOrbControl({
 
   return (
     <motion.div
-      aria-label="Navi AI 에이전트"
+      aria-label="로디 AI 에이전트"
       className={[
         'pointer-events-none absolute right-6 top-6 z-40 text-center text-[var(--nav-ink)] max-sm:right-3 max-sm:top-3',
         'overflow-visible',
       ].join(' ')}
-      data-testid={expanded ? 'navi-assistant-panel' : undefined}
+      data-testid={expanded ? 'roadie-assistant-panel' : undefined}
       initial={false}
       animate={{
         borderRadius: expanded ? 20 : 999,
@@ -3854,8 +3854,8 @@ function NaviOrbControl({
     >
       <motion.div
         aria-hidden="true"
-        className="navi-assistant-aura absolute inset-0 rounded-[inherit]"
-        data-testid="navi-assistant-aura"
+        className="roadie-assistant-aura absolute inset-0 rounded-[inherit]"
+        data-testid="roadie-assistant-aura"
         initial={false}
         animate={{
           opacity: expanded ? 1 : 0,
@@ -3871,7 +3871,7 @@ function NaviOrbControl({
       />
       {expanded ? (
         <motion.button
-          aria-label="Navi AI 에이전트 닫기"
+          aria-label="로디 AI 에이전트 닫기"
           className="pointer-events-auto absolute right-3 top-3 z-10 grid size-9 place-items-center rounded-full bg-[var(--nav-panel)] text-[var(--nav-muted)] transition hover:bg-[var(--nav-selection)] hover:text-[var(--nav-ink)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-ai-primary)]"
           initial={{ opacity: 0, scale: 0.92 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -3887,13 +3887,13 @@ function NaviOrbControl({
         </motion.button>
       ) : (
         <button
-          aria-label="Navi 호출"
+          aria-label="로디 호출"
           className="pointer-events-auto absolute right-0 top-0 z-10 size-[8.25rem] rounded-full bg-transparent outline-none transition focus-visible:ring-2 focus-visible:ring-[var(--nav-ai-secondary)]"
-          data-testid="navi-orb-control"
+          data-testid="roadie-orb-control"
           onClick={onWakeCall}
           type="button"
         >
-          <span className="sr-only">Navi 음성 어시스턴트 호출</span>
+          <span className="sr-only">로디 음성 어시스턴트 호출</span>
         </button>
       )}
       <motion.div
@@ -3901,15 +3901,15 @@ function NaviOrbControl({
       >
         <motion.div
           className="absolute grid place-items-center overflow-visible"
-          data-testid="navi-assistant-orb-slot"
+          data-testid="roadie-assistant-orb-slot"
           animate={{
             left: expanded ? '50%' : '100%',
             top: expanded ? 28 : 0,
             x: expanded ? '-50%' : '-100%',
           }}
           style={{
-            height: NAVI_ASSISTANT_PANEL_ORB_SIZE,
-            width: NAVI_ASSISTANT_PANEL_ORB_SIZE,
+            height: ROADIE_ASSISTANT_PANEL_ORB_SIZE,
+            width: ROADIE_ASSISTANT_PANEL_ORB_SIZE,
           }}
           transition={{
             ease: motionTiming.duration === 0 ? undefined : [0.34, 0, 0.2, 1],
@@ -3929,7 +3929,7 @@ function NaviOrbControl({
         {expanded ? (
           <div
             className="relative z-[1] flex min-h-0 flex-col items-center px-5 pb-5 pt-[12rem]"
-            data-testid="navi-assistant-content"
+            data-testid="roadie-assistant-content"
           >
             <motion.div
               className="flex min-h-25 w-full flex-col items-center"
@@ -4011,7 +4011,7 @@ function AssistantSpeechText({
     <p
       aria-label={text}
       className="max-w-[17rem] text-pretty text-xl font-bold leading-8 tracking-normal"
-      data-testid="navi-assistant-speech-text"
+      data-testid="roadie-assistant-speech-text"
     >
       <span className="sr-only">{text}</span>
       <span aria-hidden="true">
@@ -4051,7 +4051,7 @@ function AssistantUserText({
       <p
         aria-label={text}
         className="max-w-[16rem] text-pretty text-xl font-bold leading-8 tracking-normal"
-        data-testid="navi-assistant-user-text"
+        data-testid="roadie-assistant-user-text"
       >
         {text}
       </p>
@@ -4064,7 +4064,7 @@ function AssistantUserText({
     <p
       aria-label={text}
       className="max-w-[16rem] text-pretty text-xl font-bold leading-8 tracking-normal"
-      data-testid="navi-assistant-user-text"
+      data-testid="roadie-assistant-user-text"
     >
       <span className="sr-only">{text}</span>
       <span aria-hidden="true">
@@ -4076,11 +4076,11 @@ function AssistantUserText({
             <span
               className={[
                 'inline-block whitespace-pre-wrap',
-                isSpace ? '' : 'navi-assistant-user-word',
+                isSpace ? '' : 'roadie-assistant-user-word',
               ].join(' ')}
               key={`${word}-${index}`}
               style={{
-                '--navi-assistant-user-word-delay': `${visibleWordIndex * NAVI_ASSISTANT_USER_WORD_STAGGER_SECONDS}s`,
+                '--roadie-assistant-user-word-delay': `${visibleWordIndex * ROADIE_ASSISTANT_USER_WORD_STAGGER_SECONDS}s`,
               } as CSSProperties}
             >
               {word}
@@ -4102,8 +4102,8 @@ function AssistantRecommendationList({
   musicRecommendationLoading: boolean
   musicRecommendationTrack: UiMusicTrack
   motionTiming: MotionTiming
-  onRecommendationAction: (recommendation: NaviAssistantRecommendation) => void
-  recommendations: NaviAssistantRecommendation[]
+  onRecommendationAction: (recommendation: RoadieAssistantRecommendation) => void
+  recommendations: RoadieAssistantRecommendation[]
 }) {
   const completedRecommendation = recommendations.length === 1 && recommendations[0]?.action === '확인'
   const selectedRouteRecommendation = recommendations.length === 1
@@ -4130,7 +4130,7 @@ function AssistantRecommendationList({
         'pointer-events-auto mt-2 flex min-h-0 w-full flex-col overflow-hidden rounded-2xl',
         messagePreviewRecommendation ? 'bg-transparent' : 'bg-[var(--nav-panel)]',
       ].join(' ')}
-      data-testid="navi-assistant-recommendations"
+      data-testid="roadie-assistant-recommendations"
       exit={{ opacity: 0, height: 0, y: 8 }}
       initial={{ opacity: 0, height: 0, y: 8 }}
       animate={{ opacity: 1, height: 'auto', y: 0 }}
@@ -4150,7 +4150,7 @@ function AssistantRecommendationList({
           'min-h-0 overflow-x-hidden overflow-y-auto overscroll-contain',
           completedRecommendation || selectedRouteRecommendation ? 'px-3 py-3' : messagePreviewRecommendation ? 'px-0 py-0' : 'max-h-[16rem] px-3 pb-3',
         ].join(' ')}
-        data-testid="navi-assistant-recommendations-scroll"
+        data-testid="roadie-assistant-recommendations-scroll"
         onWheel={(event) => event.stopPropagation()}
       >
         <div className="grid gap-2">
@@ -4230,7 +4230,7 @@ function AssistantMusicRecommendationCard({
   return (
     <div
       className="grid min-h-[4.75rem] grid-cols-[3.25rem_minmax(0,1fr)_auto] items-center gap-3 rounded-2xl border border-[var(--nav-border)] bg-white px-3 py-2 text-left shadow-[0_10px_24px_rgb(15_23_42/0.06)]"
-      data-testid="navi-assistant-music-recommendation-card"
+      data-testid="roadie-assistant-music-recommendation-card"
     >
       <MusicCover track={track} className="size-13 rounded-xl" iconClassName="size-5" />
       <span className="min-w-0">
@@ -4267,12 +4267,12 @@ function MusicRecommendationLoadingCard() {
 function AssistantMessagePreviewCard({
   recommendation,
 }: {
-  recommendation: Extract<NaviAssistantRecommendation, { type: 'action' }>
+  recommendation: Extract<RoadieAssistantRecommendation, { type: 'action' }>
 }) {
   return (
     <div
       className="rounded-2xl bg-white px-4 py-3 text-left shadow-[0_10px_24px_rgb(15_23_42/0.06)]"
-      data-testid="navi-assistant-message-preview-card"
+      data-testid="roadie-assistant-message-preview-card"
     >
       <p className="text-sm font-semibold leading-5 text-[var(--nav-ink)]">
         {recommendation.detail}
@@ -4284,7 +4284,7 @@ function AssistantMessagePreviewCard({
 function AssistantSelectedRouteCard({
   recommendation,
 }: {
-  recommendation: Extract<NaviAssistantRecommendation, { type: 'place' }>
+  recommendation: Extract<RoadieAssistantRecommendation, { type: 'place' }>
 }) {
   const route = getSelectedRouteDisplay(recommendation)
 
@@ -4292,7 +4292,7 @@ function AssistantSelectedRouteCard({
     <div
       aria-label={`${route.destinationLabel} ${route.primaryAction}`}
       className="relative grid min-h-[3.625rem] grid-cols-[4.25rem_minmax(0,1fr)] items-center gap-3 overflow-hidden rounded-2xl border border-[var(--nav-primary)] bg-white px-3 py-2 text-left shadow-[0_12px_28px_rgb(23_70_162/0.14)]"
-      data-testid="navi-assistant-selected-route-card"
+      data-testid="roadie-assistant-selected-route-card"
       role="status"
     >
       <span
@@ -4320,7 +4320,7 @@ function AssistantSelectedRouteCard({
 function AssistantCompletionCard({
   recommendation,
 }: {
-  recommendation: Extract<NaviAssistantRecommendation, { type: 'action' }>
+  recommendation: Extract<RoadieAssistantRecommendation, { type: 'action' }>
 }) {
   const message = recommendation.title.includes('경로')
     || recommendation.meta.includes('경로')
@@ -4331,7 +4331,7 @@ function AssistantCompletionCard({
   return (
     <div
       className="flex items-center gap-2 px-1 py-0.5 text-left"
-      data-testid="navi-assistant-completion-card"
+      data-testid="roadie-assistant-completion-card"
       role="status"
     >
       <span className="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--nav-primary-soft)] text-[var(--nav-primary)]">
@@ -4348,13 +4348,13 @@ function AssistantRouteRecommendationCard({
   recommendation,
   onAction,
 }: {
-  recommendation: Extract<NaviAssistantRecommendation, { type: 'place' }>
+  recommendation: Extract<RoadieAssistantRecommendation, { type: 'place' }>
   onAction: () => void
 }) {
   const route = getRouteRecommendationDisplay(recommendation)
 
   return (
-    <div className="grid gap-1.5" data-testid="navi-assistant-route-recommendation">
+    <div className="grid gap-1.5" data-testid="roadie-assistant-route-recommendation">
       {route.options.map((option) => (
         <button
           aria-label={`${option.destinationLabel} ${route.primaryAction}`}
@@ -4393,7 +4393,7 @@ function AssistantRouteRecommendationCard({
   )
 }
 
-function getRouteRecommendationDisplay(recommendation: Extract<NaviAssistantRecommendation, { type: 'place' }>) {
+function getRouteRecommendationDisplay(recommendation: Extract<RoadieAssistantRecommendation, { type: 'place' }>) {
   if (recommendation.detail.includes('휴게소') || recommendation.detail.includes('졸음쉼터') || recommendation.detail.includes('경로 인근')) {
     return {
       primaryAction: '경유지 추가',
@@ -4426,7 +4426,7 @@ function getRouteRecommendationDisplay(recommendation: Extract<NaviAssistantReco
   }
 }
 
-function getSelectedRouteDisplay(_recommendation: Extract<NaviAssistantRecommendation, { type: 'place' }>) {
+function getSelectedRouteDisplay(_recommendation: Extract<RoadieAssistantRecommendation, { type: 'place' }>) {
   return {
     destinationLabel: '신탄진 졸음쉼터(부산방향)',
     durationValue: '18',
@@ -4437,7 +4437,7 @@ function getSelectedRouteDisplay(_recommendation: Extract<NaviAssistantRecommend
   }
 }
 
-function getRouteDestinationLabel(recommendation: Extract<NaviAssistantRecommendation, { type: 'place' }>) {
+function getRouteDestinationLabel(recommendation: Extract<RoadieAssistantRecommendation, { type: 'place' }>) {
   const source = `${recommendation.title} ${recommendation.detail}`
 
   if (source.includes('졸음쉼터')) {
@@ -4457,7 +4457,7 @@ function getRouteDestinationLabel(recommendation: Extract<NaviAssistantRecommend
 export function createDemoAssistantStep(
   state: DemoScenarioControllerState,
   profileName: string | null,
-): NaviAssistantStep {
+): RoadieAssistantStep {
   const setupEvent = state.setupEvent
   const scenarioEvent = state.scenarioEvent
   const recommendations = scenarioEvent ? getDemoScenarioRecommendations(scenarioEvent) : undefined
@@ -4484,7 +4484,7 @@ export function createDemoAssistantStep(
     }
   }
 
-  if (scenarioEvent?.romiMessage) {
+  if (scenarioEvent?.roadieMessage) {
     return {
       id: scenarioEvent.id,
       label: scenarioEvent.uiState.visibleStatus,
@@ -4493,7 +4493,7 @@ export function createDemoAssistantStep(
         ? 'success'
         : 'speaking',
       energy: scenarioEvent.uiState.riskLevel === 'HIGH' ? 0.86 : 0.64,
-      text: personalizeDemoRomiMessage(scenarioEvent.romiMessage, profileName),
+      text: personalizeDemoRoadieMessage(scenarioEvent.roadieMessage, profileName),
       recommendations,
     }
   }
@@ -4540,14 +4540,14 @@ function shouldSkipDemoPresenterState(state: DemoScenarioControllerState) {
     event &&
       !event.requiresResponse &&
       !event.userSpeech &&
-      !event.romiMessage &&
+      !event.roadieMessage &&
       ['정상 주행', '상태 확인 중'].includes(event.uiState.visibleStatus),
   )
 }
 
 function getDemoScenarioRecommendations(
   event: NonNullable<DemoScenarioControllerState['scenarioEvent']>,
-): NaviAssistantRecommendation[] | undefined {
+): RoadieAssistantRecommendation[] | undefined {
   if (event.id === 'drowsy_rest_area_offer') {
     return [
       {
@@ -4623,7 +4623,7 @@ function getDemoScenarioRecommendations(
   return undefined
 }
 
-export function personalizeDemoRomiMessage(message: string, profileName: string | null): string {
+export function personalizeDemoRoadieMessage(message: string, profileName: string | null): string {
   const callName = profileName?.trim() || '운전자'
 
   return message.split('{{profileName}}').join(callName)
@@ -4725,8 +4725,8 @@ function DemoScenarioPresenterPanel({
   const currentScenarioEvent = state.scenarioEvent
   const currentTitle = currentSetupEvent?.title ?? currentScenarioEvent?.uiState.visibleStatus ?? state.scenario.title
   const currentDescription = currentSetupEvent?.description
-    ?? (currentScenarioEvent?.romiMessage
-      ? personalizeDemoRomiMessage(currentScenarioEvent.romiMessage, profileName)
+    ?? (currentScenarioEvent?.roadieMessage
+      ? personalizeDemoRoadieMessage(currentScenarioEvent.roadieMessage, profileName)
       : undefined)
   const currentRiskLevel = currentScenarioEvent?.uiState.riskLevel ?? 'LOW'
   const showCurrentStepSummary = shouldShowDemoPresenterStepSummary(state)
@@ -4908,7 +4908,7 @@ function getDemoRiskBadgeClassName(riskLevel: 'LOW' | 'MEDIUM' | 'HIGH') {
   }
 }
 
-function NaviAssistantDebugPanel({
+function RoadieAssistantDebugPanel({
   motionTiming,
   scenario,
   scenarioId,
@@ -4919,22 +4919,22 @@ function NaviAssistantDebugPanel({
   onSelectScenario,
 }: {
   motionTiming: MotionTiming
-  scenario: NaviAssistantScenario
-  scenarioId: NaviAssistantScenarioId
+  scenario: RoadieAssistantScenario
+  scenarioId: RoadieAssistantScenarioId
   stepIndex: number
   onNext: () => void
   onPrevious: () => void
   onReset: () => void
-  onSelectScenario: (scenarioId: NaviAssistantScenarioId) => void
+  onSelectScenario: (scenarioId: RoadieAssistantScenarioId) => void
 }) {
   const currentStep = scenario.steps[stepIndex]
   const progress = `${stepIndex + 1} / ${scenario.steps.length}`
 
   return (
     <motion.section
-      aria-label="Navi AI 시나리오 디버그"
+      aria-label="로디 AI 시나리오 디버그"
       className="col-start-2 row-start-2 self-start rounded-[1.1rem] border border-white/70 bg-white p-4 text-[var(--nav-ink)] shadow-[0_18px_46px_rgb(0_0_0/0.24)]"
-      data-testid="navi-assistant-debug-panel"
+      data-testid="roadie-assistant-debug-panel"
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={motionTiming}
@@ -4950,18 +4950,18 @@ function NaviAssistantDebugPanel({
         <div className="flex min-w-0 flex-col gap-2">
           <label
             className="text-xs font-bold text-[var(--nav-muted)]"
-            htmlFor="navi-assistant-scenario-select"
+            htmlFor="roadie-assistant-scenario-select"
           >
             시나리오
           </label>
           <select
             aria-label="AI 시나리오 선택"
             className="h-11 min-w-0 rounded-xl bg-[var(--nav-panel)] px-3 text-sm font-bold text-[var(--nav-ink)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--nav-focus-ring)]"
-            id="navi-assistant-scenario-select"
-            onChange={(event) => onSelectScenario(event.target.value as NaviAssistantScenarioId)}
+            id="roadie-assistant-scenario-select"
+            onChange={(event) => onSelectScenario(event.target.value as RoadieAssistantScenarioId)}
             value={scenarioId}
           >
-            {NAVI_ASSISTANT_SCENARIOS.map((item) => (
+            {ROADIE_ASSISTANT_SCENARIOS.map((item) => (
               <option key={item.id} value={item.id}>{item.title}</option>
             ))}
           </select>
@@ -5882,12 +5882,12 @@ function OverflowMarqueeText({
 
   return (
     <div
-      className={['navi-overflow-marquee min-w-0 overflow-hidden whitespace-nowrap', className].join(' ')}
+      className={['roadie-overflow-marquee min-w-0 overflow-hidden whitespace-nowrap', className].join(' ')}
       ref={containerRef}
       title={text}
     >
       <span
-        className={overflowing ? 'navi-overflow-marquee__track' : 'block truncate'}
+        className={overflowing ? 'roadie-overflow-marquee__track' : 'block truncate'}
         ref={textRef}
         style={overflowing ? ({ '--marquee-offset': `${marqueeOffset}px` } as CSSProperties) : undefined}
       >
@@ -6616,7 +6616,7 @@ function ReportFullscreenOverlay({
                           </div>
                         </div>
 
-                        <h4 className="mt-6 text-sm font-bold">Navi 개입 타임라인</h4>
+                        <h4 className="mt-6 text-sm font-bold">로디 개입 타임라인</h4>
                         <div className="mt-4 grid gap-3">
                           {selectedTimeline.length > 0 ? selectedTimeline.map((event) => (
                             <div className="grid grid-cols-[3.5rem_1fr] gap-3" key={event.eventId}>
@@ -6640,7 +6640,7 @@ function ReportFullscreenOverlay({
                               </div>
                             </div>
                           )) : (
-                            <ReportEmptyState title="개입 기록 없음" description="이 운행에는 Navi 개입 타임라인이 없습니다." />
+                            <ReportEmptyState title="개입 기록 없음" description="이 운행에는 로디 개입 타임라인이 없습니다." />
                           )}
                         </div>
                       </div>
@@ -6657,7 +6657,7 @@ function ReportFullscreenOverlay({
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <h3 className="text-xl font-bold tracking-normal">교정 성공률</h3>
-                    <p className="mt-1 text-sm font-semibold text-[var(--nav-muted)]">Navi 개입 후 정상 주행 복귀</p>
+                    <p className="mt-1 text-sm font-semibold text-[var(--nav-muted)]">로디 개입 후 정상 주행 복귀</p>
                   </div>
                   <ReportMetricBadge value={formatReportPercent(overview.behaviorCorrectionRate)} tone="success" />
                 </div>
@@ -7098,7 +7098,7 @@ function ConnectDrawerContent({
           <span className="text-sm font-bold">기기 정보</span>
         </div>
         <p className="mt-2 text-sm leading-5 text-[var(--nav-muted)]">
-          Navi 앱과 차량 연결이 유지되는 동안 안내, 음악, 리포트가 동기화됩니다.
+          로디 앱과 차량 연결이 유지되는 동안 안내, 음악, 리포트가 동기화됩니다.
         </p>
       </motion.div>
     </>
@@ -7655,7 +7655,7 @@ function RouteSearchSheet({
       transition={routeSearchLayoutTransition}
     >
       <motion.div
-        className="navi-glass pointer-events-auto relative rounded-[1.35rem] p-3"
+        className="roadie-glass pointer-events-auto relative rounded-[1.35rem] p-3"
         transition={routeSearchLayoutTransition}
       >
         <motion.button
@@ -8068,7 +8068,7 @@ function RouteSearchLoadingModal({
       transition={motionTiming}
     >
       <motion.div
-        className="navi-assistant-aura relative flex w-[min(19rem,calc(100vw-3rem))] flex-col items-center overflow-hidden rounded-3xl px-6 pb-6 pt-5 text-center shadow-[0_22px_56px_rgb(15_23_42/0.20)]"
+        className="roadie-assistant-aura relative flex w-[min(19rem,calc(100vw-3rem))] flex-col items-center overflow-hidden rounded-3xl px-6 pb-6 pt-5 text-center shadow-[0_22px_56px_rgb(15_23_42/0.20)]"
         initial={{ opacity: 0, y: 10, scale: 0.985 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 8, scale: 0.985 }}

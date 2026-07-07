@@ -8,20 +8,35 @@ import {
   respondToDemoScenario,
   validateDemoScenarioDefinition,
 } from './demoScenarioEngine'
+import scenarioDatabase from './data/scenario-db.json'
 
 describe('demo scenario engine', () => {
-  it('exposes the three fixed demo scenarios only', () => {
-    expect(getDemoScenarios().map((scenario) => scenario.scenarioId)).toEqual([
-      'drowsy_driver',
-      'phone_usage',
-      'device_operation',
-    ])
+  it('exposes the configured JSON demo scenario ids', () => {
+    expect(getDemoScenarios().map((scenario) => scenario.scenarioId)).toEqual(
+      scenarioDatabase.scenarios.map((scenario) => scenario.scenarioId),
+    )
+  })
+
+  it('loads demo scenario scripts from the JSON scenario database', () => {
+    expect(getDemoScenarios()).toEqual(scenarioDatabase.scenarios)
   })
 
   it('keeps every scenario event graph valid', () => {
     const errors = getDemoScenarios().flatMap(validateDemoScenarioDefinition)
 
     expect(errors).toEqual([])
+  })
+
+  it('uses Roadie naming for assistant scenario script fields and visible text', () => {
+    const scenarioText = JSON.stringify(getDemoScenarios())
+    const previousFieldName = ['romi', 'Message'].join('')
+    const previousEnglishName = ['Ro', 'mi'].join('')
+    const previousKoreanName = ['나', '비'].join('')
+
+    expect(scenarioText).toContain('roadieMessage')
+    expect(scenarioText).not.toContain(previousFieldName)
+    expect(scenarioText).not.toContain(previousEnglishName)
+    expect(scenarioText).not.toContain(previousKoreanName)
   })
 
   it('runs the common destination setup before the selected scenario starts', () => {
@@ -81,10 +96,10 @@ describe('demo scenario engine', () => {
     state = advanceDemoScenario(state)
 
     expect(state.scenarioEvent?.id).toBe('drowsy_window_started')
-    expect(state.scenarioEvent?.romiMessage).toBe('창문을 살짝 열게요. 그래도 피곤한 모습이 반복되면 바로 알려드릴게요.')
+    expect(state.scenarioEvent?.roadieMessage).toBe('창문을 살짝 열게요. 그래도 피곤한 모습이 반복되면 바로 알려드릴게요.')
   })
 
-  it('keeps every response branch split into user speech and the next Romi step', () => {
+  it('keeps every response branch split into user speech and the next Roadie step', () => {
     getDemoScenarios().forEach((scenario) => {
       scenario.events
         .filter((event) => event.requiresResponse)
@@ -104,9 +119,9 @@ describe('demo scenario engine', () => {
 
             expect(userEvent?.eventType, `${scenario.scenarioId}:${event.id}:${option.value}`).toBe('USER_RESPONSE')
             expect(userEvent?.userSpeech, `${scenario.scenarioId}:${event.id}:${option.value}`).toBe(option.asUserSpeech)
-            expect(userEvent?.romiMessage, `${scenario.scenarioId}:${event.id}:${option.value}`).toBeNull()
+            expect(userEvent?.roadieMessage, `${scenario.scenarioId}:${event.id}:${option.value}`).toBeNull()
             expect(nextState.scenarioEvent?.id, `${scenario.scenarioId}:${event.id}:${option.value}`).not.toBe(userEvent?.id)
-            expect(nextState.scenarioEvent?.romiMessage, `${scenario.scenarioId}:${event.id}:${option.value}`).toBeTruthy()
+            expect(nextState.scenarioEvent?.roadieMessage, `${scenario.scenarioId}:${event.id}:${option.value}`).toBeTruthy()
           })
         })
     })
@@ -138,7 +153,7 @@ describe('demo scenario engine', () => {
     expect(state.scenarioEvent).toMatchObject({
       id: 'phone_recipient_prompt',
       eventType: 'AGENT_MESSAGE',
-      romiMessage: '문자를 누구에게 보낼까요?',
+      roadieMessage: '문자를 누구에게 보낼까요?',
       requiresResponse: true,
     })
 
@@ -152,7 +167,7 @@ describe('demo scenario engine', () => {
     state = advanceDemoScenario(state)
     expect(state.scenarioEvent).toMatchObject({
       id: 'phone_message_preview',
-      romiMessage: '지우에게 “운전 중이라 조금 뒤에 연락할게.” 이렇게 보낼까요?',
+      roadieMessage: '지우에게 “운전 중이라 조금 뒤에 연락할게.” 이렇게 보낼까요?',
     })
     expect(scenario.events.find((event) => event.id === 'phone_message_preview')).toBeDefined()
   })

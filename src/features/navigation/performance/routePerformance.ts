@@ -13,7 +13,7 @@ export function markRoutePerformance(name: string) {
     return
   }
 
-  window.performance.mark(`navi:${name}`)
+  window.performance.mark(`roadie:${name}`)
 }
 
 export function measureRoutePerformance(name: string, startMark: string, endMark: string) {
@@ -21,12 +21,12 @@ export function measureRoutePerformance(name: string, startMark: string, endMark
     return
   }
 
-  const start = `navi:${startMark}`
-  const end = `navi:${endMark}`
-  window.performance.measure(`navi:${name}`, start, end)
-  const [entry] = window.performance.getEntriesByName(`navi:${name}`).slice(-1)
+  const start = `roadie:${startMark}`
+  const end = `roadie:${endMark}`
+  window.performance.measure(`roadie:${name}`, start, end)
+  const [entry] = window.performance.getEntriesByName(`roadie:${name}`).slice(-1)
 
   if (entry) {
-    console.info(`[navi:perf] ${name}: ${entry.duration.toFixed(1)}ms`)
+    console.info(`[roadie:perf] ${name}: ${entry.duration.toFixed(1)}ms`)
   }
 }

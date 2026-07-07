@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   AIAI_SCENARIO_IDS,
-  createNaviAssistantScenarios,
+  createRoadieAssistantScenarios,
 } from './scenarioAdapter'
 
 describe('aiai scenario adapter', () => {
@@ -22,8 +22,8 @@ describe('aiai scenario adapter', () => {
     expect(AIAI_SCENARIO_IDS).not.toContain('wake-call')
   })
 
-  it('maps aiai steps into Navi assistant states', () => {
-    const scenarios = createNaviAssistantScenarios()
+  it('maps aiai steps into ROADIE assistant states', () => {
+    const scenarios = createRoadieAssistantScenarios()
     const scenario = scenarios.find((item) => item.id === 'drowsiness-rest-area')
 
     expect(scenario?.steps).toHaveLength(8)
@@ -55,7 +55,7 @@ describe('aiai scenario adapter', () => {
 
   it('does not expose detection-only events as assistant conversation steps', () => {
     const detectionTexts = ['졸음 감지', '휴대폰 사용 감지', '장시간 운전', '주의 분산']
-    const visibleConversationText = createNaviAssistantScenarios().flatMap((scenario) => (
+    const visibleConversationText = createRoadieAssistantScenarios().flatMap((scenario) => (
       scenario.steps.flatMap((step) => [step.text, step.userText, step.statusLabel].filter(Boolean))
     ))
 
@@ -63,7 +63,7 @@ describe('aiai scenario adapter', () => {
   })
 
   it('does not expose detection metadata in scenario titles', () => {
-    const scenarioTitles = createNaviAssistantScenarios().map((scenario) => scenario.title)
+    const scenarioTitles = createRoadieAssistantScenarios().map((scenario) => scenario.title)
 
     expect(scenarioTitles).not.toEqual(expect.arrayContaining([
       expect.stringContaining('졸음 감지'),
@@ -73,7 +73,7 @@ describe('aiai scenario adapter', () => {
   })
 
   it('matches each visible conversation text to the correct orb state', () => {
-    const mismatches = createNaviAssistantScenarios().flatMap((scenario) => (
+    const mismatches = createRoadieAssistantScenarios().flatMap((scenario) => (
       scenario.steps.flatMap((step, stepIndex) => {
         const location = `${scenario.id}-${stepIndex}-${step.label}`
 
