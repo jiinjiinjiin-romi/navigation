@@ -38,15 +38,26 @@ export interface Profile {
   profileImageUrl: string | null
   reportEmail: string | null
   agentPersonality: AgentPersonality
-  warningSensitivity?: WarningSensitivity
+  warningSensitivity: WarningSensitivity
   behaviorWarningSensitivity: BehaviorWarningSensitivity
   ttsVoiceId: string | null
   ttsSpeed: number
   guidanceVolume: number
-  theme?: ProfileTheme
+  theme: ProfileTheme
   lastUsedAt: string | null
   createdAt: string
   updatedAt: string
+}
+
+export interface ProfileSummary {
+  id: string
+  displayName: string
+  agentCallName: string
+  profileImageUrl: string | null
+  agentPersonality: AgentPersonality
+  warningSensitivity: WarningSensitivity
+  behaviorWarningSensitivity: BehaviorWarningSensitivity
+  lastUsedAt: string | null
 }
 
 export interface ProfileListResponse {

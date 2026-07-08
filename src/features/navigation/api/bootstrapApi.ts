@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-import type { Profile } from './profileApi'
+import type { ProfileSummary } from './profileApi'
 
 interface HttpClient {
   get: typeof axios.get
@@ -21,7 +21,7 @@ export interface BootstrapCapabilities {
 
 export interface BootstrapResponse {
   account: BootstrapAccount
-  profiles: Profile[]
+  profiles: ProfileSummary[]
   selectedProfileId: string | null
   profileLimit: number
   capabilities: BootstrapCapabilities

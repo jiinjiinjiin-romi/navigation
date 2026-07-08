@@ -159,7 +159,7 @@ type ProfileSettings = {
   displayName: string
   callName: string
   reportEmail: string
-  agentPersonality: 'friendly' | 'formal' | 'warm' | 'witty'
+  agentPersonality: AgentPersonality
   preferences: PreferenceState
   behaviorSensitivity: Record<BehaviorType, number>
 }
@@ -369,7 +369,7 @@ const DEFAULT_PROFILE_SETTINGS: ProfileSettings = {
   displayName: '안정현',
   callName: '로디야',
   reportEmail: 'driver@example.com',
-  agentPersonality: 'friendly',
+  agentPersonality: 'FRIENDLY',
   preferences: { mapMode: '2D', guidanceVolume: 72, ttsSpeed: 1.05, warningMode: 'balanced' },
   behaviorSensitivity: {
     DROWSINESS: 9,
@@ -510,10 +510,7 @@ function isSameDashboardValue<T>(left: T, right: T) {
 }
 
 function toDashboardAgentPersonality(value: AgentPersonality): ProfileSettings['agentPersonality'] {
-  if (value === 'FORMAL') return 'formal'
-  if (value === 'WARM') return 'warm'
-  if (value === 'WITTY') return 'witty'
-  return 'friendly'
+  return value
 }
 
 function normalizeDashboardSensitivity(
@@ -1786,7 +1783,7 @@ function NavigationSettingsPage({ favoritePlaces, notify, profileSettings, setFa
               <TextField label="프로필 이름" value={draft.displayName} onChange={(value) => setDraft((current) => ({ ...current, displayName: value }))} />
               <TextField label="로디 호출명" value={draft.callName} onChange={(value) => setDraft((current) => ({ ...current, callName: value }))} />
               <TextField label="리포트 이메일" value={draft.reportEmail} onChange={(value) => setDraft((current) => ({ ...current, reportEmail: value }))} />
-              <SelectControl label="안내 음성 스타일" value={draft.agentPersonality} onChange={(value) => setDraft((current) => ({ ...current, agentPersonality: value as ProfileSettings['agentPersonality'] }))} options={[['friendly', '기본 안내'], ['formal', '크고 또렷한 안내'], ['warm', '차분한 저음 안내'], ['witty', '밝고 빠른 안내']]} />
+              <SelectControl label="안내 음성 스타일" value={draft.agentPersonality} onChange={(value) => setDraft((current) => ({ ...current, agentPersonality: value as ProfileSettings['agentPersonality'] }))} options={[['FRIENDLY', '기본 안내'], ['FORMAL', '크고 또렷한 안내'], ['WARM', '차분한 저음 안내'], ['WITTY', '밝고 빠른 안내']]} />
             </div>
             <div className="mt-5 grid gap-3 md:grid-cols-2">
               <RangeControl label="안내 음량" min={0} max={100} value={draft.preferences.guidanceVolume} suffix="%" onChange={(value) => setDraft((current) => ({ ...current, preferences: { ...current.preferences, guidanceVolume: value } }))} />

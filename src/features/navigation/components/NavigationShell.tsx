@@ -88,6 +88,7 @@ import {
   type Profile,
   type ProfileBehaviorType,
   type ProfileCreateRequest,
+  type ProfileSummary,
 } from '../api/profileApi'
 import { getBootstrap } from '../api/bootstrapApi'
 import {
@@ -156,6 +157,7 @@ type SavedPlaceQuickItem = Place & {
 type RouteSearchSavedPlace = Place & {
   targetField?: SearchFieldId
 }
+type NavigationProfile = Profile | ProfileSummary
 type CalibrationStep = {
   title: string
   description: string
@@ -2760,17 +2762,17 @@ function NavigationProfileSetup({
   motionTiming: MotionTiming
   profileError: boolean
   profileSetupView: ProfileSetupView
-  profiles: Profile[]
+  profiles: NavigationProfile[]
   selectError: boolean
   selecting: boolean
-  selectedProfile?: Profile
+  selectedProfile?: NavigationProfile
   updateError: boolean
   onBackToList: () => void
   onChangeForm: (form: ProfileCreateRequest) => void
   onCreateProfile: () => void
   onDeleteProfile: (profileId: string) => void
   onOpenCreate: () => void
-  onOpenEdit: (profile: Profile) => void
+  onOpenEdit: (profile: NavigationProfile) => void
   onSelectProfile: (profileId: string) => void
   onStart: () => void
   onUpdateProfile: () => void
@@ -3495,24 +3497,35 @@ function normalizeProfileForm(form: ProfileCreateRequest): ProfileCreateRequest 
     agentCallName: form.agentCallName.trim(),
     behaviorWarningSensitivity: normalizeBehaviorWarningSensitivity(form.behaviorWarningSensitivity),
     displayName: form.displayName.trim(),
-    guidanceVolume: Number(form.guidanceVolume),
+    guidanceVolume: normalizeProfileNumber(form.guidanceVolume, DEFAULT_PROFILE_CREATE_REQUEST.guidanceVolume),
     reportEmail: normalizeOptionalProfileText(form.reportEmail),
-    ttsSpeed: Number(form.ttsSpeed),
+    ttsSpeed: normalizeProfileNumber(form.ttsSpeed, DEFAULT_PROFILE_CREATE_REQUEST.ttsSpeed),
     ttsVoiceId: normalizeOptionalProfileText(form.ttsVoiceId),
   }
 }
 
-function createProfileFormFromProfile(profile: Profile): ProfileCreateRequest {
+function normalizeProfileNumber(value: unknown, fallback: number): number {
+  const numericValue = Number(value)
+  return Number.isFinite(numericValue) ? numericValue : fallback
+}
+
+function createProfileFormFromProfile(profile: NavigationProfile): ProfileCreateRequest {
+  const fullProfile = isFullProfile(profile) ? profile : null
+
   return {
     displayName: profile.displayName,
     agentCallName: profile.agentCallName,
-    reportEmail: profile.reportEmail,
+    reportEmail: fullProfile?.reportEmail ?? null,
     agentPersonality: profile.agentPersonality,
     behaviorWarningSensitivity: normalizeBehaviorWarningSensitivity(profile.behaviorWarningSensitivity),
-    ttsVoiceId: profile.ttsVoiceId,
-    ttsSpeed: profile.ttsSpeed,
-    guidanceVolume: profile.guidanceVolume,
+    ttsVoiceId: fullProfile?.ttsVoiceId ?? null,
+    ttsSpeed: normalizeProfileNumber(fullProfile?.ttsSpeed, DEFAULT_PROFILE_CREATE_REQUEST.ttsSpeed),
+    guidanceVolume: normalizeProfileNumber(fullProfile?.guidanceVolume, DEFAULT_PROFILE_CREATE_REQUEST.guidanceVolume),
   }
+}
+
+function isFullProfile(profile: NavigationProfile): profile is Profile {
+  return 'createdAt' in profile
 }
 
 function normalizeBehaviorWarningSensitivity(
@@ -5307,7 +5320,7 @@ function SideDrawerPanel({
   locationStatus: LocationStatus
   motionTiming: MotionTiming
   panel: SidePanelId
-  selectedProfile?: Profile
+  selectedProfile?: NavigationProfile
   savedPlaces: SavedPlaceQuickItem[]
   savedPlacesError: boolean
   savedPlacesLoading: boolean
@@ -6053,7 +6066,7 @@ function SettingsDrawerContent({
     visible: { opacity: number; y: number; scale: number; transition: MotionTiming }
   }
   locationStatus: LocationStatus
-  selectedProfile?: Profile
+  selectedProfile?: NavigationProfile
   onChangeCameraSettings: (settings: Partial<MapCameraSettings>) => void
   onRequestCurrentLocation: () => void
 }) {

@@ -1317,6 +1317,54 @@ describe('NavigationShell', () => {
     })
   })
 
+  it('falls back to default numeric guidance settings when updating an older profile payload', async () => {
+    const legacyProfile = {
+      ...mockProfiles[0],
+      agentPersonality: 'WARM' as const,
+      guidanceVolume: undefined,
+      ttsSpeed: undefined,
+    } as unknown as typeof mockProfiles[number]
+    mockedGetBootstrap.mockResolvedValueOnce({
+      account: {
+        id: 'account-1',
+        displayName: '안정현',
+        email: 'admin@example.com',
+      },
+      profiles: [legacyProfile],
+      selectedProfileId: null,
+      profileLimit: 5,
+      capabilities: {
+        vitModelAvailable: true,
+        geminiAvailable: false,
+        emailAvailable: true,
+        demoMode: true,
+      },
+    })
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: /민준 프로필 선택/ }))
+    fireEvent.click(screen.getByRole('button', { name: '프로필 수정' }))
+    fireEvent.click(screen.getByRole('button', { name: '다음' }))
+    fireEvent.change(screen.getByLabelText('안내 음성 스타일'), {
+      target: { value: 'WARM' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '프로필 저장' }))
+
+    await waitFor(() => {
+      expect(mockedUpdateProfile).toHaveBeenCalledWith('profile-1', expect.objectContaining({
+        agentPersonality: 'WARM',
+        guidanceVolume: 70,
+        ttsSpeed: 1,
+      }))
+    })
+  })
+
   it('renders the desktop cockpit layout with video, navigation, and scenario debug regions', () => {
     const queryClient = new QueryClient()
 
