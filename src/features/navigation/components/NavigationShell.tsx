@@ -731,6 +731,8 @@ const GUIDANCE_DISTANCE_UPDATE_INTERVAL_MS = 500
 const NAVI_ORB_THEME: OrbColorTheme = 'daylight'
 const NAVI_ORB_CONTROL_SIZE = 132
 const ROADIE_ASSISTANT_PANEL_ORB_SIZE = 132
+const ROADIE_ASSISTANT_PANEL_WIDTH = 'min(21.75rem, calc(100vw - 2rem))'
+const ROADIE_ASSISTANT_RECOMMENDATION_PANEL_WIDTH = 'min(23.5rem, calc(100vw - 2rem))'
 const ROADIE_ASSISTANT_CONTENT_REVEAL_DELAY_SECONDS = 0.52
 const ROADIE_ASSISTANT_TEXT_STAGGER_SECONDS = 0.018
 const ROADIE_ASSISTANT_USER_WORD_STAGGER_SECONDS = 0.08
@@ -838,6 +840,20 @@ export function getAssistantVisibleOrbState(
   assistantStep: Pick<RoadieAssistantStep, 'orbState'>,
 ): OrbAssistantState {
   return assistantStep.orbState
+}
+
+export function getRoadieAssistantPanelWidth({
+  expanded,
+  hasRecommendations,
+}: {
+  expanded: boolean
+  hasRecommendations: boolean
+}) {
+  if (expanded && hasRecommendations) {
+    return ROADIE_ASSISTANT_RECOMMENDATION_PANEL_WIDTH
+  }
+
+  return ROADIE_ASSISTANT_PANEL_WIDTH
 }
 
 export function isAssistantVoiceWaveVisible(
@@ -3827,11 +3843,10 @@ function RoadieOrbControl({
             ? assistantStep.recommendations?.length ? 'auto' : 328
             : 132,
           opacity: 1,
-          width: expanded
-            ? assistantStep.recommendations?.length
-              ? 'min(22.25rem, calc(100vw - 2rem))'
-              : 'min(20.75rem, calc(100vw - 2rem))'
-            : 'min(20.75rem, calc(100vw - 2rem))',
+          width: getRoadieAssistantPanelWidth({
+            expanded,
+            hasRecommendations: Boolean(assistantStep.recommendations?.length),
+          }),
         }}
         transition={{
           borderRadius: {

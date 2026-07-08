@@ -8,6 +8,7 @@ import {
   createDemoAssistantStep,
   getAssistantSpeechCharacterDelaySeconds,
   getAssistantVisibleOrbState,
+  getRoadieAssistantPanelWidth,
   isAssistantVoiceWaveVisible,
   NavigationShell,
   personalizeDemoRoadieMessage,
@@ -323,6 +324,12 @@ describe('NavigationShell', () => {
     expect(
       personalizeDemoRoadieMessage('{{profileName}}, 전방을 봐주세요.', '지우'),
     ).toBe('지우, 전방을 봐주세요.')
+  })
+
+  it('uses a slightly wider 로디 assistant panel while preserving the mobile width cap', () => {
+    expect(getRoadieAssistantPanelWidth({ expanded: false, hasRecommendations: false })).toBe('min(21.75rem, calc(100vw - 2rem))')
+    expect(getRoadieAssistantPanelWidth({ expanded: true, hasRecommendations: false })).toBe('min(21.75rem, calc(100vw - 2rem))')
+    expect(getRoadieAssistantPanelWidth({ expanded: true, hasRecommendations: true })).toBe('min(23.5rem, calc(100vw - 2rem))')
   })
 
   it('shows user response before the next 로디 response in a drowsy branch', () => {
