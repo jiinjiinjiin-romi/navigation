@@ -12,6 +12,7 @@ import {
   isAssistantVoiceWaveVisible,
   NavigationShell,
   personalizeDemoRoadieMessage,
+  resolveAgentPersonalityTtsOptions,
   shouldCompleteDemoScenario,
   shouldEndDemoDrive,
   shouldOpenDemoReport,
@@ -35,6 +36,7 @@ import { createFavorite, deleteSavedPlace, listSavedPlaces, updateSavedPlace } f
 import { createSearchHistory, listSearchHistories } from '../api/searchHistoryApi'
 import { getCurrentAddress, getRoadMatch, getRouteOptions, searchPlaces } from '../api/tmapApi'
 import { getMusicRecommendations } from '../api/musicApi'
+import { synthesizeVoice } from '../api/voiceApi'
 
 let routeOptionsOverlayReadyByDefault = true
 let latestRouteOptionsOverlayReady: ((ready: boolean) => void) | undefined
@@ -175,6 +177,7 @@ vi.mock('./TmapPanel', () => ({
     routeOptions,
     routeSelectionMode,
     simulationPosition,
+    simulationSpeedKph,
     activeRouteOptionId,
     onCameraSettingsChange,
     onRouteOptionsOverlayReady,
@@ -187,6 +190,7 @@ vi.mock('./TmapPanel', () => ({
     routeOptions?: Array<{ id: string; label: string; route: { coordinates: { lat: number; lng: number }[] } }>
     routeSelectionMode?: boolean
     simulationPosition?: { lat: number; lng: number }
+    simulationSpeedKph?: number
     activeRouteOptionId?: string
     onCameraSettingsChange?: (settings: Partial<{ mode: '2d' | '3d'; zoom: number; pitch: number }>) => void
     onRouteOptionsOverlayReady?: (ready: boolean) => void
@@ -237,6 +241,9 @@ vi.mock('./TmapPanel', () => ({
             {`지도에서 ${option.label} 경로 선택`}
           </button>
         ))}
+        {typeof simulationSpeedKph === 'number' ? (
+          <span data-testid="current-speed-number">{Math.max(0, Math.round(simulationSpeedKph))}</span>
+        ) : null}
         {simulationPosition
           ? `sim:${simulationPosition.lat.toFixed(4)},${simulationPosition.lng.toFixed(4)}`
           : currentPosition
@@ -264,6 +271,7 @@ const mockedUpdateSavedPlace = vi.mocked(updateSavedPlace)
 const mockedCreateSearchHistory = vi.mocked(createSearchHistory)
 const mockedListSearchHistories = vi.mocked(listSearchHistories)
 const mockedGetMusicRecommendations = vi.mocked(getMusicRecommendations)
+const mockedSynthesizeVoice = vi.mocked(synthesizeVoice)
 
 const mockProfiles: Profile[] = [
   {
@@ -324,6 +332,51 @@ describe('NavigationShell', () => {
     expect(
       personalizeDemoRoadieMessage('{{profileName}}, 전방을 봐주세요.', '지우'),
     ).toBe('지우, 전방을 봐주세요.')
+  })
+
+  it('maps Agent personality to distinct CLOVA TTS options', () => {
+    expect(resolveAgentPersonalityTtsOptions('FRIENDLY')).toEqual({
+      speed: 0,
+      pitch: 0,
+      volume: 0,
+    })
+    expect(resolveAgentPersonalityTtsOptions('FORMAL')).toEqual({
+      speed: -1,
+      pitch: 2,
+      volume: 5,
+    })
+    expect(resolveAgentPersonalityTtsOptions('WARM')).toEqual({
+      speed: 0,
+      pitch: 4,
+      volume: 2,
+    })
+    expect(resolveAgentPersonalityTtsOptions('WITTY')).toEqual({
+      speed: -3,
+      pitch: -2,
+      volume: 1,
+    })
+  })
+
+  it('uses the mini scenario personality override for the next Roadie TTS tone', () => {
+    const scenario = getDemoScenarios().find((item) => item.scenarioId === 'agent_personality_voice_change')
+    const overrideEvent = scenario?.events.find((event) => event.id === 'personality_clear_mode_applied')
+
+    expect(scenario).toBeDefined()
+    expect(overrideEvent).toBeDefined()
+
+    const step = createDemoAssistantStep({
+      phase: 'scenario',
+      scenario: scenario!,
+      setupEvent: null,
+      scenarioEvent: overrideEvent!,
+    }, '민준')
+
+    expect(step.text).toContain('크게, 또박또박')
+    expect(step.ttsOptions).toEqual({
+      speed: -1,
+      pitch: 2,
+      volume: 5,
+    })
   })
 
   it('uses a slightly wider 로디 assistant panel while preserving the mobile width cap', () => {
@@ -594,6 +647,8 @@ describe('NavigationShell', () => {
     mockedCreateSearchHistory.mockReset()
     mockedListSearchHistories.mockReset()
     mockedGetMusicRecommendations.mockReset()
+    mockedSynthesizeVoice.mockReset()
+    mockedSynthesizeVoice.mockResolvedValue(new Blob(['audio'], { type: 'audio/mpeg' }))
     mockedGetMusicRecommendations.mockResolvedValue([
       {
         id: 'itunes-soft-focus',
@@ -862,6 +917,8 @@ describe('NavigationShell', () => {
       expect(screen.queryByTestId('navigation-profile-setup')).not.toBeInTheDocument()
     })
     expect(screen.getByTestId('demo-scenario-selection')).toBeInTheDocument()
+    expect(screen.getByTestId('demo-scenario-card-agent_personality_voice_change')).not.toHaveClass('col-span-full')
+    expect(screen.getAllByTestId('demo-scenario-placeholder-card')).toHaveLength(3)
     fireEvent.click(screen.getByRole('button', { name: '네비게이션 이용하기' }))
     expect(screen.getByRole('button', { name: /어디로 갈까요/ })).toBeInTheDocument()
   })
@@ -1124,7 +1181,7 @@ describe('NavigationShell', () => {
     expect(screen.getByRole('heading', { name: '프로필 설정' })).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: '오늘은 누가 운전할까요?' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: '기본 정보' })).toHaveAttribute('aria-current', 'step')
-    expect(screen.queryByLabelText('Agent 성격')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('안내 음성 스타일')).not.toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('프로필 이름'), {
       target: { value: '도현' },
     })
@@ -1136,7 +1193,7 @@ describe('NavigationShell', () => {
     })
     fireEvent.click(screen.getByRole('button', { name: '다음' }))
     expect(screen.getByRole('button', { name: '안내 설정' })).toHaveAttribute('aria-current', 'step')
-    fireEvent.change(screen.getByLabelText('Agent 성격'), {
+    fireEvent.change(screen.getByLabelText('안내 음성 스타일'), {
       target: { value: 'WITTY' },
     })
     fireEvent.change(screen.getByLabelText('TTS 속도'), {
@@ -1239,7 +1296,7 @@ describe('NavigationShell', () => {
     expect(screen.getByRole('heading', { name: '프로필 설정' })).toBeInTheDocument()
     expect(screen.getByLabelText('프로필 이름')).toHaveValue('민준')
     expect(screen.getByLabelText('호출 이름')).toHaveValue('로디')
-    expect(screen.queryByLabelText('Agent 성격')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('안내 음성 스타일')).not.toBeInTheDocument()
 
     fireEvent.change(screen.getByLabelText('프로필 이름'), {
       target: { value: '민준 수정' },
@@ -3534,6 +3591,7 @@ describe('NavigationShell', () => {
       expect(screen.getByText('494')).toBeInTheDocument()
       expect(screen.getByText('894m')).toBeInTheDocument()
     })
+    expect(screen.getByTestId('current-speed-number')).toHaveTextContent('45')
 
     requestAnimationFrameSpy.mockRestore()
     cancelAnimationFrameSpy.mockRestore()

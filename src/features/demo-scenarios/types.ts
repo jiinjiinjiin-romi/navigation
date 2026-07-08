@@ -56,6 +56,7 @@ export interface DemoScenarioEvent {
   report: DemoReportMarker
   debugNote: string | null
   nextEventId: string | null
+  agentPersonalityOverride?: 'FRIENDLY' | 'FORMAL' | 'WARM' | 'WITTY'
 }
 
 export interface DemoScenarioEnding {
@@ -73,6 +74,7 @@ export interface DemoScenarioDefinition {
   tags: string[]
   events: DemoScenarioEvent[]
   ending: DemoScenarioEnding
+  skipDrivingSetup?: boolean
 }
 
 export interface DemoSetupEvent {

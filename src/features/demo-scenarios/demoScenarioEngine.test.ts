@@ -17,6 +17,29 @@ describe('demo scenario engine', () => {
     )
   })
 
+  it('includes a short personalization scenario for changing Roadie tone during conversation', () => {
+    const scenario = getDemoScenario('agent_personality_voice_change')
+
+    expect(scenario.title).toBe('오늘은 크게 또박또박 말해줘')
+    expect(scenario.events.length).toBeLessThanOrEqual(6)
+    expect(scenario.events.some((event) => (
+      event.eventType === 'USER_RESPONSE'
+      && event.userSpeech === '로디야, 오늘 좀 피곤해서 크게 또박또박 말해줘'
+    ))).toBe(true)
+    expect(scenario.events.some((event) => (
+      event.roadieMessage?.includes('크게, 또박또박')
+      && (event as { agentPersonalityOverride?: string }).agentPersonalityOverride === 'FORMAL'
+    ))).toBe(true)
+  })
+
+  it('starts the personalization mini scenario without the common driving setup', () => {
+    const state = createInitialDemoScenarioState('agent_personality_voice_change')
+
+    expect(state.phase).toBe('scenario')
+    expect(state.setupEvent).toBeNull()
+    expect(state.scenarioEvent?.id).toBe('personality_session_started')
+  })
+
   it('loads demo scenario scripts from the JSON scenario database', () => {
     expect(getDemoScenarios()).toEqual(scenarioDatabase.scenarios)
   })

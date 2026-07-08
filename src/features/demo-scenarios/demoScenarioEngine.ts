@@ -31,9 +31,20 @@ export function getDemoScenario(scenarioId: DemoScenarioId) {
 export function createInitialDemoScenarioState(
   scenarioId: DemoScenarioId,
 ): DemoScenarioControllerState {
+  const scenario = getDemoScenario(scenarioId)
+
+  if (scenario.skipDrivingSetup) {
+    return {
+      phase: 'scenario',
+      scenario,
+      setupEvent: null,
+      scenarioEvent: scenario.events[0] ?? null,
+    }
+  }
+
   return {
     phase: 'setup',
-    scenario: getDemoScenario(scenarioId),
+    scenario,
     setupEvent: COMMON_DRIVING_SETUP_EVENTS[0] ?? null,
     scenarioEvent: null,
   }

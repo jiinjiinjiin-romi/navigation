@@ -60,6 +60,11 @@ export interface RoadieAssistantStep {
   text?: string
   userText?: string
   recommendations?: RoadieAssistantRecommendation[]
+  ttsOptions?: {
+    volume?: number
+    speed?: number
+    pitch?: number
+  }
 }
 
 export interface RoadieAssistantScenario {

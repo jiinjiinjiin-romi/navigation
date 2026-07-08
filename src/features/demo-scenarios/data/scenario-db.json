@@ -905,6 +905,144 @@
         "detailReportAvailable": true,
         "emailUiAvailable": true
       }
+    },
+    {
+      "id": "agent_personality_voice_change",
+      "scenarioId": "agent_personality_voice_change",
+      "title": "오늘은 크게 또박또박 말해줘",
+      "description": "운전자가 피곤한 상태에서 더 크게 또박또박 안내해 달라고 요청하면 현재 세션에서 즉시 크고 또렷한 안내 스타일로 바뀌는 짧은 개인화 데모",
+      "durationSeconds": 25,
+      "tags": [
+        "개인화",
+        "안내 음성 스타일",
+        "TTS"
+      ],
+      "skipDrivingSetup": true,
+      "events": [
+        {
+          "id": "personality_session_started",
+          "at": 0,
+          "eventType": "AGENT_MESSAGE",
+          "uiState": {
+            "drivingMode": "MOVING",
+            "riskLevel": "LOW",
+            "visibleStatus": "기본 안내"
+          },
+          "roadieMessage": "좋아요. 현재 경로를 계속 안내할게요.",
+          "requiresResponse": false,
+          "responseOptions": [],
+          "report": {
+            "include": false,
+            "eventName": null
+          },
+          "debugNote": "변경 전 기본 말투와 TTS 톤을 들려주는 단계입니다.",
+          "nextEventId": "personality_user_request"
+        },
+        {
+          "id": "personality_user_request",
+          "at": 4,
+          "eventType": "USER_RESPONSE",
+          "uiState": {
+            "drivingMode": "MOVING",
+            "riskLevel": "LOW",
+            "visibleStatus": "말투 변경 요청"
+          },
+          "roadieMessage": null,
+          "userSpeech": "로디야, 오늘 좀 피곤해서 크게 또박또박 말해줘",
+          "requiresResponse": false,
+          "responseOptions": [],
+          "report": {
+            "include": false,
+            "eventName": null
+          },
+          "debugNote": "발표자가 다음을 눌러 운전자 자연어 요청을 주입합니다.",
+          "nextEventId": "personality_clear_mode_applied"
+        },
+        {
+          "id": "personality_clear_mode_applied",
+          "at": 8,
+          "eventType": "AGENT_MESSAGE",
+          "uiState": {
+            "drivingMode": "MOVING",
+            "riskLevel": "LOW",
+            "visibleStatus": "또박또박 안내 적용"
+          },
+          "roadieMessage": "{{profileName}}, 알겠어요. 오늘은 평소보다 크게, 또박또박 들리게 안내할게요.",
+          "requiresResponse": false,
+          "responseOptions": [],
+          "report": {
+            "include": true,
+            "eventName": "크고 또렷한 안내 적용"
+          },
+          "debugNote": "이 단계부터 크고 또렷한 안내 TTS 옵션을 적용합니다.",
+          "nextEventId": "personality_clear_followup",
+          "agentPersonalityOverride": "FORMAL"
+        },
+        {
+          "id": "personality_clear_followup",
+          "at": 14,
+          "eventType": "AGENT_MESSAGE",
+          "uiState": {
+            "drivingMode": "MOVING",
+            "riskLevel": "LOW",
+            "visibleStatus": "선명한 안내 확인"
+          },
+          "roadieMessage": "전방 주시를 유지해 주세요. 다음 안내는 필요한 순간에 분명하게 말씀드릴게요.",
+          "requiresResponse": false,
+          "responseOptions": [],
+          "report": {
+            "include": true,
+            "eventName": "또박또박 안내 발화"
+          },
+          "debugNote": "변경된 말투와 커진 TTS 톤을 한 번 더 확인합니다.",
+          "nextEventId": "personality_session_ended",
+          "agentPersonalityOverride": "FORMAL"
+        },
+        {
+          "id": "personality_session_ended",
+          "at": 22,
+          "eventType": "SESSION_ENDED",
+          "uiState": {
+            "drivingMode": "ENDED",
+            "riskLevel": "LOW",
+            "visibleStatus": "개인화 데모 종료"
+          },
+          "roadieMessage": "오늘 주행이 끝났어요. 운전 리포트를 정리해드릴게요.",
+          "requiresResponse": false,
+          "responseOptions": [],
+          "report": {
+            "include": false,
+            "eventName": null
+          },
+          "debugNote": null,
+          "nextEventId": "personality_report_ready",
+          "agentPersonalityOverride": "FORMAL"
+        },
+        {
+          "id": "personality_report_ready",
+          "at": 25,
+          "eventType": "REPORT_READY",
+          "uiState": {
+            "drivingMode": "ENDED",
+            "riskLevel": "LOW",
+            "visibleStatus": "개인화 데모 완료"
+          },
+          "roadieMessage": null,
+          "requiresResponse": false,
+          "responseOptions": [],
+          "report": {
+            "include": false,
+            "eventName": null
+          },
+          "debugNote": null,
+          "nextEventId": null
+        }
+      ],
+      "ending": {
+        "showReportModal": false,
+        "detailReportAvailable": false,
+        "emailUiAvailable": false
+      }
     }
   ]
 }

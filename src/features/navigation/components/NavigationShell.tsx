@@ -106,7 +106,7 @@ import {
   type SearchHistoryItem,
 } from '../api/searchHistoryApi'
 import { getCurrentAddress, getRoadMatch, getRouteOptions, searchPlaces } from '../api/tmapApi'
-import { synthesizeVoice } from '../api/voiceApi'
+import { synthesizeVoice, type VoiceTtsOptions } from '../api/voiceApi'
 import { getMusicRecommendations, type MusicMood, type MusicRecommendationTrack } from '../api/musicApi'
 import { createRoundedRoutePath } from '../map/routeGeometry'
 import { markRoutePerformance, measureRoutePerformance } from '../performance/routePerformance'
@@ -862,6 +862,38 @@ export function isAssistantVoiceWaveVisible(
   return getAssistantVisibleOrbState(assistantStep) === 'speaking' && !assistantStep.statusLabel
 }
 
+export function resolveAgentPersonalityTtsOptions(
+  agentPersonality: AgentPersonality,
+): Required<VoiceTtsOptions> {
+  switch (agentPersonality) {
+    case 'FORMAL':
+      return {
+        speed: -1,
+        pitch: 2,
+        volume: 5,
+      }
+    case 'WARM':
+      return {
+        speed: 0,
+        pitch: 4,
+        volume: 2,
+      }
+    case 'WITTY':
+      return {
+        speed: -3,
+        pitch: -2,
+        volume: 1,
+      }
+    case 'FRIENDLY':
+    default:
+      return {
+        speed: 0,
+        pitch: 0,
+        volume: 0,
+      }
+  }
+}
+
 const DEBUG_DRIVING_ASSIST_SEQUENCE = ([
   {
     alert: {
@@ -1046,6 +1078,7 @@ export function NavigationShell({
   const [simulationPosition, setSimulationPosition] = useState<Coordinate>()
   const [simulationRemainingDistance, setSimulationRemainingDistance] = useState(0)
   const [simulationRemainingDuration, setSimulationRemainingDuration] = useState(0)
+  const [simulationSpeedKph, setSimulationSpeedKph] = useState(0)
   const [guidanceDistanceUpdateKey, setGuidanceDistanceUpdateKey] = useState(0)
   const animationFrameRef = useRef<number | undefined>(undefined)
   const simulationStartedAtRef = useRef<number | undefined>(undefined)
@@ -1522,7 +1555,9 @@ export function NavigationShell({
   const selectedProfileName = selectedProfile?.displayName ?? null
   const demoActive = navigationEntryMode === 'demo-scenario' && Boolean(demoScenarioState)
   const demoNavigationLocked = demoActive
-  const demoAssistantStep = demoScenarioState ? createDemoAssistantStep(demoScenarioState, selectedProfileName) : undefined
+  const demoAssistantStep = demoScenarioState
+    ? createDemoAssistantStep(demoScenarioState, selectedProfileName, selectedProfile?.agentPersonality ?? 'FRIENDLY')
+    : undefined
   const visibleAssistantStep = demoAssistantStep ?? assistantStep
   const motionTiming = shouldReduceMotion
     ? { duration: 0 }
@@ -1868,6 +1903,7 @@ export function NavigationShell({
 
     setSimulationRemainingDistance(route.summary.distanceMeters)
     setSimulationRemainingDuration(route.summary.durationSeconds)
+    setSimulationSpeedKph(0)
     setGuidanceDistanceUpdateKey(0)
     guidanceDistanceDisplayRef.current.clear()
     simulationStartedAtRef.current = undefined
@@ -1887,6 +1923,7 @@ export function NavigationShell({
     simulationLastUiUpdateAtRef.current = undefined
     simulationSkipInitialFrameWorkRef.current = false
     simulationSkipInitialUiUpdateRef.current = false
+    setSimulationSpeedKph(0)
     setSimulationRunning(false)
   }, [])
 
@@ -2221,6 +2258,7 @@ export function NavigationShell({
         setSimulationPosition(progress.coordinate)
         setSimulationRemainingDistance(progress.remainingDistanceMeters)
         setSimulationRemainingDuration(progress.remainingDurationSeconds)
+        setSimulationSpeedKph(progress.speedKph)
         setGuidanceDistanceUpdateKey(Math.floor(elapsed / GUIDANCE_DISTANCE_UPDATE_INTERVAL_MS))
         simulationLastUiUpdateAtRef.current = timestamp
         simulationSkipInitialFrameWorkRef.current = false
@@ -2228,6 +2266,7 @@ export function NavigationShell({
 
       if (progress.completed) {
         setSimulationRunning(false)
+        setSimulationSpeedKph(0)
         animationFrameRef.current = undefined
         simulationLastUiUpdateAtRef.current = undefined
         simulationSkipInitialFrameWorkRef.current = false
@@ -2283,6 +2322,7 @@ export function NavigationShell({
               origin={origin}
               destination={destination}
               simulationPosition={simulationPosition}
+              simulationSpeedKph={activeRoute ? simulationSpeedKph : undefined}
               activeRouteOptionId={activeRouteOptionId}
               onCameraSettingsChange={updateMapCameraSettings}
               onRouteOptionsOverlayReady={setRouteOptionsOverlayReady}
@@ -2313,6 +2353,7 @@ export function NavigationShell({
               }}
               profileName={selectedProfileName}
               reducedMotion={Boolean(shouldReduceMotion)}
+              ttsOptions={resolveAgentPersonalityTtsOptions(selectedProfile?.agentPersonality ?? 'FRIENDLY')}
             />
             {!activeRoute ? (
               <>
@@ -3172,12 +3213,12 @@ function ProfileSettingsForm({
           {activePage.id === 'guidance' ? (
             <div className="grid h-full content-start grid-cols-2 gap-5 max-sm:grid-cols-1">
               <ProfileSelectField<AgentPersonality>
-                label="Agent 성격"
+                label="안내 음성 스타일"
                 options={[
-                  ['FRIENDLY', '친근함'],
-                  ['FORMAL', '정중함'],
-                  ['WARM', '따뜻함'],
-                  ['WITTY', '위트'],
+                  ['FRIENDLY', '기본 안내'],
+                  ['FORMAL', '크고 또렷한 안내'],
+                  ['WARM', '차분한 저음 안내'],
+                  ['WITTY', '밝고 빠른 안내'],
                 ]}
                 value={form.agentPersonality}
                 onChange={(value) => updateForm('agentPersonality', value)}
@@ -3743,6 +3784,7 @@ function RoadieOrbControl({
   onWakeCall,
   profileName,
   reducedMotion,
+  ttsOptions,
 }: {
   assistantStep: RoadieAssistantStep
   hidden: boolean
@@ -3754,6 +3796,7 @@ function RoadieOrbControl({
   onWakeCall: () => void
   profileName: string | null
   reducedMotion: boolean
+  ttsOptions: Required<VoiceTtsOptions>
 }) {
   const expanded = assistantStep.mode !== 'idle'
   const visibleOrbState = getAssistantVisibleOrbState(assistantStep)
@@ -3763,6 +3806,7 @@ function RoadieOrbControl({
     : ROADIE_ASSISTANT_CONTENT_REVEAL_DELAY_SECONDS
   const speechText = assistantStep.text ?? assistantStep.userText ?? ''
   const speakerRole = assistantStep.text ? 'assistant' : assistantStep.userText ? 'user' : null
+  const activeTtsOptions = assistantStep.ttsOptions ?? ttsOptions
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const audioUrlRef = useRef<string | null>(null)
 
@@ -3796,6 +3840,7 @@ function RoadieOrbControl({
         text: speechText,
         speakerRole,
         profileName,
+        ...activeTtsOptions,
       },
       undefined,
       controller.signal,
@@ -3822,7 +3867,16 @@ function RoadieOrbControl({
       audioRef.current = null
       revokeAudioUrl()
     }
-  }, [expanded, hidden, profileName, speakerRole, speechText])
+  }, [
+    activeTtsOptions.pitch,
+    activeTtsOptions.speed,
+    activeTtsOptions.volume,
+    expanded,
+    hidden,
+    profileName,
+    speakerRole,
+    speechText,
+  ])
 
   if (hidden) {
     return null
@@ -4475,10 +4529,14 @@ function getRouteDestinationLabel(recommendation: Extract<RoadieAssistantRecomme
 export function createDemoAssistantStep(
   state: DemoScenarioControllerState,
   profileName: string | null,
+  agentPersonality: AgentPersonality = 'FRIENDLY',
 ): RoadieAssistantStep {
   const setupEvent = state.setupEvent
   const scenarioEvent = state.scenarioEvent
   const recommendations = scenarioEvent ? getDemoScenarioRecommendations(scenarioEvent) : undefined
+  const ttsOptions = resolveAgentPersonalityTtsOptions(
+    scenarioEvent?.agentPersonalityOverride ?? agentPersonality,
+  )
 
   if (setupEvent) {
     return {
@@ -4513,6 +4571,7 @@ export function createDemoAssistantStep(
       energy: scenarioEvent.uiState.riskLevel === 'HIGH' ? 0.86 : 0.64,
       text: personalizeDemoRoadieMessage(scenarioEvent.roadieMessage, profileName),
       recommendations,
+      ttsOptions,
     }
   }
 
@@ -4658,6 +4717,10 @@ function DemoScenarioSelection({
   onStartFreeNavigation: () => void
   onStartScenario: (scenarioId: DemoScenarioId) => void
 }) {
+  const primaryScenarios = DEMO_SCENARIO_DEFINITIONS.filter((scenario) => !scenario.skipDrivingSetup)
+  const miniScenarios = DEMO_SCENARIO_DEFINITIONS.filter((scenario) => scenario.skipDrivingSetup)
+  const miniPlaceholderCount = Math.max(0, 4 - miniScenarios.length)
+
   return (
     <motion.div
       className="absolute inset-0 z-40 flex h-full flex-col bg-[var(--nav-frame)] px-7 py-6 text-[var(--nav-ink)]"
@@ -4683,7 +4746,7 @@ function DemoScenarioSelection({
       </div>
 
       <div className="mx-auto mt-7 grid w-full max-w-[76rem] grid-cols-3 gap-3">
-        {DEMO_SCENARIO_DEFINITIONS.map((scenario, index) => (
+        {primaryScenarios.map((scenario, index) => (
           <button
             key={scenario.scenarioId}
             className="group relative flex min-h-[14rem] overflow-hidden rounded-2xl border border-white/80 bg-white px-5 py-5 text-center shadow-[0_14px_32px_rgb(15_23_42/0.10)] transition hover:-translate-y-0.5 hover:border-[var(--nav-primary)] hover:shadow-[0_20px_44px_rgb(15_23_42/0.14)]"
@@ -4710,6 +4773,53 @@ function DemoScenarioSelection({
                 시작
                 <CaretRight className="size-4 transition group-hover:translate-x-0.5" weight="bold" />
               </span>
+            </span>
+          </button>
+        ))}
+      </div>
+
+      <div className="mx-auto mt-3 grid w-full max-w-[76rem] grid-cols-4 gap-3">
+        {miniScenarios.map((scenario, index) => {
+          const scenarioIndex = primaryScenarios.length + index
+
+          return (
+            <button
+              key={scenario.scenarioId}
+              className="group relative flex min-h-[5.75rem] items-center overflow-hidden rounded-xl border border-white/80 bg-white px-4 py-4 text-left shadow-[0_10px_22px_rgb(15_23_42/0.08)] transition hover:-translate-y-0.5 hover:border-[var(--nav-primary)] hover:shadow-[0_14px_28px_rgb(15_23_42/0.12)]"
+              data-testid={`demo-scenario-card-${scenario.scenarioId}`}
+              onClick={() => onStartScenario(scenario.scenarioId)}
+              type="button"
+            >
+              <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1 bg-[var(--nav-primary)] opacity-80" />
+              <span aria-hidden="true" className="mr-4 text-2xl font-black leading-none text-[var(--nav-primary)]">
+                {String(scenarioIndex + 1).padStart(2, '0')}
+              </span>
+              <span className="relative min-w-0 flex-1">
+                <span className="block truncate text-sm font-black leading-5">
+                  {scenario.title}
+                </span>
+                <span className="mt-1 block truncate text-xs font-semibold text-[var(--nav-muted)]">
+                  {scenario.description}
+                </span>
+              </span>
+              <CaretRight className="ml-3 size-4 shrink-0 text-[var(--nav-primary)] transition group-hover:translate-x-0.5" weight="bold" />
+            </button>
+          )
+        })}
+        {Array.from({ length: miniPlaceholderCount }, (_, index) => (
+          <button
+            key={`mini-placeholder-${index}`}
+            className="relative flex min-h-[5.75rem] cursor-not-allowed items-center overflow-hidden rounded-xl border border-dashed border-[var(--nav-border)] bg-white/55 px-4 py-4 text-left text-[var(--nav-muted)]"
+            data-testid="demo-scenario-placeholder-card"
+            disabled
+            type="button"
+          >
+            <span aria-hidden="true" className="mr-4 text-2xl font-black leading-none text-[rgb(152_162_179/0.62)]">
+              {String(primaryScenarios.length + miniScenarios.length + index + 1).padStart(2, '0')}
+            </span>
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-black leading-5">시나리오 준비 중</span>
+              <span className="mt-1 block truncate text-xs font-semibold">추가 데모 슬롯</span>
             </span>
           </button>
         ))}

@@ -12,6 +12,9 @@ describe('synthesizeVoice', () => {
         text: '안녕하세요.',
         speakerRole: 'assistant',
         profileName: '지우',
+        speed: 4,
+        pitch: 2,
+        volume: 0,
       },
       { post },
     )
@@ -22,6 +25,9 @@ describe('synthesizeVoice', () => {
         text: '안녕하세요.',
         speakerRole: 'assistant',
         profileName: '지우',
+        speed: 4,
+        pitch: 2,
+        volume: 0,
       },
       { responseType: 'blob' },
     )

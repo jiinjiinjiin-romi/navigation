@@ -11,7 +11,12 @@ export interface VoiceTtsRequest {
   speakerRole: VoiceSpeakerRole
   profileName?: string | null
   format?: 'mp3' | 'wav'
+  volume?: number
+  speed?: number
+  pitch?: number
 }
+
+export type VoiceTtsOptions = Pick<VoiceTtsRequest, 'volume' | 'speed' | 'pitch'>
 
 export async function synthesizeVoice(
   payload: VoiceTtsRequest,
