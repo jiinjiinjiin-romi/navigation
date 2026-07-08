@@ -336,17 +336,17 @@ describe('NavigationShell', () => {
 
     const userStep = createDemoAssistantStep(state, '민준')
 
-    expect(userStep.userText).toBe('창문 살짝 열어줘')
+    expect(userStep.userText).toBe('보조석 창문 살짝 열어줘')
     expect(userStep.text).toBeUndefined()
     expect(userStep.mode).toBe('user-listening')
 
     state = advanceDemoScenario(state)
 
-    const romiStep = createDemoAssistantStep(state, '민준')
+    const roadieStep = createDemoAssistantStep(state, '민준')
 
-    expect(romiStep.userText).toBeUndefined()
-    expect(romiStep.text).toBe('창문을 살짝 열게요. 그래도 피곤한 모습이 반복되면 바로 알려드릴게요.')
-    expect(romiStep.mode).toBe('assistant-speaking')
+    expect(roadieStep.userText).toBeUndefined()
+    expect(roadieStep.text).toBe('창문을 살짝 열게요. 그래도 피곤한 모습이 반복되면 바로 알려드릴게요.')
+    expect(roadieStep.mode).toBe('assistant-speaking')
   })
 
   it('preserves user speech before the next 로디 response for every demo response branch', () => {
@@ -374,14 +374,14 @@ describe('NavigationShell', () => {
 
             const nextState = advanceDemoScenario(state)
             const nextEvent = nextState.scenarioEvent
-            const romiStep = createDemoAssistantStep(nextState, '민준')
+            const roadieStep = createDemoAssistantStep(nextState, '민준')
 
             if (nextEvent?.roadieMessage) {
-              expect(romiStep.userText, `${scenario.scenarioId}:${event.id}:${option.value}`).toBeUndefined()
-              expect(romiStep.text, `${scenario.scenarioId}:${event.id}:${option.value}`).toBe(
+              expect(roadieStep.userText, `${scenario.scenarioId}:${event.id}:${option.value}`).toBeUndefined()
+              expect(roadieStep.text, `${scenario.scenarioId}:${event.id}:${option.value}`).toBe(
                 personalizeDemoRoadieMessage(nextEvent.roadieMessage, '민준'),
               )
-              expect(romiStep.mode, `${scenario.scenarioId}:${event.id}:${option.value}`).toBe('assistant-speaking')
+              expect(roadieStep.mode, `${scenario.scenarioId}:${event.id}:${option.value}`).toBe('assistant-speaking')
             }
           })
         })
@@ -1327,10 +1327,13 @@ describe('NavigationShell', () => {
     fireEvent.click(screen.getByRole('button', { name: '다음 AI 시나리오 단계' }))
 
     expect(screen.getByTestId('roadie-assistant-panel')).toBeInTheDocument()
-    expect(screen.getByTestId('roadie-assistant-panel')).toHaveClass('overflow-visible')
+    expect(screen.getByTestId('roadie-assistant-panel')).toHaveClass('max-h-full')
+    expect(screen.getByTestId('roadie-assistant-panel')).toHaveClass('self-start')
+    expect(screen.getByTestId('roadie-assistant-panel')).toHaveClass('overflow-hidden')
     expect(screen.getByTestId('roadie-assistant-panel')).toHaveClass('pointer-events-none')
     expect(screen.getByTestId('roadie-assistant-aura')).toHaveClass('roadie-assistant-aura')
     expect(screen.getByTestId('roadie-assistant-orb-slot')).toHaveClass('absolute')
+    expect(screen.getByTestId('roadie-assistant-content')).toHaveClass('flex-1')
     expect(screen.getByTestId('roadie-assistant-content')).toHaveClass('pt-[12rem]')
     expect(screen.getByRole('button', { name: '로디 AI 에이전트 닫기' })).toBeInTheDocument()
     expect(await screen.findByTestId('roadie-assistant-speech-text')).toHaveAttribute(
@@ -1353,7 +1356,10 @@ describe('NavigationShell', () => {
     fireEvent.click(screen.getByRole('button', { name: '다음 AI 시나리오 단계' }))
     expect(screen.getByTestId('roadie-assistant-recommendations')).toBeInTheDocument()
     expect(screen.getByTestId('roadie-assistant-recommendations')).toHaveClass('pointer-events-auto')
-    expect(screen.getByTestId('roadie-assistant-recommendations-scroll')).toHaveClass('max-h-[16rem]')
+    expect(screen.getByTestId('roadie-assistant-recommendations')).toHaveClass('shrink')
+    expect(screen.getByTestId('roadie-assistant-recommendations')).not.toHaveClass('flex-1')
+    expect(screen.getByTestId('roadie-assistant-recommendations-scroll')).toHaveClass('shrink')
+    expect(screen.getByTestId('roadie-assistant-recommendations-scroll')).not.toHaveClass('flex-1')
     expect(screen.getByTestId('roadie-assistant-recommendations-scroll')).toHaveClass('overscroll-contain')
     expect(screen.getByTestId('roadie-assistant-route-recommendation')).toBeInTheDocument()
     expect(await screen.findByTestId('voice-wave')).toHaveAttribute('data-active', 'true')

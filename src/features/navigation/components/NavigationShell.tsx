@@ -3813,180 +3813,181 @@ function RoadieOrbControl({
   }
 
   return (
-    <motion.div
+    <div
       aria-label="로디 AI 에이전트"
-      className={[
-        'pointer-events-none absolute right-6 top-6 z-40 text-center text-[var(--nav-ink)] max-sm:right-3 max-sm:top-3',
-        'overflow-visible',
-      ].join(' ')}
-      data-testid={expanded ? 'roadie-assistant-panel' : undefined}
-      initial={false}
-      animate={{
-        borderRadius: expanded ? 20 : 999,
-        height: expanded
-          ? assistantStep.recommendations?.length ? 'auto' : 328
-          : 132,
-        opacity: 1,
-        width: expanded
-          ? assistantStep.recommendations?.length
-            ? 'min(22.25rem, calc(100vw - 2rem))'
-            : 'min(20.75rem, calc(100vw - 2rem))'
-          : 'min(20.75rem, calc(100vw - 2rem))',
-      }}
-      transition={{
-        borderRadius: {
-          delay: expanded && motionTiming.duration !== 0 ? 0.1 : 0,
-          duration: motionTiming.duration === 0 ? 0 : 0.34,
-          ease: motionTiming.duration === 0 ? undefined : [0.34, 0, 0.2, 1],
-        },
-        height: {
-          delay: expanded && motionTiming.duration !== 0 ? 0.1 : 0,
-          duration: motionTiming.duration === 0 ? 0 : 0.34,
-          ease: motionTiming.duration === 0 ? undefined : [0.34, 0, 0.2, 1],
-        },
-        opacity: motionTiming,
-        width: {
-          delay: expanded && motionTiming.duration !== 0 ? 0.1 : 0,
-          duration: motionTiming.duration === 0 ? 0 : 0.34,
-          ease: motionTiming.duration === 0 ? undefined : [0.34, 0, 0.2, 1],
-        },
-      }}
+      className="pointer-events-none absolute bottom-[calc(43px+0.75rem)] right-6 top-6 z-40 flex min-h-0 items-start justify-end text-center text-[var(--nav-ink)] max-sm:bottom-[calc(37px+0.75rem)] max-sm:right-3 max-sm:top-3"
     >
       <motion.div
-        aria-hidden="true"
-        className="roadie-assistant-aura absolute inset-0 rounded-[inherit]"
-        data-testid="roadie-assistant-aura"
+        className="pointer-events-none relative flex max-h-full min-h-0 flex-col self-start overflow-hidden"
+        data-testid={expanded ? 'roadie-assistant-panel' : undefined}
         initial={false}
         animate={{
-          opacity: expanded ? 1 : 0,
-          boxShadow: expanded
-            ? '0 18px 46px rgba(16, 24, 40, 0.16), 0 18px 54px rgba(109, 93, 246, 0.18)'
-            : '0 18px 46px rgba(16, 24, 40, 0)',
+          borderRadius: expanded ? 20 : 999,
+          height: expanded
+            ? assistantStep.recommendations?.length ? 'auto' : 328
+            : 132,
+          opacity: 1,
+          width: expanded
+            ? assistantStep.recommendations?.length
+              ? 'min(22.25rem, calc(100vw - 2rem))'
+              : 'min(20.75rem, calc(100vw - 2rem))'
+            : 'min(20.75rem, calc(100vw - 2rem))',
         }}
         transition={{
-          delay: expanded && motionTiming.duration !== 0 ? 0.12 : 0,
-          duration: motionTiming.duration === 0 ? 0 : 0.2,
-          ease: motionTiming.duration === 0 ? undefined : [0.34, 0, 0.2, 1],
+          borderRadius: {
+            delay: expanded && motionTiming.duration !== 0 ? 0.1 : 0,
+            duration: motionTiming.duration === 0 ? 0 : 0.34,
+            ease: motionTiming.duration === 0 ? undefined : [0.34, 0, 0.2, 1],
+          },
+          height: {
+            delay: expanded && motionTiming.duration !== 0 ? 0.1 : 0,
+            duration: motionTiming.duration === 0 ? 0 : 0.34,
+            ease: motionTiming.duration === 0 ? undefined : [0.34, 0, 0.2, 1],
+          },
+          opacity: motionTiming,
+          width: {
+            delay: expanded && motionTiming.duration !== 0 ? 0.1 : 0,
+            duration: motionTiming.duration === 0 ? 0 : 0.34,
+            ease: motionTiming.duration === 0 ? undefined : [0.34, 0, 0.2, 1],
+          },
         }}
-      />
-      {expanded ? (
-        <motion.button
-          aria-label="로디 AI 에이전트 닫기"
-          className="pointer-events-auto absolute right-3 top-3 z-10 grid size-9 place-items-center rounded-full bg-[var(--nav-panel)] text-[var(--nav-muted)] transition hover:bg-[var(--nav-selection)] hover:text-[var(--nav-ink)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-ai-primary)]"
-          initial={{ opacity: 0, scale: 0.92 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{
-            ...motionTiming,
-            delay: motionTiming.duration === 0 ? 0 : 0.26,
-            duration: motionTiming.duration === 0 ? 0 : 0.16,
-          }}
-          onClick={onClose}
-          type="button"
-        >
-          <X className="size-4" weight="bold" />
-        </motion.button>
-      ) : (
-        <button
-          aria-label="로디 호출"
-          className="pointer-events-auto absolute right-0 top-0 z-10 size-[8.25rem] rounded-full bg-transparent outline-none transition focus-visible:ring-2 focus-visible:ring-[var(--nav-ai-secondary)]"
-          data-testid="roadie-orb-control"
-          onClick={onWakeCall}
-          type="button"
-        >
-          <span className="sr-only">로디 음성 어시스턴트 호출</span>
-        </button>
-      )}
-      <motion.div
-        className="relative h-full min-h-0"
       >
         <motion.div
-          className="absolute grid place-items-center overflow-visible"
-          data-testid="roadie-assistant-orb-slot"
+          aria-hidden="true"
+          className="roadie-assistant-aura absolute inset-0 rounded-[inherit]"
+          data-testid="roadie-assistant-aura"
+          initial={false}
           animate={{
-            left: expanded ? '50%' : '100%',
-            top: expanded ? 28 : 0,
-            x: expanded ? '-50%' : '-100%',
-          }}
-          style={{
-            height: ROADIE_ASSISTANT_PANEL_ORB_SIZE,
-            width: ROADIE_ASSISTANT_PANEL_ORB_SIZE,
+            opacity: expanded ? 1 : 0,
+            boxShadow: expanded
+              ? '0 18px 46px rgba(16, 24, 40, 0.16), 0 18px 54px rgba(109, 93, 246, 0.18)'
+              : '0 18px 46px rgba(16, 24, 40, 0)',
           }}
           transition={{
+            delay: expanded && motionTiming.duration !== 0 ? 0.12 : 0,
+            duration: motionTiming.duration === 0 ? 0 : 0.2,
             ease: motionTiming.duration === 0 ? undefined : [0.34, 0, 0.2, 1],
-            duration: motionTiming.duration === 0 ? 0 : 0.34,
           }}
-        >
-          {/* Project-local orb contract: docs/assistant/orb.md */}
-          <VoiceOrb
-            className="pointer-events-none [&_canvas]:mx-auto [&_canvas]:block"
-            colorTheme={NAVI_ORB_THEME}
-            energy={assistantStep.energy}
-            reducedMotion={reducedMotion}
-            size={NAVI_ORB_CONTROL_SIZE}
-            state={visibleOrbState}
-          />
-        </motion.div>
+        />
         {expanded ? (
-          <div
-            className="relative z-[1] flex min-h-0 flex-col items-center px-5 pb-5 pt-[12rem]"
-            data-testid="roadie-assistant-content"
+          <motion.button
+            aria-label="로디 AI 에이전트 닫기"
+            className="pointer-events-auto absolute right-3 top-3 z-10 grid size-9 place-items-center rounded-full bg-[var(--nav-panel)] text-[var(--nav-muted)] transition hover:bg-[var(--nav-selection)] hover:text-[var(--nav-ink)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-ai-primary)]"
+            initial={{ opacity: 0, scale: 0.92 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{
+              ...motionTiming,
+              delay: motionTiming.duration === 0 ? 0 : 0.26,
+              duration: motionTiming.duration === 0 ? 0 : 0.16,
+            }}
+            onClick={onClose}
+            type="button"
           >
-            <motion.div
-              className="flex min-h-25 w-full flex-col items-center"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{
-                ...motionTiming,
-                delay: motionTiming.duration === 0 ? 0 : contentRevealDelay,
-                duration: motionTiming.duration === 0 ? 0 : 0.18,
-              }}
+            <X className="size-4" weight="bold" />
+          </motion.button>
+        ) : (
+          <button
+            aria-label="로디 호출"
+            className="pointer-events-auto absolute right-0 top-0 z-10 size-[8.25rem] rounded-full bg-transparent outline-none transition focus-visible:ring-2 focus-visible:ring-[var(--nav-ai-secondary)]"
+            data-testid="roadie-orb-control"
+            onClick={onWakeCall}
+            type="button"
+          >
+            <span className="sr-only">로디 음성 어시스턴트 호출</span>
+          </button>
+        )}
+        <motion.div
+          className="relative flex h-full min-h-0 flex-col"
+        >
+          <motion.div
+            className="absolute grid place-items-center overflow-visible"
+            data-testid="roadie-assistant-orb-slot"
+            animate={{
+              left: expanded ? '50%' : '100%',
+              top: expanded ? 28 : 0,
+              x: expanded ? '-50%' : '-100%',
+            }}
+            style={{
+              height: ROADIE_ASSISTANT_PANEL_ORB_SIZE,
+              width: ROADIE_ASSISTANT_PANEL_ORB_SIZE,
+            }}
+            transition={{
+              ease: motionTiming.duration === 0 ? undefined : [0.34, 0, 0.2, 1],
+              duration: motionTiming.duration === 0 ? 0 : 0.34,
+            }}
+          >
+            {/* Project-local orb contract: docs/assistant/orb.md */}
+            <VoiceOrb
+              className="pointer-events-none [&_canvas]:mx-auto [&_canvas]:block"
+              colorTheme={NAVI_ORB_THEME}
+              energy={assistantStep.energy}
+              reducedMotion={reducedMotion}
+              size={NAVI_ORB_CONTROL_SIZE}
+              state={visibleOrbState}
+            />
+          </motion.div>
+          {expanded ? (
+            <div
+              className="relative z-[1] flex min-h-0 flex-1 flex-col items-center overflow-hidden px-5 pb-5 pt-[12rem]"
+              data-testid="roadie-assistant-content"
             >
-              <div className="flex h-5 items-center justify-center">
-                {assistantStep.statusLabel ? (
-                  <div className="text-sm font-bold text-[var(--nav-ai-primary)]">{assistantStep.statusLabel}</div>
-                ) : showVoiceWave ? (
-                  <VoiceWave
-                    active
-                    className="pointer-events-none"
-                    colorTheme={NAVI_ORB_THEME}
-                    energy={assistantStep.energy}
-                    reducedMotion={reducedMotion}
-                  />
-                ) : null}
-              </div>
-              <div className="mt-2 flex min-h-[4.5rem] w-full items-center justify-center">
-                {assistantStep.userText ? (
-                  <AssistantUserText
-                    animateWords={assistantStep.mode === 'user-listening'}
+              <motion.div
+                className="flex min-h-25 w-full shrink-0 flex-col items-center"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{
+                  ...motionTiming,
+                  delay: motionTiming.duration === 0 ? 0 : contentRevealDelay,
+                  duration: motionTiming.duration === 0 ? 0 : 0.18,
+                }}
+              >
+                <div className="flex h-5 items-center justify-center">
+                  {assistantStep.statusLabel ? (
+                    <div className="text-sm font-bold text-[var(--nav-ai-primary)]">{assistantStep.statusLabel}</div>
+                  ) : showVoiceWave ? (
+                    <VoiceWave
+                      active
+                      className="pointer-events-none"
+                      colorTheme={NAVI_ORB_THEME}
+                      energy={assistantStep.energy}
+                      reducedMotion={reducedMotion}
+                    />
+                  ) : null}
+                </div>
+                <div className="mt-2 flex min-h-[4.5rem] w-full items-center justify-center">
+                  {assistantStep.userText ? (
+                    <AssistantUserText
+                      animateWords={assistantStep.mode === 'user-listening'}
+                      motionTiming={motionTiming}
+                      reducedMotion={reducedMotion}
+                      text={assistantStep.userText}
+                    />
+                  ) : null}
+                  {assistantStep.text ? (
+                    <AssistantSpeechText
+                      motionTiming={motionTiming}
+                      reducedMotion={reducedMotion}
+                      text={assistantStep.text}
+                    />
+                  ) : null}
+                </div>
+              </motion.div>
+              <AnimatePresence initial={false}>
+                {assistantStep.recommendations?.length ? (
+                  <AssistantRecommendationList
                     motionTiming={motionTiming}
-                    reducedMotion={reducedMotion}
-                    text={assistantStep.userText}
+                    musicRecommendationLoading={musicRecommendationLoading}
+                    musicRecommendationTrack={musicRecommendationTrack}
+                    onRecommendationAction={onRecommendationAction}
+                    recommendations={assistantStep.recommendations}
                   />
                 ) : null}
-                {assistantStep.text ? (
-                  <AssistantSpeechText
-                    motionTiming={motionTiming}
-                    reducedMotion={reducedMotion}
-                    text={assistantStep.text}
-                  />
-                ) : null}
-              </div>
-            </motion.div>
-            <AnimatePresence initial={false}>
-              {assistantStep.recommendations?.length ? (
-                <AssistantRecommendationList
-                  motionTiming={motionTiming}
-                  musicRecommendationLoading={musicRecommendationLoading}
-                  musicRecommendationTrack={musicRecommendationTrack}
-                  onRecommendationAction={onRecommendationAction}
-                  recommendations={assistantStep.recommendations}
-                />
-              ) : null}
-            </AnimatePresence>
-          </div>
-        ) : null}
+              </AnimatePresence>
+            </div>
+          ) : null}
+        </motion.div>
       </motion.div>
-    </motion.div>
+    </div>
   )
 }
 
@@ -4112,6 +4113,7 @@ function AssistantRecommendationList({
   const messagePreviewRecommendation = recommendations.length === 1
     && recommendations[0]?.type === 'action'
     && recommendations[0].title.includes('보낼 메시지')
+  const scrollsWithinPanel = !(completedRecommendation || selectedRouteRecommendation || messagePreviewRecommendation)
   const recommendationCount = recommendations.reduce((count, item) => {
     if (item.type !== 'place') {
       return count + 1
@@ -4128,6 +4130,7 @@ function AssistantRecommendationList({
     <motion.div
       className={[
         'pointer-events-auto mt-2 flex min-h-0 w-full flex-col overflow-hidden rounded-2xl',
+        scrollsWithinPanel ? 'shrink' : 'shrink-0',
         messagePreviewRecommendation ? 'bg-transparent' : 'bg-[var(--nav-panel)]',
       ].join(' ')}
       data-testid="roadie-assistant-recommendations"
@@ -4148,7 +4151,7 @@ function AssistantRecommendationList({
       <div
         className={[
           'min-h-0 overflow-x-hidden overflow-y-auto overscroll-contain',
-          completedRecommendation || selectedRouteRecommendation ? 'px-3 py-3' : messagePreviewRecommendation ? 'px-0 py-0' : 'max-h-[16rem] px-3 pb-3',
+          completedRecommendation || selectedRouteRecommendation ? 'px-3 py-3' : messagePreviewRecommendation ? 'px-0 py-0' : 'shrink px-3 pb-3',
         ].join(' ')}
         data-testid="roadie-assistant-recommendations-scroll"
         onWheel={(event) => event.stopPropagation()}
