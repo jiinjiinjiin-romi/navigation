@@ -90,7 +90,7 @@ describe('demo scenario engine', () => {
     expect(state.scenarioEvent).toMatchObject({
       id: 'drowsy_window_response',
       eventType: 'USER_RESPONSE',
-      userSpeech: '창문 살짝 열어줘',
+      userSpeech: '보조석 창문 살짝 열어줘',
     })
 
     state = advanceDemoScenario(state)

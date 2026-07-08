@@ -4,7 +4,7 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
-  cacheDir: '.vite-codex-cache-local',
+  cacheDir: '.vite-navigation-cache',
   plugins: [
     react(),
     tailwindcss(),

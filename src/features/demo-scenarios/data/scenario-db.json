@@ -65,20 +65,20 @@
             {
               "label": "괜찮아",
               "value": "I_AM_OK",
-              "asUserSpeech": "괜찮아",
-              "nextEventId": "drowsy_ok_response"
+              "nextEventId": "drowsy_ok_response",
+              "asUserSpeech": "괜찮아"
             },
             {
               "label": "창문 살짝 열기",
               "value": "OPEN_WINDOW",
-              "asUserSpeech": "창문 살짝 열어줘",
-              "nextEventId": "drowsy_window_response"
+              "nextEventId": "drowsy_window_response",
+              "asUserSpeech": "보조석 창문 살짝 열어줘"
             },
             {
               "label": "밝은 음악 틀기",
               "value": "PLAY_BRIGHT_MUSIC",
-              "asUserSpeech": "밝은 음악 틀어줘",
-              "nextEventId": "drowsy_music_response"
+              "nextEventId": "drowsy_music_response",
+              "asUserSpeech": "밝은 음악 틀어줘"
             }
           ],
           "report": {
@@ -137,7 +137,7 @@
             "visibleStatus": "환기 보조"
           },
           "roadieMessage": null,
-          "userSpeech": "창문 살짝 열어줘",
+          "userSpeech": "보조석 창문 살짝 열어줘",
           "requiresResponse": false,
           "responseOptions": [],
           "report": {
@@ -258,8 +258,8 @@
             {
               "label": "신탄진 졸음쉼터 안내",
               "value": "GUIDE_TO_REST_AREA",
-              "asUserSpeech": "응, 신탄진 졸음쉼터로 안내해줘",
-              "nextEventId": "drowsy_rest_area_approved"
+              "nextEventId": "drowsy_rest_area_approved",
+              "asUserSpeech": "응, 신탄진 졸음쉼터로 안내해줘"
             }
           ],
           "report": {
@@ -456,8 +456,8 @@
             {
               "label": "대신 처리",
               "value": "ASSIST_MESSAGE",
-              "asUserSpeech": "응, 해줘",
-              "nextEventId": "phone_assist_approved"
+              "nextEventId": "phone_assist_approved",
+              "asUserSpeech": "응, 해줘"
             }
           ],
           "report": {
@@ -502,8 +502,8 @@
             {
               "label": "지우에게",
               "value": "SEND_TO_JIWOO",
-              "asUserSpeech": "지우에게 보내줘",
-              "nextEventId": "phone_recipient_selected"
+              "nextEventId": "phone_recipient_selected",
+              "asUserSpeech": "지우에게 보내줘"
             }
           ],
           "report": {
@@ -548,8 +548,8 @@
             {
               "label": "보내기",
               "value": "SEND_MESSAGE",
-              "asUserSpeech": "응, 보내줘",
-              "nextEventId": "phone_send_approved"
+              "nextEventId": "phone_send_approved",
+              "asUserSpeech": "응, 보내줘"
             }
           ],
           "report": {
@@ -765,8 +765,8 @@
             {
               "label": "음악 말하기",
               "value": "START_VOICE_MUSIC",
-              "asUserSpeech": "응, 조용한 음악 틀어줘",
-              "nextEventId": "device_music_approved"
+              "nextEventId": "device_music_approved",
+              "asUserSpeech": "응, 조용한 음악 틀어줘"
             }
           ],
           "report": {
@@ -811,8 +811,8 @@
             {
               "label": "음악 재생",
               "value": "PLAY_CALM_MUSIC",
-              "asUserSpeech": "응, 재생해줘",
-              "nextEventId": "device_music_selected"
+              "nextEventId": "device_music_selected",
+              "asUserSpeech": "응, 재생해줘"
             }
           ],
           "report": {
