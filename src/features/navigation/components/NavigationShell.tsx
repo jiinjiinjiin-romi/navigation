@@ -1521,7 +1521,7 @@ export function NavigationShell({
   ]
   const selectedProfileName = selectedProfile?.displayName ?? null
   const demoActive = navigationEntryMode === 'demo-scenario' && Boolean(demoScenarioState)
-  const demoNavigationLocked = demoActive && demoScenarioState?.phase === 'setup'
+  const demoNavigationLocked = demoActive
   const demoAssistantStep = demoScenarioState ? createDemoAssistantStep(demoScenarioState, selectedProfileName) : undefined
   const visibleAssistantStep = demoAssistantStep ?? assistantStep
   const motionTiming = shouldReduceMotion
@@ -2431,7 +2431,7 @@ export function NavigationShell({
             )}
             {demoNavigationLocked ? (
               <div
-                aria-label="데모 준비 중 내비게이션 조작 잠금"
+                aria-label="데모 시나리오 중 내비게이션 조작 잠금"
                 className="pointer-events-auto absolute inset-0 z-[55] cursor-not-allowed bg-transparent"
                 data-testid="demo-navigation-lock"
               />

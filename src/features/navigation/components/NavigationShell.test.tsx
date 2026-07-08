@@ -893,6 +893,71 @@ describe('NavigationShell', () => {
     expect(screen.queryByTestId('demo-scenario-presenter-panel')).not.toBeInTheDocument()
   })
 
+  it('keeps navigation interactions locked during every demo scenario stage', async () => {
+    mockedSearchPlaces.mockResolvedValue([
+      {
+        id: 'ossi-kalguksu',
+        name: '오씨칼국수 본점',
+        address: '대전 동구 옛신탄진로 13',
+        coordinate: { lat: 36.3378, lng: 127.4309 },
+      },
+    ])
+    mockedGetRoute.mockResolvedValue({
+      coordinates: [
+        { lat: 37.5502, lng: 127.073 },
+        { lat: 36.3378, lng: 127.4309 },
+      ],
+      summary: {
+        distanceMeters: 166_800,
+        durationSeconds: 8_280,
+      },
+      maneuvers: [],
+    })
+    const queryClient = new QueryClient()
+    const clickPresenterNext = async () => {
+      const nextButton = screen.getByRole('button', { name: /다음/ })
+
+      await waitFor(() => expect(nextButton).not.toBeDisabled())
+      fireEvent.click(nextButton)
+    }
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: /민준 프로필 선택/ }))
+    fireEvent.click(screen.getByRole('button', { name: '민준(으)로 시작' }))
+    fireEvent.click(await screen.findByTestId('demo-scenario-card-drowsy_driver'))
+
+    expect(await screen.findByTestId('demo-navigation-lock')).toBeInTheDocument()
+
+    await clickPresenterNext()
+    await clickPresenterNext()
+    await clickPresenterNext()
+    await clickPresenterNext()
+    await clickPresenterNext()
+    await clickPresenterNext()
+
+    expect(await screen.findByText('졸음 주의')).toBeInTheDocument()
+    expect(screen.getByTestId('demo-navigation-lock')).toBeInTheDocument()
+
+    await clickPresenterNext()
+
+    expect(await screen.findByRole('button', { name: '괜찮아' })).toBeInTheDocument()
+    expect(screen.getByTestId('demo-navigation-lock')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '괜찮아' }))
+    await clickPresenterNext()
+    await clickPresenterNext()
+    await clickPresenterNext()
+
+    expect(await screen.findByText('위험도 높음 · 휴식 안내 필요')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '신탄진 졸음쉼터 안내' })).toBeInTheDocument()
+    expect(screen.getByTestId('demo-navigation-lock')).toBeInTheDocument()
+  })
+
   it('starts the mini player when a demo music scenario reaches the music started step', async () => {
     mockedSearchPlaces.mockResolvedValue([
       {
