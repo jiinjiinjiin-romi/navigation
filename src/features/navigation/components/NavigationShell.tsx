@@ -4791,11 +4791,11 @@ function DemoScenarioSelection({
 }) {
   const primaryScenarios = DEMO_SCENARIO_DEFINITIONS.filter((scenario) => !scenario.skipDrivingSetup)
   const miniScenarios = DEMO_SCENARIO_DEFINITIONS.filter((scenario) => scenario.skipDrivingSetup)
-  const miniPlaceholderCount = Math.max(0, 4 - miniScenarios.length)
+  const miniPlaceholderCount = Math.max(0, 3 - miniScenarios.length)
 
   return (
     <motion.div
-      className="absolute inset-0 z-40 flex h-full flex-col bg-[var(--nav-frame)] px-7 py-6 text-[var(--nav-ink)]"
+      className="absolute inset-0 z-40 flex h-full flex-col justify-center bg-[var(--nav-frame)] px-7 py-6 text-[var(--nav-ink)]"
       data-testid="demo-scenario-selection"
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
@@ -4850,7 +4850,7 @@ function DemoScenarioSelection({
         ))}
       </div>
 
-      <div className="mx-auto mt-3 grid w-full max-w-[76rem] grid-cols-4 gap-3">
+      <div className="mx-auto mt-3 grid w-full max-w-[76rem] grid-cols-3 gap-3">
         {miniScenarios.map((scenario, index) => {
           const scenarioIndex = primaryScenarios.length + index
 

@@ -40,6 +40,75 @@ describe('demo scenario engine', () => {
     expect(state.scenarioEvent?.id).toBe('personality_session_started')
   })
 
+  it('includes gaze-away and reaching-behind mini scenarios without the common driving setup', () => {
+    const gazeAwayScenario = getDemoScenario('gaze_away_attention')
+    const reachingBehindScenario = getDemoScenario('reaching_behind_check')
+
+    expect(gazeAwayScenario).toMatchObject({
+      title: '시선 이탈 감지',
+      skipDrivingSetup: true,
+      tags: expect.arrayContaining(['시선 이탈', '전방 주시', '미니 시나리오']),
+    })
+    expect(gazeAwayScenario.events).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        eventType: 'DETECTION_UPDATE',
+        uiState: expect.objectContaining({
+          riskLevel: 'MEDIUM',
+          visibleStatus: '시선 이탈 주의',
+        }),
+      }),
+      expect.objectContaining({
+        eventType: 'AGENT_MESSAGE',
+        roadieMessage: '전방을 봐주세요. 시선이 도로에서 오래 벗어났어요.',
+      }),
+      expect.objectContaining({
+        eventType: 'USER_RESPONSE',
+        userSpeech: '알겠어, 앞 볼게.',
+      }),
+      expect.objectContaining({
+        eventType: 'AGENT_MESSAGE',
+        roadieMessage: '좋아요. 지금처럼 전방 주시를 유지해 주세요.',
+      }),
+    ]))
+    expect(createInitialDemoScenarioState('gaze_away_attention')).toMatchObject({
+      phase: 'scenario',
+      setupEvent: null,
+      scenarioEvent: expect.objectContaining({ id: 'gaze_away_session_started' }),
+    })
+
+    expect(reachingBehindScenario).toMatchObject({
+      title: '뒷좌석 확인 감지',
+      skipDrivingSetup: true,
+      tags: expect.arrayContaining(['뒷좌석 확인', '위험 자세', '미니 시나리오']),
+    })
+    expect(reachingBehindScenario.events).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        eventType: 'DETECTION_UPDATE',
+        uiState: expect.objectContaining({
+          riskLevel: 'MEDIUM',
+          visibleStatus: '뒤돌아봄 주의',
+        }),
+      }),
+      expect.objectContaining({
+        eventType: 'AGENT_MESSAGE',
+        roadieMessage: '뒤쪽 확인할 일이 있으면 잠깐 멈춘 뒤에 보는 게 좋아요.',
+      }),
+      expect.objectContaining({
+        eventType: 'USER_RESPONSE',
+        userSpeech: '응, 잠깐 정차하고 볼게.',
+      }),
+      expect.objectContaining({
+        eventType: 'AGENT_MESSAGE',
+        roadieMessage: '좋아요. 정차 후 확인하면 훨씬 안전해요.',
+      }),
+    ]))
+    expect(createInitialDemoScenarioState('reaching_behind_check')).toMatchObject({
+      phase: 'scenario',
+      setupEvent: null,
+      scenarioEvent: expect.objectContaining({ id: 'reaching_behind_session_started' }),
+    })
+  })
+
   it('loads demo scenario scripts from the JSON scenario database', () => {
     expect(getDemoScenarios()).toEqual(scenarioDatabase.scenarios)
   })

@@ -910,7 +910,7 @@
       "id": "agent_personality_voice_change",
       "scenarioId": "agent_personality_voice_change",
       "title": "오늘은 크게 또박또박 말해줘",
-      "description": "운전자가 피곤한 상태에서 더 크게 또박또박 안내해 달라고 요청하면 현재 세션에서 즉시 크고 또렷한 안내 스타일로 바뀌는 짧은 개인화 데모",
+      "description": "안내 음성을 크고 또박또박 바꾸는 미니 데모",
       "durationSeconds": 25,
       "tags": [
         "개인화",
@@ -1026,6 +1026,276 @@
             "drivingMode": "ENDED",
             "riskLevel": "LOW",
             "visibleStatus": "개인화 데모 완료"
+          },
+          "roadieMessage": null,
+          "requiresResponse": false,
+          "responseOptions": [],
+          "report": {
+            "include": false,
+            "eventName": null
+          },
+          "debugNote": null,
+          "nextEventId": null
+        }
+      ],
+      "ending": {
+        "showReportModal": false,
+        "detailReportAvailable": false,
+        "emailUiAvailable": false
+      }
+    },
+    {
+      "id": "gaze_away_attention",
+      "scenarioId": "gaze_away_attention",
+      "title": "시선 이탈 감지",
+      "description": "시선이 벗어났을 때 전방 주시를 안내하는 미니 데모",
+      "durationSeconds": 18,
+      "tags": [
+        "시선 이탈",
+        "전방 주시",
+        "미니 시나리오"
+      ],
+      "skipDrivingSetup": true,
+      "events": [
+        {
+          "id": "gaze_away_session_started",
+          "at": 0,
+          "eventType": "DETECTION_UPDATE",
+          "uiState": {
+            "drivingMode": "MOVING",
+            "riskLevel": "MEDIUM",
+            "visibleStatus": "시선 이탈 주의"
+          },
+          "roadieMessage": null,
+          "requiresResponse": false,
+          "responseOptions": [],
+          "report": {
+            "include": true,
+            "eventName": "전방 주시 이탈"
+          },
+          "debugNote": "GAZE_AWAY 상태 표시",
+          "nextEventId": "gaze_away_first_guidance"
+        },
+        {
+          "id": "gaze_away_first_guidance",
+          "at": 3,
+          "eventType": "AGENT_MESSAGE",
+          "uiState": {
+            "drivingMode": "MOVING",
+            "riskLevel": "MEDIUM",
+            "visibleStatus": "시선 이탈 주의"
+          },
+          "roadieMessage": "전방을 봐주세요. 시선이 도로에서 오래 벗어났어요.",
+          "requiresResponse": false,
+          "responseOptions": [],
+          "report": {
+            "include": true,
+            "eventName": "시선 이탈 안내"
+          },
+          "debugNote": null,
+          "nextEventId": "gaze_away_user_response"
+        },
+        {
+          "id": "gaze_away_user_response",
+          "at": 8,
+          "eventType": "USER_RESPONSE",
+          "uiState": {
+            "drivingMode": "MOVING",
+            "riskLevel": "LOW",
+            "visibleStatus": "주의 해제"
+          },
+          "roadieMessage": null,
+          "userSpeech": "알겠어, 앞 볼게.",
+          "requiresResponse": false,
+          "responseOptions": [],
+          "report": {
+            "include": false,
+            "eventName": null
+          },
+          "debugNote": null,
+          "nextEventId": "gaze_away_resolved"
+        },
+        {
+          "id": "gaze_away_resolved",
+          "at": 13,
+          "eventType": "AGENT_MESSAGE",
+          "uiState": {
+            "drivingMode": "MOVING",
+            "riskLevel": "LOW",
+            "visibleStatus": "주의 해제"
+          },
+          "roadieMessage": "좋아요. 지금처럼 전방 주시를 유지해 주세요.",
+          "requiresResponse": false,
+          "responseOptions": [],
+          "report": {
+            "include": true,
+            "eventName": "전방 주시 복귀"
+          },
+          "debugNote": null,
+          "nextEventId": "gaze_away_session_ended"
+        },
+        {
+          "id": "gaze_away_session_ended",
+          "at": 16,
+          "eventType": "SESSION_ENDED",
+          "uiState": {
+            "drivingMode": "ENDED",
+            "riskLevel": "LOW",
+            "visibleStatus": "주의 해제"
+          },
+          "roadieMessage": "오늘 주행이 끝났어요. 운전 리포트를 정리해드릴게요.",
+          "requiresResponse": false,
+          "responseOptions": [],
+          "report": {
+            "include": false,
+            "eventName": null
+          },
+          "debugNote": null,
+          "nextEventId": "gaze_away_report_ready"
+        },
+        {
+          "id": "gaze_away_report_ready",
+          "at": 18,
+          "eventType": "REPORT_READY",
+          "uiState": {
+            "drivingMode": "ENDED",
+            "riskLevel": "LOW",
+            "visibleStatus": "미니 데모 완료"
+          },
+          "roadieMessage": null,
+          "requiresResponse": false,
+          "responseOptions": [],
+          "report": {
+            "include": false,
+            "eventName": null
+          },
+          "debugNote": null,
+          "nextEventId": null
+        }
+      ],
+      "ending": {
+        "showReportModal": false,
+        "detailReportAvailable": false,
+        "emailUiAvailable": false
+      }
+    },
+    {
+      "id": "reaching_behind_check",
+      "scenarioId": "reaching_behind_check",
+      "title": "뒷좌석 확인 감지",
+      "description": "뒤쪽 확인은 정차 후 하도록 안내하는 미니 데모",
+      "durationSeconds": 18,
+      "tags": [
+        "뒷좌석 확인",
+        "위험 자세",
+        "미니 시나리오"
+      ],
+      "skipDrivingSetup": true,
+      "events": [
+        {
+          "id": "reaching_behind_session_started",
+          "at": 0,
+          "eventType": "DETECTION_UPDATE",
+          "uiState": {
+            "drivingMode": "MOVING",
+            "riskLevel": "MEDIUM",
+            "visibleStatus": "뒤돌아봄 주의"
+          },
+          "roadieMessage": null,
+          "requiresResponse": false,
+          "responseOptions": [],
+          "report": {
+            "include": true,
+            "eventName": "뒷좌석 확인 동작"
+          },
+          "debugNote": "REACHING_BEHIND 상태 표시",
+          "nextEventId": "reaching_behind_first_guidance"
+        },
+        {
+          "id": "reaching_behind_first_guidance",
+          "at": 3,
+          "eventType": "AGENT_MESSAGE",
+          "uiState": {
+            "drivingMode": "MOVING",
+            "riskLevel": "MEDIUM",
+            "visibleStatus": "뒤돌아봄 주의"
+          },
+          "roadieMessage": "뒤쪽 확인할 일이 있으면 잠깐 멈춘 뒤에 보는 게 좋아요.",
+          "requiresResponse": false,
+          "responseOptions": [],
+          "report": {
+            "include": true,
+            "eventName": "뒷좌석 확인 안내"
+          },
+          "debugNote": null,
+          "nextEventId": "reaching_behind_user_response"
+        },
+        {
+          "id": "reaching_behind_user_response",
+          "at": 8,
+          "eventType": "USER_RESPONSE",
+          "uiState": {
+            "drivingMode": "MOVING",
+            "riskLevel": "LOW",
+            "visibleStatus": "주의 해제"
+          },
+          "roadieMessage": null,
+          "userSpeech": "응, 잠깐 정차하고 볼게.",
+          "requiresResponse": false,
+          "responseOptions": [],
+          "report": {
+            "include": false,
+            "eventName": null
+          },
+          "debugNote": null,
+          "nextEventId": "reaching_behind_resolved"
+        },
+        {
+          "id": "reaching_behind_resolved",
+          "at": 13,
+          "eventType": "AGENT_MESSAGE",
+          "uiState": {
+            "drivingMode": "MOVING",
+            "riskLevel": "LOW",
+            "visibleStatus": "주의 해제"
+          },
+          "roadieMessage": "좋아요. 정차 후 확인하면 훨씬 안전해요.",
+          "requiresResponse": false,
+          "responseOptions": [],
+          "report": {
+            "include": true,
+            "eventName": "뒷좌석 확인 주의 해제"
+          },
+          "debugNote": null,
+          "nextEventId": "reaching_behind_session_ended"
+        },
+        {
+          "id": "reaching_behind_session_ended",
+          "at": 16,
+          "eventType": "SESSION_ENDED",
+          "uiState": {
+            "drivingMode": "ENDED",
+            "riskLevel": "LOW",
+            "visibleStatus": "주의 해제"
+          },
+          "roadieMessage": "오늘 주행이 끝났어요. 운전 리포트를 정리해드릴게요.",
+          "requiresResponse": false,
+          "responseOptions": [],
+          "report": {
+            "include": false,
+            "eventName": null
+          },
+          "debugNote": null,
+          "nextEventId": "reaching_behind_report_ready"
+        },
+        {
+          "id": "reaching_behind_report_ready",
+          "at": 18,
+          "eventType": "REPORT_READY",
+          "uiState": {
+            "drivingMode": "ENDED",
+            "riskLevel": "LOW",
+            "visibleStatus": "미니 데모 완료"
           },
           "roadieMessage": null,
           "requiresResponse": false,
