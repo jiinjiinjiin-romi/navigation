@@ -849,7 +849,19 @@ describe('NavigationShell', () => {
 
   const enterFreeNavigationIfNeeded = async () => {
     if (!screen.queryByTestId('tmap-panel')) {
-      fireEvent.click(await screen.findByRole('button', { name: '네비게이션 이용하기' }))
+      await waitFor(() => {
+        expect(
+          screen.queryByTestId('demo-entry-manual-control-button') ??
+            screen.queryByRole('button', { name: '네비게이션 이용하기' }),
+        ).toBeTruthy()
+      })
+
+      const directControlButton = screen.queryByTestId('demo-entry-manual-control-button')
+      if (directControlButton) {
+        fireEvent.click(directControlButton)
+      } else {
+        fireEvent.click(await screen.findByRole('button', { name: '네비게이션 이용하기' }))
+      }
     }
 
     await screen.findByTestId('tmap-panel')
@@ -916,11 +928,34 @@ describe('NavigationShell', () => {
       expect(mockedSelectProfile).toHaveBeenCalledWith('profile-1')
       expect(screen.queryByTestId('navigation-profile-setup')).not.toBeInTheDocument()
     })
+    expect(screen.getByTestId('demo-entry-mode-selection')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /대표 시나리오 보기/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /실시간 위험 상황 조작/ })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /대표 시나리오 보기/ }))
     expect(screen.getByTestId('demo-scenario-selection')).toBeInTheDocument()
     expect(screen.getByTestId('demo-scenario-card-agent_personality_voice_change')).not.toHaveClass('col-span-full')
     expect(screen.getByTestId('demo-scenario-card-gaze_away_attention')).toHaveTextContent('시선 이탈 감지')
     expect(screen.getByTestId('demo-scenario-card-reaching_behind_check')).toHaveTextContent('뒷좌석 확인 감지')
     expect(screen.queryByTestId('demo-scenario-placeholder-card')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '데모 모드 선택' }))
+    expect(screen.getByTestId('demo-entry-mode-selection')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /실시간 위험 상황 조작/ }))
+    expect(await screen.findByTestId('roadie-assistant-debug-panel')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /어디로 갈까요/ })).toBeInTheDocument()
+  })
+
+  it('opens free navigation from the demo scenario selection screen', async () => {
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: /민준 프로필 선택/ }))
+    fireEvent.click(screen.getByRole('button', { name: '민준(으)로 시작' }))
+    fireEvent.click(await screen.findByRole('button', { name: /대표 시나리오 보기/ }))
     fireEvent.click(screen.getByRole('button', { name: '네비게이션 이용하기' }))
     expect(screen.getByRole('button', { name: /어디로 갈까요/ })).toBeInTheDocument()
   })
@@ -936,6 +971,7 @@ describe('NavigationShell', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: /민준 프로필 선택/ }))
     fireEvent.click(screen.getByRole('button', { name: '민준(으)로 시작' }))
+    fireEvent.click(await screen.findByRole('button', { name: /대표 시나리오 보기/ }))
     fireEvent.click(await screen.findByTestId('demo-scenario-card-drowsy_driver'))
 
     expect(await screen.findByTestId('demo-scenario-presenter-panel')).toBeInTheDocument()
@@ -948,7 +984,7 @@ describe('NavigationShell', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '데모 선택으로' }))
 
-    expect(await screen.findByTestId('demo-scenario-selection')).toBeInTheDocument()
+    expect(await screen.findByTestId('demo-entry-mode-selection')).toBeInTheDocument()
     expect(screen.queryByTestId('demo-scenario-presenter-panel')).not.toBeInTheDocument()
   })
 
@@ -988,6 +1024,7 @@ describe('NavigationShell', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: /민준 프로필 선택/ }))
     fireEvent.click(screen.getByRole('button', { name: '민준(으)로 시작' }))
+    fireEvent.click(await screen.findByRole('button', { name: /대표 시나리오 보기/ }))
     fireEvent.click(await screen.findByTestId('demo-scenario-card-drowsy_driver'))
 
     expect(await screen.findByTestId('demo-navigation-lock')).toBeInTheDocument()
@@ -1053,6 +1090,7 @@ describe('NavigationShell', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: /민준 프로필 선택/ }))
     fireEvent.click(screen.getByRole('button', { name: '민준(으)로 시작' }))
+    fireEvent.click(await screen.findByRole('button', { name: /대표 시나리오 보기/ }))
     fireEvent.click(await screen.findByTestId('demo-scenario-card-device_operation'))
 
     await screen.findByTestId('demo-scenario-presenter-panel')
@@ -1260,7 +1298,7 @@ describe('NavigationShell', () => {
     await waitFor(() => {
       expect(mockedSelectProfile).toHaveBeenCalledWith('profile-created')
     })
-    expect(await screen.findByTestId('demo-scenario-selection')).toBeInTheDocument()
+    expect(await screen.findByTestId('demo-entry-mode-selection')).toBeInTheDocument()
   })
 
   it('deletes a backend profile from the profile settings screen', async () => {

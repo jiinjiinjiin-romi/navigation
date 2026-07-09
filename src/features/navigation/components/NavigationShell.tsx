@@ -1033,6 +1033,7 @@ export function NavigationShell({
   const [navigationEntryMode, setNavigationEntryMode] = useState<NavigationEntryMode | null>(
     initialProfileSetupComplete ? 'free-navigation' : null,
   )
+  const [demoScenarioSelectionOpen, setDemoScenarioSelectionOpen] = useState(false)
   const [demoScenarioState, setDemoScenarioState] = useState<DemoScenarioControllerState | null>(null)
   const [demoSimulationStartPending, setDemoSimulationStartPending] = useState(false)
   const [demoCompleted, setDemoCompleted] = useState(false)
@@ -1240,6 +1241,7 @@ export function NavigationShell({
       setCalibrationProgress(0)
       setProfileSetupComplete(false)
       setNavigationEntryMode(null)
+      setDemoScenarioSelectionOpen(false)
       setDemoScenarioState(null)
       setDemoSimulationStartPending(false)
       setDemoCompleted(false)
@@ -2247,6 +2249,7 @@ export function NavigationShell({
     endGuidance()
     setDemoScenarioState(null)
     setNavigationEntryMode(null)
+    setDemoScenarioSelectionOpen(false)
     setDemoCompleted(false)
   }, [endGuidance])
 
@@ -2607,20 +2610,34 @@ export function NavigationShell({
             </>
           ) : null}
           {profileSetupComplete && !navigationEntryMode ? (
-            <DemoScenarioSelection
-              motionTiming={motionTiming}
-              profileName={selectedProfile?.displayName ?? '운전자'}
-              onStartFreeNavigation={() => {
-                setNavigationEntryMode('free-navigation')
-                setDemoScenarioState(null)
-                setDemoCompleted(false)
-              }}
-              onStartScenario={(scenarioId) => {
-                setNavigationEntryMode('demo-scenario')
-                setDemoScenarioState(createInitialDemoScenarioState(scenarioId))
-                setDemoCompleted(false)
-              }}
-            />
+            demoScenarioSelectionOpen ? (
+              <DemoScenarioSelection
+                motionTiming={motionTiming}
+                profileName={selectedProfile?.displayName ?? '운전자'}
+                onBackToEntryMode={() => setDemoScenarioSelectionOpen(false)}
+                onStartFreeNavigation={() => {
+                  setNavigationEntryMode('free-navigation')
+                  setDemoScenarioState(null)
+                  setDemoCompleted(false)
+                }}
+                onStartScenario={(scenarioId) => {
+                  setNavigationEntryMode('demo-scenario')
+                  setDemoScenarioState(createInitialDemoScenarioState(scenarioId))
+                  setDemoCompleted(false)
+                }}
+              />
+            ) : (
+              <DemoEntryModeSelection
+                motionTiming={motionTiming}
+                profileName={selectedProfile?.displayName ?? '운전자'}
+                onOpenScenarioSelection={() => setDemoScenarioSelectionOpen(true)}
+                onStartManualControl={() => {
+                  setNavigationEntryMode('free-navigation')
+                  setDemoScenarioState(null)
+                  setDemoCompleted(false)
+                }}
+              />
+            )
           ) : null}
         </div>
 
@@ -2749,6 +2766,7 @@ export function NavigationShell({
           onBackToScenarios={() => {
             setActiveSidePanel(null)
             setNavigationEntryMode(null)
+            setDemoScenarioSelectionOpen(false)
             setDemoCompleted(false)
           }}
         />
@@ -4778,14 +4796,85 @@ export function personalizeDemoRoadieMessage(message: string, profileName: strin
   return message.split('{{profileName}}').join(callName)
 }
 
+function DemoEntryModeSelection({
+  motionTiming,
+  profileName,
+  onOpenScenarioSelection,
+  onStartManualControl,
+}: {
+  motionTiming: MotionTiming
+  profileName: string
+  onOpenScenarioSelection: () => void
+  onStartManualControl: () => void
+}) {
+  return (
+    <motion.div
+      className="absolute inset-0 z-40 flex h-full flex-col justify-center bg-[var(--nav-frame)] px-7 py-6 text-[var(--nav-ink)]"
+      data-testid="demo-entry-mode-selection"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={motionTiming}
+    >
+      <div className="mx-auto w-full max-w-[42rem] text-center">
+        <h2 className="text-2xl font-black leading-tight">데모 모드 선택</h2>
+        <p className="mt-2 text-sm font-semibold text-[var(--nav-muted)]">
+          {profileName} 프로필 · 원하는 방식으로 로디 데모를 시작하세요
+        </p>
+      </div>
+
+      <div className="mx-auto mt-7 grid w-full max-w-[56rem] grid-cols-2 gap-3 max-sm:grid-cols-1">
+        <button
+          className="group flex min-h-[13rem] flex-col items-center justify-center rounded-2xl border border-white/80 bg-white px-6 py-6 text-center shadow-[0_14px_32px_rgb(15_23_42/0.10)] transition hover:-translate-y-0.5 hover:border-[var(--nav-primary)] hover:shadow-[0_20px_44px_rgb(15_23_42/0.14)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--nav-primary)]"
+          data-testid="demo-entry-scenario-button"
+          onClick={onOpenScenarioSelection}
+          type="button"
+        >
+          <span className="grid size-12 place-items-center rounded-full bg-[var(--nav-primary-soft)] text-[var(--nav-primary)]">
+            <RoadHorizon className="size-6" weight="bold" />
+          </span>
+          <span className="mt-5 text-xl font-black leading-7">대표 시나리오 보기</span>
+          <span className="mt-3 max-w-[18rem] text-sm font-semibold leading-6 text-[var(--nav-muted)]">
+            준비된 위험행동 흐름을 순서대로 확인합니다.
+          </span>
+          <span className="mt-6 inline-flex items-center gap-1.5 text-sm font-bold text-[var(--nav-primary)]">
+            선택
+            <CaretRight className="size-4 transition group-hover:translate-x-0.5" weight="bold" />
+          </span>
+        </button>
+
+        <button
+          className="group flex min-h-[13rem] flex-col items-center justify-center rounded-2xl border border-white/80 bg-white px-6 py-6 text-center shadow-[0_14px_32px_rgb(15_23_42/0.10)] transition hover:-translate-y-0.5 hover:border-[var(--nav-warning)] hover:shadow-[0_20px_44px_rgb(15_23_42/0.14)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--nav-warning)]"
+          data-testid="demo-entry-manual-control-button"
+          onClick={onStartManualControl}
+          type="button"
+        >
+          <span className="grid size-12 place-items-center rounded-full bg-[rgb(255_247_237)] text-[var(--nav-warning)]">
+            <Warning className="size-6" weight="bold" />
+          </span>
+          <span className="mt-5 text-xl font-black leading-7">실시간 위험 상황 조작</span>
+          <span className="mt-3 max-w-[18rem] text-sm font-semibold leading-6 text-[var(--nav-muted)]">
+            데모 사용자가 직접 위험 상황을 선택하고 조작합니다.
+          </span>
+          <span className="mt-6 inline-flex items-center gap-1.5 text-sm font-bold text-[var(--nav-warning)]">
+            선택
+            <CaretRight className="size-4 transition group-hover:translate-x-0.5" weight="bold" />
+          </span>
+        </button>
+      </div>
+    </motion.div>
+  )
+}
+
 function DemoScenarioSelection({
   motionTiming,
   profileName,
+  onBackToEntryMode,
   onStartFreeNavigation,
   onStartScenario,
 }: {
   motionTiming: MotionTiming
   profileName: string
+  onBackToEntryMode: () => void
   onStartFreeNavigation: () => void
   onStartScenario: (scenarioId: DemoScenarioId) => void
 }) {
@@ -4809,7 +4898,14 @@ function DemoScenarioSelection({
           </p>
         </div>
         <button
-          className="absolute right-0 top-0 h-11 rounded-xl bg-white px-4 text-sm font-bold text-[var(--nav-ink)] shadow-[0_10px_24px_rgb(15_23_42/0.10)] transition hover:bg-[var(--nav-selection)]"
+          className="absolute left-0 top-0 h-11 rounded-xl bg-white px-4 text-sm font-bold text-[var(--nav-ink)] shadow-[0_10px_24px_rgb(15_23_42/0.10)] transition hover:bg-[var(--nav-selection)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
+          onClick={onBackToEntryMode}
+          type="button"
+        >
+          데모 모드 선택
+        </button>
+        <button
+          className="absolute right-0 top-0 h-11 rounded-xl bg-white px-4 text-sm font-bold text-[var(--nav-ink)] shadow-[0_10px_24px_rgb(15_23_42/0.10)] transition hover:bg-[var(--nav-selection)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
           onClick={onStartFreeNavigation}
           type="button"
         >
