@@ -3713,6 +3713,147 @@ describe('NavigationShell', () => {
     cancelAnimationFrameSpy.mockRestore()
   })
 
+  it('limits a delayed animation frame from jumping far ahead in simulation', async () => {
+    const rafCallbacks: FrameRequestCallback[] = []
+    const requestAnimationFrameSpy = vi
+      .spyOn(window, 'requestAnimationFrame')
+      .mockImplementation((callback) => {
+        rafCallbacks.push(callback)
+        return rafCallbacks.length
+      })
+    const cancelAnimationFrameSpy = vi
+      .spyOn(window, 'cancelAnimationFrame')
+      .mockImplementation(() => undefined)
+
+    mockedSearchPlaces.mockResolvedValue([
+      {
+        id: 'destination',
+        name: '강남역',
+        address: '서울 강남구',
+        coordinate: { lat: 37.4979, lng: 127.0276 },
+      },
+    ])
+    mockedGetRoute.mockResolvedValue({
+      coordinates: [
+        { lat: 37.5665, lng: 126.978 },
+        { lat: 37.4979, lng: 127.0276 },
+      ],
+      summary: {
+        distanceMeters: 1000,
+        durationSeconds: 60,
+      },
+    })
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
+      </QueryClientProvider>,
+    )
+
+    const destinationInput = await openDestinationEditor()
+    fireEvent.change(destinationInput, {
+      target: { value: '강남역' },
+    })
+    fireEvent.click(await screen.findByRole('option', { name: /강남역/ }))
+    await screen.findByRole('button', { name: '시뮬레이션 시작' })
+
+    fireEvent.click(screen.getByRole('button', { name: '시뮬레이션 시작' }))
+
+    await waitFor(() => {
+      expect(rafCallbacks.length).toBeGreaterThan(0)
+    })
+
+    await act(async () => {
+      rafCallbacks.shift()?.(1000)
+    })
+    await act(async () => {
+      rafCallbacks.shift()?.(11_000)
+    })
+
+    expect(window.__lastRenderedSimulationFrame?.lat).toBeGreaterThan(37.565)
+    expect(window.__lastRenderedSimulationFrame?.lng).toBeLessThan(126.98)
+
+    requestAnimationFrameSpy.mockRestore()
+    cancelAnimationFrameSpy.mockRestore()
+  })
+
+  it('uses road-match speed limits as the simulation speed baseline', async () => {
+    const rafCallbacks: FrameRequestCallback[] = []
+    const requestAnimationFrameSpy = vi
+      .spyOn(window, 'requestAnimationFrame')
+      .mockImplementation((callback) => {
+        rafCallbacks.push(callback)
+        return rafCallbacks.length
+      })
+    const cancelAnimationFrameSpy = vi
+      .spyOn(window, 'cancelAnimationFrame')
+      .mockImplementation(() => undefined)
+
+    mockedGetRoadMatch.mockResolvedValue([
+      {
+        sourceIndex: 0,
+        coordinate: { lat: 37.5665, lng: 126.978 },
+        speedLimitKph: 30,
+        roadCategory: 5,
+      },
+    ])
+    mockedSearchPlaces.mockResolvedValue([
+      {
+        id: 'destination',
+        name: '강남역',
+        address: '서울 강남구',
+        coordinate: { lat: 37.4979, lng: 127.0276 },
+      },
+    ])
+    mockedGetRoute.mockResolvedValue({
+      coordinates: [
+        { lat: 37.5665, lng: 126.978 },
+        { lat: 37.4979, lng: 127.0276 },
+      ],
+      summary: {
+        distanceMeters: 1000,
+        durationSeconds: 60,
+      },
+    })
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
+      </QueryClientProvider>,
+    )
+
+    const destinationInput = await openDestinationEditor()
+    fireEvent.change(destinationInput, {
+      target: { value: '강남역' },
+    })
+    fireEvent.click(await screen.findByRole('option', { name: /강남역/ }))
+    const startSimulationButton = await screen.findByRole('button', { name: '시뮬레이션 시작' })
+    expect(await screen.findByLabelText('제한속도 30km/h')).toBeInTheDocument()
+
+    fireEvent.click(startSimulationButton)
+
+    await waitFor(() => {
+      expect(rafCallbacks.length).toBeGreaterThan(0)
+    })
+    await act(async () => {
+      rafCallbacks.shift()?.(0)
+    })
+    await act(async () => {
+      rafCallbacks.shift()?.(300)
+    })
+
+    expect(screen.getByTestId('current-speed-number')).toHaveTextContent('25')
+
+    requestAnimationFrameSpy.mockRestore()
+    cancelAnimationFrameSpy.mockRestore()
+  })
+
   it('keeps a school-zone alert visible as active after the simulation passes the alert point', async () => {
     const rafCallbacks: FrameRequestCallback[] = []
     const requestAnimationFrameSpy = vi
@@ -3779,7 +3920,9 @@ describe('NavigationShell', () => {
       rafCallbacks.shift()?.(0)
     })
     await act(async () => {
-      rafCallbacks.shift()?.(6000)
+      for (let timestamp = 300; timestamp <= 3600; timestamp += 300) {
+        rafCallbacks.shift()?.(timestamp)
+      }
     })
 
     expect(await screen.findByLabelText('어린이보호구역 구간 내')).toBeInTheDocument()
@@ -3855,7 +3998,9 @@ describe('NavigationShell', () => {
       rafCallbacks.shift()?.(0)
     })
     await act(async () => {
-      rafCallbacks.shift()?.(6000)
+      for (let timestamp = 300; timestamp <= 3600; timestamp += 300) {
+        rafCallbacks.shift()?.(timestamp)
+      }
     })
 
     expect(await screen.findByLabelText('사고다발 구간 내')).toBeInTheDocument()

@@ -20,6 +20,7 @@ interface TmapPanelProps {
   origin?: Place
   destination?: Place
   simulationPosition?: Coordinate
+  simulationSpeedKph?: number
   activeRouteOptionId?: string
   onCameraSettingsChange?: (settings: Partial<MapCameraSettings>) => void
   onRouteOptionsOverlayReady?: (ready: boolean) => void
@@ -178,6 +179,7 @@ export function TmapPanel({
   origin,
   destination,
   simulationPosition,
+  simulationSpeedKph,
   activeRouteOptionId,
   onCameraSettingsChange,
   onRouteOptionsOverlayReady,
@@ -1836,7 +1838,7 @@ export function TmapPanel({
     <div className="relative z-0 h-full w-full overflow-hidden bg-[var(--nav-frame)]">
       <div ref={mapElementRef} className="h-full w-full" data-testid="tmap-canvas" />
       {status === 'ready' ? (
-        <div className="absolute bottom-[4.25rem] left-5 z-10 flex flex-col items-center gap-3 max-sm:bottom-16 max-sm:left-3">
+        <div className="absolute bottom-[4.25rem] left-5 z-10 flex flex-col items-start gap-3 max-sm:bottom-16 max-sm:left-3">
           <MapControlButton label="나침반 원위치" onClick={() => resetMapOrientation()}>
             <span
               className="relative grid size-11 place-items-center"
@@ -1852,9 +1854,20 @@ export function TmapPanel({
               />
             </span>
           </MapControlButton>
-          <MapControlButton label="현재 위치" onClick={handleRequestLocation}>
-            <Crosshair className="size-6" weight="bold" />
-          </MapControlButton>
+          <div className="flex items-center gap-2">
+            <MapControlButton label="현재 위치" onClick={handleRequestLocation}>
+              <Crosshair className="size-6" weight="bold" />
+            </MapControlButton>
+            {typeof simulationSpeedKph === 'number' ? (
+              <div
+                aria-label={`현재 속도 ${Math.max(0, Math.round(simulationSpeedKph))}`}
+                className="min-w-9 text-center text-2xl font-black tabular-nums text-[var(--nav-ink)] drop-shadow-[0_2px_6px_rgba(255,255,255,0.82)]"
+                data-testid="current-speed-number"
+              >
+                {Math.max(0, Math.round(simulationSpeedKph))}
+              </div>
+            ) : null}
+          </div>
           {/* <div className="overflow-hidden rounded-full bg-[var(--nav-surface-raised)]/95 shadow-[0_8px_24px_rgb(15_23_42/0.14)] backdrop-blur">
             <button
               type="button"

@@ -729,7 +729,9 @@ const MAP_SETTINGS_PITCH_MIN = 0
 const MAP_SETTINGS_PITCH_MAX = 60
 const MAP_SETTINGS_PITCH_STEP = 1
 const SIMULATION_UI_UPDATE_INTERVAL_MS = 200
+const SIMULATION_SPEED_UPDATE_INTERVAL_MS = 80
 const GUIDANCE_DISTANCE_UPDATE_INTERVAL_MS = 500
+const MAX_SIMULATION_FRAME_DELTA_MS = 300
 const NAVI_ORB_THEME: OrbColorTheme = 'daylight'
 const NAVI_ORB_CONTROL_SIZE = 132
 const ROADIE_ASSISTANT_PANEL_ORB_SIZE = 132
@@ -1084,7 +1086,10 @@ export function NavigationShell({
   const [guidanceDistanceUpdateKey, setGuidanceDistanceUpdateKey] = useState(0)
   const animationFrameRef = useRef<number | undefined>(undefined)
   const simulationStartedAtRef = useRef<number | undefined>(undefined)
+  const simulationElapsedMsRef = useRef(0)
+  const activeSimulationPlanRef = useRef<ReturnType<typeof createRouteSimulationPlan> | undefined>(undefined)
   const simulationLastUiUpdateAtRef = useRef<number | undefined>(undefined)
+  const simulationLastSpeedUpdateAtRef = useRef<number | undefined>(undefined)
   const simulationSkipInitialFrameWorkRef = useRef(false)
   const simulationSkipInitialUiUpdateRef = useRef(false)
   const simulationFrameRendererRef = useRef<((position: Coordinate, options?: { skipCamera?: boolean; skipRouteLineHead?: boolean }) => void) | undefined>(undefined)
@@ -1392,10 +1397,6 @@ export function NavigationShell({
       coordinates: createRoundedRoutePath(route.coordinates),
     }
   }, [selectedRouteOption?.route])
-  const activeRouteSimulationPlan = useMemo(
-    () => activeRoute ? createRouteSimulationPlan(activeRoute) : undefined,
-    [activeRoute],
-  )
   const demoSetupActive = navigationEntryMode === 'demo-scenario' && demoScenarioState?.phase === 'setup'
   const routeSelectionMode = Boolean(origin && destination && !selectedRouteOptionId)
   const routeSelectionModeRef = useRef(routeSelectionMode)
@@ -1429,6 +1430,10 @@ export function NavigationShell({
     staleTime: 5 * 60 * 1000,
     retry: false,
   })
+  const activeRouteSimulationPlan = useMemo(
+    () => activeRoute ? createRouteSimulationPlan(activeRoute, roadMatchQuery.data ?? []) : undefined,
+    [activeRoute, roadMatchQuery.data],
+  )
   const currentRoadMatchQuery = useQuery({
     queryKey: [
       'current-road-match',
@@ -1899,17 +1904,21 @@ export function NavigationShell({
 
   const startSimulation = () => {
     const route = activeRoute
-    if (!route?.coordinates.length) {
+    const simulationPlan = activeRouteSimulationPlan
+    if (!route?.coordinates.length || !simulationPlan) {
       return
     }
 
+    activeSimulationPlanRef.current = simulationPlan
     setSimulationRemainingDistance(route.summary.distanceMeters)
     setSimulationRemainingDuration(route.summary.durationSeconds)
     setSimulationSpeedKph(0)
     setGuidanceDistanceUpdateKey(0)
     guidanceDistanceDisplayRef.current.clear()
     simulationStartedAtRef.current = undefined
+    simulationElapsedMsRef.current = 0
     simulationLastUiUpdateAtRef.current = undefined
+    simulationLastSpeedUpdateAtRef.current = undefined
     simulationSkipInitialFrameWorkRef.current = true
     simulationSkipInitialUiUpdateRef.current = true
     setSimulationRunning(true)
@@ -1922,7 +1931,9 @@ export function NavigationShell({
     }
 
     simulationStartedAtRef.current = undefined
+    simulationElapsedMsRef.current = 0
     simulationLastUiUpdateAtRef.current = undefined
+    simulationLastSpeedUpdateAtRef.current = undefined
     simulationSkipInitialFrameWorkRef.current = false
     simulationSkipInitialUiUpdateRef.current = false
     setSimulationSpeedKph(0)
@@ -2214,7 +2225,7 @@ export function NavigationShell({
 
   useEffect(() => {
     const route = activeRoute
-    const simulationPlan = activeRouteSimulationPlan
+    const simulationPlan = activeSimulationPlanRef.current
 
     if (!simulationRunning || !route || !simulationPlan) {
       return
@@ -2233,36 +2244,54 @@ export function NavigationShell({
           skipRouteLineHead: true,
         })
         simulationStartedAtRef.current = timestamp
+        simulationElapsedMsRef.current = 0
         simulationSkipInitialUiUpdateRef.current = false
         simulationSkipInitialFrameWorkRef.current = false
-        simulationLastUiUpdateAtRef.current = timestamp
+        simulationLastUiUpdateAtRef.current = 0
+        simulationLastSpeedUpdateAtRef.current = 0
         animationFrameRef.current = window.requestAnimationFrame(tick)
         return
       }
 
-      if (simulationStartedAtRef.current === undefined) {
-        simulationStartedAtRef.current = timestamp
-      }
-      const elapsed = timestamp - simulationStartedAtRef.current
+      const previousFrameAt = simulationStartedAtRef.current ?? timestamp
+      const frameDeltaMs = Math.min(
+        Math.max(timestamp - previousFrameAt, 0),
+        MAX_SIMULATION_FRAME_DELTA_MS,
+      )
+      simulationStartedAtRef.current = timestamp
+      simulationElapsedMsRef.current = Math.min(
+        simulationDurationMs,
+        simulationElapsedMsRef.current + frameDeltaMs,
+      )
+      const elapsed = simulationElapsedMsRef.current
       const progress = getSimulatedRoutePosition(simulationPlan, elapsed / simulationDurationMs)
       const skipInitialFrameWork = simulationSkipInitialFrameWorkRef.current
       simulationFrameRendererRef.current?.(progress.coordinate, {
         skipCamera: skipInitialFrameWork,
         skipRouteLineHead: skipInitialFrameWork,
       })
+      const shouldUpdateSpeed = (
+        progress.completed ||
+        simulationLastSpeedUpdateAtRef.current === undefined ||
+        elapsed - simulationLastSpeedUpdateAtRef.current >= SIMULATION_SPEED_UPDATE_INTERVAL_MS
+      )
+      if (shouldUpdateSpeed) {
+        setSimulationSpeedKph(progress.speedKph)
+        simulationLastSpeedUpdateAtRef.current = elapsed
+      }
+
       const shouldUpdateUiState = !skipInitialUiUpdate && (
         progress.completed ||
         simulationLastUiUpdateAtRef.current === undefined ||
-        timestamp - simulationLastUiUpdateAtRef.current >= SIMULATION_UI_UPDATE_INTERVAL_MS
+        elapsed - simulationLastUiUpdateAtRef.current >= SIMULATION_UI_UPDATE_INTERVAL_MS
       )
 
       if (shouldUpdateUiState) {
         setSimulationPosition(progress.coordinate)
         setSimulationRemainingDistance(progress.remainingDistanceMeters)
         setSimulationRemainingDuration(progress.remainingDurationSeconds)
-        setSimulationSpeedKph(progress.speedKph)
         setGuidanceDistanceUpdateKey(Math.floor(elapsed / GUIDANCE_DISTANCE_UPDATE_INTERVAL_MS))
-        simulationLastUiUpdateAtRef.current = timestamp
+        simulationLastUiUpdateAtRef.current = elapsed
         simulationSkipInitialFrameWorkRef.current = false
       }
 
@@ -2270,7 +2299,10 @@ export function NavigationShell({
         setSimulationRunning(false)
         setSimulationSpeedKph(0)
         animationFrameRef.current = undefined
+        simulationElapsedMsRef.current = 0
+        activeSimulationPlanRef.current = undefined
         simulationLastUiUpdateAtRef.current = undefined
+        simulationLastSpeedUpdateAtRef.current = undefined
         simulationSkipInitialFrameWorkRef.current = false
         simulationSkipInitialUiUpdateRef.current = false
         return
@@ -2286,7 +2318,7 @@ export function NavigationShell({
         window.cancelAnimationFrame(animationFrameRef.current)
       }
     }
-  }, [activeRoute, activeRouteSimulationPlan, simulationRunning])
+  }, [activeRoute, simulationRunning])
 
   return (
     <main

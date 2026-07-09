@@ -1695,6 +1695,26 @@ describe('TmapPanel', () => {
     expect(screen.queryByRole('button', { name: '지도 축소' })).not.toBeInTheDocument()
   })
 
+  it('keeps compass and current location controls left-aligned when showing simulation speed', async () => {
+    render(<TmapPanel simulationSpeedKph={29} />)
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '현재 위치' })).toBeInTheDocument()
+    })
+
+    const compassButton = screen.getByRole('button', { name: '나침반 원위치' })
+    const currentLocationButton = screen.getByRole('button', { name: '현재 위치' })
+    const speedNumber = screen.getByTestId('current-speed-number')
+    const speedRow = currentLocationButton.parentElement
+    const controlStack = speedRow?.parentElement
+
+    expect(speedRow).toContainElement(currentLocationButton)
+    expect(speedRow).toContainElement(speedNumber)
+    expect(controlStack).toContainElement(compassButton)
+    expect(controlStack).toHaveClass('items-start')
+    expect(controlStack).not.toHaveClass('items-center')
+  })
+
   it('resets the map to north-up top-down when the compass is pressed', async () => {
     const matchMedia = vi.fn().mockReturnValue({ matches: true })
     vi.stubGlobal('matchMedia', matchMedia)
