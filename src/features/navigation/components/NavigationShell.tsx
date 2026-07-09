@@ -17,11 +17,13 @@ import {
   ClipboardText,
   DotsThree,
   FileVideo,
+  ForkKnife,
   GearSix,
   HouseLine,
   MagnifyingGlass,
   MapPin,
   Minus,
+  Moon,
   MusicNotes,
   PencilSimple,
   Play,
@@ -745,6 +747,7 @@ const ROADIE_ASSISTANT_CONTENT_REVEAL_DELAY_SECONDS = 0.52
 const ROADIE_ASSISTANT_TEXT_STAGGER_SECONDS = 0.018
 const ROADIE_ASSISTANT_USER_WORD_STAGGER_SECONDS = 0.08
 const DRIVING_ASSIST_DEBUG_QUERY_PARAM = 'debugSigns'
+const ROADIE_ASSISTANT_DEBUG_QUERY_PARAM = 'debugAssistant'
 const DRIVING_ASSIST_DEBUG_SEQUENCE_INTERVAL_MS = 1400
 const DEFAULT_CURRENT_LOCATION_PLACE: Place = {
   id: CURRENT_LOCATION_PLACE_ID,
@@ -2771,16 +2774,20 @@ export function NavigationShell({
           }}
         />
       ) : navigationEntryMode === 'free-navigation' ? (
-        <RoadieAssistantDebugPanel
-          motionTiming={motionTiming}
-          scenario={assistantScenario}
-          scenarioId={assistantScenarioId}
-          stepIndex={assistantStepIndex}
-          onNext={() => moveAssistantScenarioStep(1)}
-          onPrevious={() => moveAssistantScenarioStep(-1)}
-          onReset={resetAssistantScenario}
-          onSelectScenario={selectAssistantScenario}
-        />
+        isRoadieAssistantDebugPanelEnabled() ? (
+          <RoadieAssistantDebugPanel
+            motionTiming={motionTiming}
+            scenario={assistantScenario}
+            scenarioId={assistantScenarioId}
+            stepIndex={assistantStepIndex}
+            onNext={() => moveAssistantScenarioStep(1)}
+            onPrevious={() => moveAssistantScenarioStep(-1)}
+            onReset={resetAssistantScenario}
+            onSelectScenario={selectAssistantScenario}
+          />
+        ) : (
+          <ManualRiskControlPanel motionTiming={motionTiming} />
+        )
       ) : (
         <div className="col-start-2 row-start-2 self-start rounded-[1.1rem] border border-white/70 bg-white p-4 text-[var(--nav-ink)] shadow-[0_18px_46px_rgb(0_0_0/0.24)]">
           <p className="text-sm font-bold">데모 준비</p>
@@ -5202,6 +5209,151 @@ function getDemoRiskBadgeClassName(riskLevel: 'LOW' | 'MEDIUM' | 'HIGH') {
     default:
       return `${baseClassName} bg-emerald-100 text-emerald-700`
   }
+}
+
+type ManualRiskControlId = 'phone' | 'drowsiness' | 'device' | 'intake' | 'warning'
+
+function ManualRiskControlPanel({
+  motionTiming,
+}: {
+  motionTiming: MotionTiming
+}) {
+  const [selectedRiskId, setSelectedRiskId] = useState<ManualRiskControlId | null>(null)
+  const controls: Array<{
+    id: ManualRiskControlId
+    label: string
+    description: string
+    icon: ReactNode
+    selectedClassName: string
+    idleClassName: string
+    iconClassName: string
+  }> = [
+    {
+      id: 'phone',
+      label: '핸드폰',
+      description: '주행 중 휴대폰 주시',
+      icon: <Phone className="size-5" weight="bold" />,
+      selectedClassName: 'border-[var(--nav-danger)] bg-[rgb(255_241_242)] text-[var(--nav-danger)]',
+      idleClassName: 'border-[var(--nav-border)] bg-white text-[var(--nav-ink)] hover:border-[var(--nav-danger)]',
+      iconClassName: 'text-[var(--nav-danger)]',
+    },
+    {
+      id: 'drowsiness',
+      label: '졸음',
+      description: '눈 감김과 피로 신호',
+      icon: <Moon className="size-5" weight="bold" />,
+      selectedClassName: 'border-[var(--nav-warning)] bg-[rgb(255_247_237)] text-[var(--nav-warning)]',
+      idleClassName: 'border-[var(--nav-border)] bg-white text-[var(--nav-ink)] hover:border-[var(--nav-warning)]',
+      iconClassName: 'text-[var(--nav-warning)]',
+    },
+    {
+      id: 'device',
+      label: '기기조작',
+      description: '내비·콘솔 조작',
+      icon: <GearSix className="size-5" weight="bold" />,
+      selectedClassName: 'border-[var(--nav-primary)] bg-[var(--nav-primary-soft)] text-[var(--nav-primary)]',
+      idleClassName: 'border-[var(--nav-border)] bg-white text-[var(--nav-ink)] hover:border-[var(--nav-primary)]',
+      iconClassName: 'text-[var(--nav-primary)]',
+    },
+    {
+      id: 'intake',
+      label: '섭취',
+      description: '음식·음료 섭취',
+      icon: <ForkKnife className="size-5" weight="bold" />,
+      selectedClassName: 'border-[var(--nav-guidance)] bg-[rgb(240_253_244)] text-[var(--nav-guidance)]',
+      idleClassName: 'border-[var(--nav-border)] bg-white text-[var(--nav-ink)] hover:border-[var(--nav-guidance)]',
+      iconClassName: 'text-[var(--nav-guidance)]',
+    },
+  ]
+  const warningControl = {
+    id: 'warning' as const,
+    label: '경고',
+    description: '즉시 경고 상황',
+    icon: <Warning className="size-5" weight="bold" />,
+    selectedClassName: 'border-[var(--nav-danger)] bg-[rgb(255_241_242)] text-[var(--nav-ink)]',
+    idleClassName: 'border-[rgb(254_205_211)] bg-[rgb(255_241_242)] text-[var(--nav-ink)] hover:border-[var(--nav-danger)]',
+    iconClassName: 'text-[var(--nav-danger)]',
+  }
+
+  return (
+    <motion.section
+      aria-label="실시간 위험 상황 조작"
+      className="col-start-2 row-start-2 self-start rounded-[1.1rem] border border-white/70 bg-white p-4 text-[var(--nav-ink)] shadow-[0_18px_46px_rgb(0_0_0/0.24)]"
+      data-testid="manual-risk-control-panel"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={motionTiming}
+    >
+      <div className="border-b border-[var(--nav-border)] pb-3">
+        <p className="text-sm font-bold">운전자 이상 행동</p>
+        <p className="mt-1 text-xs font-semibold leading-5 text-[var(--nav-muted)]">
+          운전자 이상 행동을 선택하세요.
+        </p>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-2" data-testid="manual-risk-control-grid">
+        {controls.map((control) => {
+          const selected = selectedRiskId === control.id
+
+          return (
+            <button
+              aria-label={`${control.label} 위험 상황 선택`}
+              aria-pressed={selected}
+              className={[
+                'flex h-[4.25rem] flex-col items-center justify-center rounded-lg border px-3 text-center transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]',
+                selected
+                  ? control.selectedClassName
+                  : control.idleClassName,
+              ].join(' ')}
+              data-testid={`manual-risk-control-${control.id}`}
+              key={control.id}
+              onClick={() => setSelectedRiskId(control.id)}
+              type="button"
+              >
+              <span className="inline-flex items-center justify-center gap-2">
+                <span
+                  className={[
+                    'grid size-5 place-items-center',
+                    selected ? '' : control.iconClassName,
+                  ].join(' ')}
+                >
+                  {control.icon}
+                </span>
+                <span className="text-lg font-bold leading-6">{control.label}</span>
+              </span>
+              <span className="mt-0.5 text-[11px] font-semibold leading-3 text-[var(--nav-muted)]">{control.description}</span>
+            </button>
+          )
+        })}
+        <button
+          aria-label={`${warningControl.label} 위험 상황 선택`}
+          aria-pressed={selectedRiskId === warningControl.id}
+          className={[
+            'col-span-2 flex h-[4.25rem] flex-col items-center justify-center rounded-lg border px-3 text-center transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]',
+            selectedRiskId === warningControl.id
+              ? warningControl.selectedClassName
+              : warningControl.idleClassName,
+          ].join(' ')}
+          data-testid="manual-risk-control-warning"
+          onClick={() => setSelectedRiskId(warningControl.id)}
+          type="button"
+        >
+          <span className="inline-flex items-center justify-center gap-2">
+            <span
+              className={[
+                'grid size-5 place-items-center',
+                selectedRiskId === warningControl.id ? '' : warningControl.iconClassName,
+              ].join(' ')}
+            >
+              {warningControl.icon}
+            </span>
+            <span className="text-lg font-bold leading-6">{warningControl.label}</span>
+          </span>
+          <span className="mt-0.5 text-[11px] font-semibold leading-3 text-[var(--nav-ink)]">{warningControl.description}</span>
+        </button>
+      </div>
+    </motion.section>
+  )
 }
 
 function RoadieAssistantDebugPanel({
@@ -9063,6 +9215,14 @@ function useDrivingAssistDebugSequence(hasRoute: boolean) {
   }
 
   return DEBUG_DRIVING_ASSIST_SEQUENCE[debugIndex]
+}
+
+function isRoadieAssistantDebugPanelEnabled() {
+  if (typeof window === 'undefined') {
+    return false
+  }
+
+  return new URLSearchParams(window.location.search).get(ROADIE_ASSISTANT_DEBUG_QUERY_PARAM) === '1'
 }
 
 function isDrivingAssistDebugSequenceEnabled() {

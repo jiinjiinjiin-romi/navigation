@@ -940,7 +940,12 @@ describe('NavigationShell', () => {
     fireEvent.click(screen.getByRole('button', { name: '데모 모드 선택' }))
     expect(screen.getByTestId('demo-entry-mode-selection')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /실시간 위험 상황 조작/ }))
-    expect(await screen.findByTestId('roadie-assistant-debug-panel')).toBeInTheDocument()
+    expect(await screen.findByTestId('manual-risk-control-panel')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '핸드폰 위험 상황 선택' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '졸음 위험 상황 선택' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '기기조작 위험 상황 선택' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '섭취 위험 상황 선택' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '경고 위험 상황 선택' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /어디로 갈까요/ })).toBeInTheDocument()
   })
 
@@ -1417,7 +1422,7 @@ describe('NavigationShell', () => {
     const stage = screen.getByTestId('navigation-stage')
     const videoPanel = screen.getByTestId('driver-video-panel')
     const viewport = screen.getByTestId('navigation-viewport')
-    const debugPanel = screen.getByTestId('roadie-assistant-debug-panel')
+    const manualControlPanel = screen.getByTestId('manual-risk-control-panel')
 
     expect(stage).toHaveClass('grid')
     expect(stage).toHaveClass('grid-cols-[minmax(0,1fr)_24rem]')
@@ -1430,11 +1435,11 @@ describe('NavigationShell', () => {
     expect(viewport).toHaveClass('col-start-1')
     expect(viewport).toHaveClass('row-start-2')
     expect(viewport).not.toHaveClass('aspect-[16/10]')
-    expect(debugPanel).toHaveClass('col-start-2')
-    expect(debugPanel).toHaveClass('row-start-2')
-    expect(debugPanel).not.toHaveClass('row-span-2')
-    expect(debugPanel).not.toHaveClass('h-full')
-    expect(debugPanel).toHaveClass('self-start')
+    expect(manualControlPanel).toHaveClass('col-start-2')
+    expect(manualControlPanel).toHaveClass('row-start-2')
+    expect(manualControlPanel).not.toHaveClass('row-span-2')
+    expect(manualControlPanel).not.toHaveClass('h-full')
+    expect(manualControlPanel).toHaveClass('self-start')
   })
 
   it('loads a selected local driver video into the top video panel', () => {
@@ -1527,6 +1532,7 @@ describe('NavigationShell', () => {
 
   it('steps through the dummy 로디 assistant scenario without auto-playing it', async () => {
     const queryClient = new QueryClient()
+    window.history.replaceState(null, '', '/?debugAssistant=1')
 
     render(
       <QueryClientProvider client={queryClient}>
@@ -1624,6 +1630,7 @@ describe('NavigationShell', () => {
 
   it('renders a music assistant recommendation without an inline play action', async () => {
     const queryClient = new QueryClient()
+    window.history.replaceState(null, '', '/?debugAssistant=1')
     mockedGetMusicRecommendations.mockResolvedValueOnce([
       {
         id: 'itunes-bright-road',
@@ -1663,6 +1670,7 @@ describe('NavigationShell', () => {
 
   it('shows a spinner instead of fallback music while assistant recommendation is loading', async () => {
     const queryClient = new QueryClient()
+    window.history.replaceState(null, '', '/?debugAssistant=1')
     mockedGetMusicRecommendations.mockImplementationOnce(() => new Promise(() => undefined))
 
     render(
@@ -1705,6 +1713,7 @@ describe('NavigationShell', () => {
 
   it('closes the expanded 로디 assistant panel back to the floating orb', () => {
     const queryClient = new QueryClient()
+    window.history.replaceState(null, '', '/?debugAssistant=1')
 
     render(
       <QueryClientProvider client={queryClient}>
