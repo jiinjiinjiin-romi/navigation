@@ -1620,7 +1620,19 @@ describe('NavigationShell', () => {
 
     expect(await screen.findByText('휴대폰 사용을 즉시 중단하세요. 지금은 전방만 봐야 합니다.')).toBeInTheDocument()
     await waitFor(() => {
-      expect(audioPlayOrder).toEqual(['/sounds/manual-risk-stage-3.wav'])
+      expect(mockedSynthesizeVoice).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: '휴대폰 사용을 즉시 중단하세요. 지금은 전방만 봐야 합니다.',
+          speed: -2,
+          pitch: 2,
+          volume: 5,
+        }),
+        undefined,
+        expect.any(AbortSignal),
+      )
+    })
+    await waitFor(() => {
+      expect(audioPlayOrder[0]).toBe('/sounds/manual-risk-stage-3.wav')
     })
     expect(createObjectURL).not.toHaveBeenCalled()
 

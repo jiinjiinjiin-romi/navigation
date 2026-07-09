@@ -895,6 +895,11 @@ const MANUAL_RISK_DEVICE_DEPTH_ONE_DISMISS_DELAY_MS = 4_000
 const MANUAL_RISK_INTAKE_DEPTH_ONE_DISMISS_DELAY_MS = 5_000
 const MANUAL_RISK_INTAKE_STRONG_DISMISS_DELAY_MS = 7_000
 const MANUAL_RISK_STRONG_PRE_SPEECH_AUDIO_SRC = '/sounds/manual-risk-stage-3.wav'
+const MANUAL_RISK_STRONG_TTS_OPTIONS: Required<VoiceTtsOptions> = {
+  speed: -2,
+  pitch: 2,
+  volume: 5,
+}
 const MANUAL_RISK_EMERGENCY_WARNING_DELAY_MS = 3_000
 const MANUAL_RISK_EMERGENCY_PRE_SPEECH_AUDIO_SRC = '/sounds/manual-risk-emergency-warning.wav'
 const MANUAL_RISK_EMERGENCY_TTS_OPTIONS: Required<VoiceTtsOptions> = {
@@ -5543,7 +5548,9 @@ function createManualRiskAssistantStep(conversation: ManualRiskConversation): Ro
       : strongWarning ? MANUAL_RISK_STRONG_PRE_SPEECH_AUDIO_SRC : undefined,
     speechAudioPromise: conversation.speechAudioPromise,
     speechPlaybackGain: emergencyWarning ? MANUAL_RISK_EMERGENCY_TTS_PLAYBACK_GAIN : undefined,
-    ttsOptions: emergencyWarning ? MANUAL_RISK_EMERGENCY_TTS_OPTIONS : undefined,
+    ttsOptions: emergencyWarning
+      ? MANUAL_RISK_EMERGENCY_TTS_OPTIONS
+      : strongWarning ? MANUAL_RISK_STRONG_TTS_OPTIONS : undefined,
     recommendations,
   }
 }
