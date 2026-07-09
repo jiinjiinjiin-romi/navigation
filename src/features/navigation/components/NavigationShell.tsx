@@ -111,8 +111,12 @@ import { synthesizeVoice, type VoiceTtsOptions } from '../api/voiceApi'
 import { getMusicRecommendations, type MusicMood, type MusicRecommendationTrack } from '../api/musicApi'
 import { createRoundedRoutePath } from '../map/routeGeometry'
 import { markRoutePerformance, measureRoutePerformance } from '../performance/routePerformance'
-import { createRouteSimulationPlan, getSimulatedRoutePosition } from '../simulation/routeSimulation'
-import { getSimulationDurationMs } from '../simulation/simulationTiming'
+import {
+  createRouteSimulationPlan,
+  getRouteSimulationDistanceAtElapsedMs,
+  getRouteSimulationElapsedMsAtDistance,
+  getSimulatedRoutePosition,
+} from '../simulation/routeSimulation'
 import type { Coordinate, NavigationRoute, NavigationRouteOption, Place, RoadMatchPoint, RouteManeuver, SafetyAlert } from '../types'
 import accidentSignSrc from '../assets/road-signs/141.png'
 import bridgeSignSrc from '../assets/road-signs/122.png'
@@ -908,7 +912,6 @@ const DEBUG_DRIVING_ASSIST_SEQUENCE = ([
       active: false,
     },
   },
-  { speedLimitKph: 30 },
   {
     alert: {
       type: 'enforcement',
@@ -1010,7 +1013,7 @@ const DEBUG_DRIVING_ASSIST_SEQUENCE = ([
       signCode: 130,
     },
   },
-] satisfies DrivingAssistInfo[]).map((assist) => ({ speedLimitKph: 30, ...assist }))
+] satisfies DrivingAssistInfo[])
 
 export function NavigationShell({
   calibrationTiming,
@@ -1924,6 +1927,30 @@ export function NavigationShell({
     setSimulationRunning(true)
   }
 
+  useEffect(() => {
+    const currentPlan = activeSimulationPlanRef.current
+
+    if (!simulationRunning || !currentPlan || !activeRouteSimulationPlan) {
+      return
+    }
+
+    if (currentPlan === activeRouteSimulationPlan) {
+      return
+    }
+
+    const currentDistanceMeters = getRouteSimulationDistanceAtElapsedMs(
+      currentPlan,
+      simulationElapsedMsRef.current,
+    )
+    activeSimulationPlanRef.current = activeRouteSimulationPlan
+    simulationElapsedMsRef.current = getRouteSimulationElapsedMsAtDistance(
+      activeRouteSimulationPlan,
+      currentDistanceMeters,
+    )
+    simulationLastUiUpdateAtRef.current = undefined
+    simulationLastSpeedUpdateAtRef.current = undefined
+  }, [activeRouteSimulationPlan, simulationRunning])
+
   const stopSimulation = useCallback(() => {
     if (animationFrameRef.current !== undefined) {
       window.cancelAnimationFrame(animationFrameRef.current)
@@ -2225,18 +2252,18 @@ export function NavigationShell({
 
   useEffect(() => {
     const route = activeRoute
-    const simulationPlan = activeSimulationPlanRef.current
 
-    if (!simulationRunning || !route || !simulationPlan) {
+    if (!simulationRunning || !route) {
       return
     }
 
-    const simulationDurationMs = getSimulationDurationMs(
-      route.summary.durationSeconds,
-      route.summary.distanceMeters,
-    )
-
     const tick = (timestamp: number) => {
+      const simulationPlan = activeSimulationPlanRef.current
+      if (!simulationPlan) {
+        return
+      }
+
+      const simulationDurationMs = Math.max(1, simulationPlan.totalDurationMs)
       const skipInitialUiUpdate = simulationSkipInitialUiUpdateRef.current
       if (skipInitialUiUpdate) {
         simulationFrameRendererRef.current?.(simulationPlan.coordinates[0] ?? route.coordinates[0], {

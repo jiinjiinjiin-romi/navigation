@@ -1,4 +1,4 @@
-import { Environment, Float } from '@react-three/drei'
+import { Float } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
 import { Suspense } from 'react'
 import { OrbCharacter } from './OrbCharacter'
@@ -29,7 +29,6 @@ export function OrbScene({ state, volume, colorTheme = 'aurora', reducedMotion =
             reducedMotion={reducedMotion}
           />
         </Float>
-        <Environment preset="night" />
       </Suspense>
     </Canvas>
   )

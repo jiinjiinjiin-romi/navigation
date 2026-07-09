@@ -35,6 +35,12 @@ interface RouteSimulationSpeedPoint {
   speedMetersPerSecond: number
 }
 
+interface RouteSimulationSpeedLimitPoint {
+  distanceMeters: number
+  speedLimitKph: number
+  sourceIndex: number
+}
+
 const SIMULATION_SPEED_METERS_PER_SECOND = 12.5
 const DECELERATION_DURATION_MS = 7_000
 const ACCELERATION_DURATION_MS = 8_000
@@ -46,6 +52,7 @@ const STOP_BEFORE_MANEUVER_DISTANCE_METERS = 10
 const MIN_SEGMENT_DURATION_MS = 1
 const MIN_SPEED_LIMIT_KPH = 5
 const MAX_SPEED_LIMIT_KPH = 130
+const SPEED_PROFILE_ANCHOR_SPACING_METERS = 140
 const ROLLING_SLOW_MIN_KPH = 8
 const ROLLING_SLOW_MAX_KPH = 18
 const EXPLICIT_STOP_PATTERN = /신호|횡단보도/
@@ -75,6 +82,7 @@ export function createRouteSimulationPlan(
     route.coordinates,
     cumulativeDistanceMeters,
     roadMatches,
+    pathDistanceMeters,
   )
   const timelineSegments = createSimulationTimeline(pathDistanceMeters, stopEvents, speedProfile)
 
@@ -86,6 +94,47 @@ export function createRouteSimulationPlan(
     timelineSegments,
     totalDurationMs: timelineSegments[timelineSegments.length - 1]?.endTimeMs ?? 0,
   }
+}
+
+export function getRouteSimulationDistanceAtElapsedMs(plan: RouteSimulationPlan, elapsedMs: number) {
+  return getTimelineProgress(plan.timelineSegments, elapsedMs).distanceMeters
+}
+
+export function getRouteSimulationElapsedMsAtDistance(plan: RouteSimulationPlan, distanceMeters: number) {
+  const safeDistanceMeters = clamp(distanceMeters, 0, plan.pathDistanceMeters)
+
+  for (const segment of plan.timelineSegments) {
+    const startsBeforeDistance = segment.startDistanceMeters <= safeDistanceMeters
+    const endsAfterDistance = segment.endDistanceMeters >= safeDistanceMeters
+
+    if (!startsBeforeDistance || !endsAfterDistance) {
+      continue
+    }
+
+    const segmentDistanceMeters = segment.endDistanceMeters - segment.startDistanceMeters
+    const segmentDurationMs = Math.max(MIN_SEGMENT_DURATION_MS, segment.endTimeMs - segment.startTimeMs)
+
+    if (segmentDistanceMeters <= 0) {
+      return segment.startTimeMs
+    }
+
+    const distanceRatio = clamp(
+      (safeDistanceMeters - segment.startDistanceMeters) / segmentDistanceMeters,
+      0,
+      1,
+    )
+    const timeRatio = segment.type === 'SLOWING'
+      ? 1 - Math.sqrt(1 - distanceRatio)
+      : segment.type === 'ACCELERATING'
+        ? Math.sqrt(distanceRatio)
+        : distanceRatio
+
+    return segment.startTimeMs + (segmentDurationMs * timeRatio)
+  }
+
+  return safeDistanceMeters >= plan.pathDistanceMeters
+    ? plan.totalDurationMs
+    : 0
 }
 
 export function getSimulatedRoutePosition(
@@ -229,13 +278,18 @@ function createSimulationTimeline(
         return
       }
 
-      const speedMetersPerSecond = getSpeedAtDistance(speedProfile, cursorDistanceMeters)
+      const startSpeedMetersPerSecond = getSpeedAtDistance(speedProfile, cursorDistanceMeters)
+      const endSpeedMetersPerSecond = getSpeedAtDistance(speedProfile, segmentEndDistanceMeters)
+      const averageSpeedMetersPerSecond = Math.max(
+        0.1,
+        (startSpeedMetersPerSecond + endSpeedMetersPerSecond) / 2,
+      )
       appendSegment(
         'MOVING',
         distanceMeters,
-        (distanceMeters / speedMetersPerSecond) * 1000,
-        speedMetersPerSecond,
-        speedMetersPerSecond,
+        (distanceMeters / averageSpeedMetersPerSecond) * 1000,
+        startSpeedMetersPerSecond,
+        endSpeedMetersPerSecond,
       )
     })
   }
@@ -389,14 +443,14 @@ function createSimulationSpeedProfile(
   coordinates: Coordinate[],
   cumulativeDistanceMeters: number[],
   roadMatches: RoadMatchPoint[],
+  pathDistanceMeters: number,
 ): RouteSimulationSpeedPoint[] {
-  const speedPoints = roadMatches.flatMap((roadMatch, index) => {
+  const speedLimitPoints = roadMatches.flatMap<RouteSimulationSpeedLimitPoint>((roadMatch, index) => {
     if (!Number.isFinite(roadMatch.speedLimitKph) || !roadMatch.speedLimitKph) {
       return []
     }
 
     const speedLimitKph = clamp(roadMatch.speedLimitKph, MIN_SPEED_LIMIT_KPH, MAX_SPEED_LIMIT_KPH)
-    const speedKph = getSpeedLimitDrivingSpeedKph(speedLimitKph, roadMatch, index)
 
     return [{
       distanceMeters: projectCoordinateToRouteDistance(
@@ -404,18 +458,19 @@ function createSimulationSpeedProfile(
         cumulativeDistanceMeters,
         roadMatch.coordinate,
       ),
-      speedMetersPerSecond: speedKph / 3.6,
+      speedLimitKph,
+      sourceIndex: roadMatch.sourceIndex ?? index,
     }]
   }).sort((left, right) => left.distanceMeters - right.distanceMeters)
 
-  if (speedPoints.length === 0) {
+  if (speedLimitPoints.length === 0) {
     return [{
       distanceMeters: 0,
       speedMetersPerSecond: SIMULATION_SPEED_METERS_PER_SECOND,
     }]
   }
 
-  const dedupedSpeedPoints = speedPoints.reduce<RouteSimulationSpeedPoint[]>((points, point) => {
+  const dedupedSpeedLimitPoints = speedLimitPoints.reduce<RouteSimulationSpeedLimitPoint[]>((points, point) => {
     const previousPoint = points[points.length - 1]
 
     if (previousPoint && Math.abs(previousPoint.distanceMeters - point.distanceMeters) < 1) {
@@ -427,30 +482,75 @@ function createSimulationSpeedProfile(
     return points
   }, [])
 
-  if (dedupedSpeedPoints[0]?.distanceMeters > 0) {
-    dedupedSpeedPoints.unshift({
+  if (dedupedSpeedLimitPoints[0]?.distanceMeters > 0) {
+    dedupedSpeedLimitPoints.unshift({
       distanceMeters: 0,
-      speedMetersPerSecond: dedupedSpeedPoints[0].speedMetersPerSecond,
+      speedLimitKph: dedupedSpeedLimitPoints[0].speedLimitKph,
+      sourceIndex: dedupedSpeedLimitPoints[0].sourceIndex,
     })
   }
 
-  return dedupedSpeedPoints
+  const speedPoints: RouteSimulationSpeedPoint[] = []
+
+  dedupedSpeedLimitPoints.forEach((point, index) => {
+    const nextPoint = dedupedSpeedLimitPoints[index + 1]
+    const segmentEndDistanceMeters = nextPoint?.distanceMeters ?? pathDistanceMeters
+    const segmentDistanceMeters = Math.max(0, segmentEndDistanceMeters - point.distanceMeters)
+    const anchorCount = Math.max(
+      1,
+      Math.ceil(segmentDistanceMeters / SPEED_PROFILE_ANCHOR_SPACING_METERS),
+    )
+
+    for (let anchorIndex = 0; anchorIndex <= anchorCount; anchorIndex += 1) {
+      const distanceRatio = anchorCount > 0 ? anchorIndex / anchorCount : 0
+      const distanceMeters = clamp(
+        point.distanceMeters + (segmentDistanceMeters * distanceRatio),
+        0,
+        pathDistanceMeters,
+      )
+
+      if (nextPoint && distanceMeters >= nextPoint.distanceMeters && anchorIndex === anchorCount) {
+        continue
+      }
+
+      speedPoints.push({
+        distanceMeters,
+        speedMetersPerSecond: getSpeedLimitDrivingSpeedKph(
+          point.speedLimitKph,
+          point.sourceIndex + anchorIndex,
+        ) / 3.6,
+      })
+    }
+  })
+
+  if (speedPoints[speedPoints.length - 1]?.distanceMeters < pathDistanceMeters) {
+    const lastLimitPoint = dedupedSpeedLimitPoints[dedupedSpeedLimitPoints.length - 1]
+    speedPoints.push({
+      distanceMeters: pathDistanceMeters,
+      speedMetersPerSecond: getSpeedLimitDrivingSpeedKph(
+        lastLimitPoint.speedLimitKph,
+        lastLimitPoint.sourceIndex + speedPoints.length,
+      ) / 3.6,
+    })
+  }
+
+  return speedPoints
 }
 
-function getSpeedLimitVarianceKph(roadMatch: RoadMatchPoint, index: number) {
-  const variances = [-5, -2, 2, 5]
+function getSpeedLimitVarianceKph(index: number) {
+  const variances = [-5, -2, 2, 5, 1, -3, 4, -1]
 
-  return variances[Math.abs(roadMatch.sourceIndex ?? index) % variances.length]
+  return variances[Math.abs(index) % variances.length]
 }
 
 function getSpeedLimitDrivingSpeedKph(
   speedLimitKph: number,
-  roadMatch: RoadMatchPoint,
-  index: number,
+  seed: number,
 ) {
-  const speedKph = speedLimitKph + getSpeedLimitVarianceKph(roadMatch, index)
+  const drivingBaselineKph = speedLimitKph === 10 ? 20 : speedLimitKph
+  const speedKph = drivingBaselineKph + getSpeedLimitVarianceKph(seed)
 
-  return speedLimitKph <= 20
+  return drivingBaselineKph <= 20
     ? clamp(speedKph, 13, 25)
     : speedKph
 }

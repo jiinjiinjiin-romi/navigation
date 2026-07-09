@@ -2963,18 +2963,19 @@ describe('NavigationShell', () => {
     fireEvent.click(await screen.findByRole('button', { name: '도착지를 회사로 설정' }))
 
     expect(await screen.findByLabelText('어린이보호구역 40m 남음')).toBeInTheDocument()
-    expect(screen.getByLabelText('제한속도 30km/h')).toBeInTheDocument()
-
-    await act(async () => {
-      await new Promise((resolve) => window.setTimeout(resolve, debugSequenceWaitMs))
-    })
-    expect(screen.getByLabelText('제한속도 30km/h')).toBeInTheDocument()
+    expect(screen.queryByLabelText('제한속도 30km/h')).not.toBeInTheDocument()
 
     await act(async () => {
       await new Promise((resolve) => window.setTimeout(resolve, debugSequenceWaitMs))
     })
     expect(screen.getByLabelText('단속구간 80m 남음')).toBeInTheDocument()
-    expect(screen.getByLabelText('제한속도 30km/h')).toBeInTheDocument()
+    expect(screen.queryByLabelText('제한속도 30km/h')).not.toBeInTheDocument()
+
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, debugSequenceWaitMs))
+    })
+    expect(screen.getByLabelText('급커브 120m 남음')).toBeInTheDocument()
+    expect(screen.queryByLabelText('제한속도 30km/h')).not.toBeInTheDocument()
   })
 
   it('sets origin and destination from saved places without a POI search request', async () => {
@@ -3388,7 +3389,11 @@ describe('NavigationShell', () => {
     fireEvent.click(await screen.findByRole('option', { name: /강남역/ }))
     await screen.findByText('22분')
 
-    fireEvent.click(screen.getByRole('button', { name: '시뮬레이션 시작' }))
+    const startSimulationButton = screen.getByRole('button', { name: '시뮬레이션 시작' })
+    await waitFor(() => {
+      expect(startSimulationButton).toBeEnabled()
+    })
+    fireEvent.click(startSimulationButton)
 
     expect(screen.getByRole('button', { name: '시뮬레이션 중지' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '보고서' }))
@@ -3537,7 +3542,11 @@ describe('NavigationShell', () => {
     fireEvent.click(await screen.findByRole('option', { name: /강남역/ }))
     await screen.findByText('22분')
 
-    fireEvent.click(screen.getByRole('button', { name: '시뮬레이션 시작' }))
+    const startSimulationButton = screen.getByRole('button', { name: '시뮬레이션 시작' })
+    await waitFor(() => {
+      expect(startSimulationButton).toBeEnabled()
+    })
+    fireEvent.click(startSimulationButton)
 
     expect(screen.getByTestId('primary-maneuver-card')).toBeInTheDocument()
     expect(screen.getByText('경로 따라 주행')).toBeInTheDocument()
@@ -3567,7 +3576,7 @@ describe('NavigationShell', () => {
     mockedGetRoute.mockResolvedValue({
       coordinates: [
         { lat: 37.5665, lng: 126.978 },
-        { lat: 37.4979, lng: 127.0276 },
+        { lat: 37.5575, lng: 126.978 },
       ],
       summary: {
         distanceMeters: 1000,
@@ -3610,7 +3619,11 @@ describe('NavigationShell', () => {
     await screen.findByText('좌회전')
     expect(screen.getByText('500')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: '시뮬레이션 시작' }))
+    const startSimulationButton = screen.getByRole('button', { name: '시뮬레이션 시작' })
+    await waitFor(() => {
+      expect(startSimulationButton).toBeEnabled()
+    })
+    fireEvent.click(startSimulationButton)
     await waitFor(() => {
       expect(rafCallbacks.length).toBeGreaterThan(0)
     })
@@ -3690,9 +3703,12 @@ describe('NavigationShell', () => {
       target: { value: '강남역' },
     })
     fireEvent.click(await screen.findByRole('option', { name: /강남역/ }))
-    await screen.findByRole('button', { name: '시뮬레이션 시작' })
+    const startSimulationButton = await screen.findByRole('button', { name: '시뮬레이션 시작' })
+    await waitFor(() => {
+      expect(startSimulationButton).toBeEnabled()
+    })
 
-    fireEvent.click(screen.getByRole('button', { name: '시뮬레이션 시작' }))
+    fireEvent.click(startSimulationButton)
 
     await waitFor(() => {
       expect(rafCallbacks.length).toBeGreaterThan(0)
@@ -3758,9 +3774,12 @@ describe('NavigationShell', () => {
       target: { value: '강남역' },
     })
     fireEvent.click(await screen.findByRole('option', { name: /강남역/ }))
-    await screen.findByRole('button', { name: '시뮬레이션 시작' })
+    const startSimulationButton = await screen.findByRole('button', { name: '시뮬레이션 시작' })
+    await waitFor(() => {
+      expect(startSimulationButton).toBeEnabled()
+    })
 
-    fireEvent.click(screen.getByRole('button', { name: '시뮬레이션 시작' }))
+    fireEvent.click(startSimulationButton)
 
     await waitFor(() => {
       expect(rafCallbacks.length).toBeGreaterThan(0)
@@ -3775,6 +3794,139 @@ describe('NavigationShell', () => {
 
     expect(window.__lastRenderedSimulationFrame?.lat).toBeGreaterThan(37.565)
     expect(window.__lastRenderedSimulationFrame?.lng).toBeLessThan(126.98)
+
+    requestAnimationFrameSpy.mockRestore()
+    cancelAnimationFrameSpy.mockRestore()
+  })
+
+  it('starts route simulation even when road-match data is still pending', async () => {
+    const requestAnimationFrameSpy = vi
+      .spyOn(window, 'requestAnimationFrame')
+      .mockImplementation(() => 1)
+    mockedGetRoadMatch.mockReturnValue(new Promise<Awaited<ReturnType<typeof getRoadMatch>>>(() => undefined))
+    mockedSearchPlaces.mockResolvedValue([
+      {
+        id: 'destination',
+        name: '강남역',
+        address: '서울 강남구',
+        coordinate: { lat: 37.4979, lng: 127.0276 },
+      },
+    ])
+    mockedGetRoute.mockResolvedValue({
+      coordinates: [
+        { lat: 37.5665, lng: 126.978 },
+        { lat: 37.4979, lng: 127.0276 },
+      ],
+      summary: {
+        distanceMeters: 1000,
+        durationSeconds: 60,
+      },
+    })
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
+      </QueryClientProvider>,
+    )
+
+    const destinationInput = await openDestinationEditor()
+    fireEvent.change(destinationInput, {
+      target: { value: '강남역' },
+    })
+    fireEvent.click(await screen.findByRole('option', { name: /강남역/ }))
+    const startSimulationButton = await screen.findByRole('button', { name: '시뮬레이션 시작' })
+
+    expect(startSimulationButton).toBeEnabled()
+    fireEvent.click(startSimulationButton)
+    expect(screen.getByRole('button', { name: '시뮬레이션 중지' })).toBeInTheDocument()
+    expect(requestAnimationFrameSpy).toHaveBeenCalled()
+
+    requestAnimationFrameSpy.mockRestore()
+  })
+
+  it('syncs moving speed with road-match limits that arrive after simulation starts', async () => {
+    const rafCallbacks: FrameRequestCallback[] = []
+    const requestAnimationFrameSpy = vi
+      .spyOn(window, 'requestAnimationFrame')
+      .mockImplementation((callback) => {
+        rafCallbacks.push(callback)
+        return rafCallbacks.length
+      })
+    const cancelAnimationFrameSpy = vi
+      .spyOn(window, 'cancelAnimationFrame')
+      .mockImplementation(() => undefined)
+    let resolveRoadMatch!: (value: Awaited<ReturnType<typeof getRoadMatch>>) => void
+    mockedGetRoadMatch.mockReturnValue(new Promise((resolve) => {
+      resolveRoadMatch = resolve
+    }))
+    mockedSearchPlaces.mockResolvedValue([
+      {
+        id: 'destination',
+        name: '강남역',
+        address: '서울 강남구',
+        coordinate: { lat: 37.4979, lng: 127.0276 },
+      },
+    ])
+    mockedGetRoute.mockResolvedValue({
+      coordinates: [
+        { lat: 37.5665, lng: 126.978 },
+        { lat: 37.5575, lng: 126.978 },
+      ],
+      summary: {
+        distanceMeters: 1000,
+        durationSeconds: 60,
+      },
+    })
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
+      </QueryClientProvider>,
+    )
+
+    const destinationInput = await openDestinationEditor()
+    fireEvent.change(destinationInput, {
+      target: { value: '강남역' },
+    })
+    fireEvent.click(await screen.findByRole('option', { name: /강남역/ }))
+    fireEvent.click(await screen.findByRole('button', { name: '시뮬레이션 시작' }))
+
+    await waitFor(() => {
+      expect(rafCallbacks.length).toBeGreaterThan(0)
+    })
+    await act(async () => {
+      rafCallbacks.shift()?.(0)
+    })
+    await act(async () => {
+      rafCallbacks.shift()?.(300)
+    })
+    expect(screen.getByTestId('current-speed-number')).toHaveTextContent('45')
+
+    await act(async () => {
+      resolveRoadMatch([
+        {
+          sourceIndex: 0,
+          coordinate: { lat: 37.5665, lng: 126.978 },
+          speedLimitKph: 10,
+          roadCategory: 5,
+        },
+      ])
+    })
+    expect(await screen.findByLabelText('제한속도 10km/h')).toBeInTheDocument()
+
+    await act(async () => {
+      rafCallbacks.shift()?.(600)
+    })
+
+    const syncedSpeedKph = Number(screen.getByTestId('current-speed-number').textContent)
+    expect(syncedSpeedKph).toBeGreaterThanOrEqual(13)
+    expect(syncedSpeedKph).toBeLessThanOrEqual(25)
 
     requestAnimationFrameSpy.mockRestore()
     cancelAnimationFrameSpy.mockRestore()
@@ -3877,7 +4029,7 @@ describe('NavigationShell', () => {
     mockedGetRoute.mockResolvedValue({
       coordinates: [
         { lat: 37.5665, lng: 126.978 },
-        { lat: 37.4979, lng: 127.0276 },
+        { lat: 37.5575, lng: 126.978 },
       ],
       summary: {
         distanceMeters: 1000,
@@ -3911,7 +4063,11 @@ describe('NavigationShell', () => {
     fireEvent.click(await screen.findByRole('option', { name: /강남역/ }))
 
     expect(await screen.findByLabelText('어린이보호구역 40m 남음')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: '시뮬레이션 시작' }))
+    const startSimulationButton = screen.getByRole('button', { name: '시뮬레이션 시작' })
+    await waitFor(() => {
+      expect(startSimulationButton).toBeEnabled()
+    })
+    fireEvent.click(startSimulationButton)
     await waitFor(() => {
       expect(rafCallbacks.length).toBeGreaterThan(0)
     })
@@ -3955,7 +4111,7 @@ describe('NavigationShell', () => {
     mockedGetRoute.mockResolvedValue({
       coordinates: [
         { lat: 37.5665, lng: 126.978 },
-        { lat: 37.4979, lng: 127.0276 },
+        { lat: 37.5575, lng: 126.978 },
       ],
       summary: {
         distanceMeters: 1000,
@@ -3989,7 +4145,11 @@ describe('NavigationShell', () => {
     fireEvent.click(await screen.findByRole('option', { name: /강남역/ }))
 
     expect(await screen.findByLabelText('사고다발 40m 남음')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: '시뮬레이션 시작' }))
+    const startSimulationButton = screen.getByRole('button', { name: '시뮬레이션 시작' })
+    await waitFor(() => {
+      expect(startSimulationButton).toBeEnabled()
+    })
+    fireEvent.click(startSimulationButton)
     await waitFor(() => {
       expect(rafCallbacks.length).toBeGreaterThan(0)
     })

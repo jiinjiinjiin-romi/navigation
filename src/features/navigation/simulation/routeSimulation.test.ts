@@ -297,6 +297,24 @@ describe('getSimulatedRoutePosition', () => {
     expect(later.speedKph).toBeLessThanOrEqual(55)
   })
 
+  it('varies moving speed gently inside one speed-limit range', () => {
+    const plan = createRouteSimulationPlan(route, [
+      {
+        sourceIndex: 0,
+        coordinate: { lat: 37, lng: 127 },
+        speedLimitKph: 50,
+      },
+    ])
+
+    const speeds = [0.1, 0.3, 0.5, 0.7, 0.9].map((progress) => (
+      getSimulatedRoutePosition(plan, progress).speedKph
+    ))
+
+    expect(Math.min(...speeds)).toBeGreaterThanOrEqual(45)
+    expect(Math.max(...speeds)).toBeLessThanOrEqual(55)
+    expect(new Set(speeds).size).toBeGreaterThan(1)
+  })
+
   it('keeps low speed-limit roads in a 13 to 25 kph driving range', () => {
     const plan = createRouteSimulationPlan(route, [
       {
@@ -318,5 +336,32 @@ describe('getSimulatedRoutePosition', () => {
     expect(early.speedKph).toBeLessThanOrEqual(25)
     expect(later.speedKph).toBeGreaterThanOrEqual(13)
     expect(later.speedKph).toBeLessThanOrEqual(25)
+  })
+
+  it('treats a 10 kph speed limit like 20 kph for driving speed', () => {
+    const tenLimitPlan = createRouteSimulationPlan(route, [
+      {
+        sourceIndex: 0,
+        coordinate: { lat: 37, lng: 127 },
+        speedLimitKph: 10,
+      },
+    ])
+    const twentyLimitPlan = createRouteSimulationPlan(route, [
+      {
+        sourceIndex: 0,
+        coordinate: { lat: 37, lng: 127 },
+        speedLimitKph: 20,
+      },
+    ])
+    const sampleProgress = [0.1, 0.3, 0.5, 0.7, 0.9]
+
+    const tenLimitSpeeds = sampleProgress.map((progress) => (
+      getSimulatedRoutePosition(tenLimitPlan, progress).speedKph
+    ))
+    const twentyLimitSpeeds = sampleProgress.map((progress) => (
+      getSimulatedRoutePosition(twentyLimitPlan, progress).speedKph
+    ))
+
+    expect(tenLimitSpeeds).toEqual(twentyLimitSpeeds)
   })
 })
