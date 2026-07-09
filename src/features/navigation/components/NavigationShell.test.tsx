@@ -824,6 +824,10 @@ describe('NavigationShell', () => {
     mockGeolocationSuccess()
   })
 
+  const clickManualRiskNext = () => {
+    fireEvent.click(within(screen.getByTestId('manual-risk-control-panel')).getByRole('button', { name: '다음' }))
+  }
+
   const openRouteSearchSummary = async () => {
     await enterFreeNavigationIfNeeded()
 
@@ -964,6 +968,586 @@ describe('NavigationShell', () => {
     fireEvent.click(screen.getByRole('button', { name: '네비게이션 이용하기' }))
     expect(screen.getByRole('button', { name: /어디로 갈까요/ })).toBeInTheDocument()
   })
+
+  it('stacks manual risk depth only for the same driver behavior', async () => {
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '핸드폰 위험 상황 선택' }))
+    expect(await screen.findByText('휴대폰은 잠시 내려두고 전방을 봐주세요.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '핸드폰 위험 상황 선택' })).not.toHaveAttribute('aria-pressed')
+    expect(within(screen.getByTestId('manual-risk-stack-status')).getByText('핸드폰')).toBeInTheDocument()
+    expect(within(screen.getByTestId('manual-risk-stack-status')).getByText('1/3')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '핸드폰 위험 상황 선택' }))
+    expect(await screen.findByText('휴대폰으로 할 일이 있으면 제가 도와드릴게요. 어떤 도움이 필요하세요?')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '아빠한테 10분 정도 늦을 것 같다고 문자 보내줘.' })).toBeInTheDocument()
+    expect(within(screen.getByTestId('manual-risk-stack-status')).getByText('2/3')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '핸드폰 위험 상황 선택' }))
+    expect(await screen.findByText('휴대폰 사용을 즉시 중단하세요. 지금은 전방만 봐야 합니다.')).toBeInTheDocument()
+    expect(within(screen.getByTestId('manual-risk-stack-status')).getByText('3/3')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '핸드폰 위험 상황 선택' }))
+    expect(await screen.findByText('휴대폰은 잠시 내려두고 전방을 봐주세요.')).toBeInTheDocument()
+    expect(within(screen.getByTestId('manual-risk-stack-status')).getByText('1/3')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '졸음 위험 상황 선택' }))
+    expect(await screen.findByText('눈이 무거워 보여요. 전방을 보고 자세를 바로잡아주세요.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '괜찮아. 조금 더 갈 수 있어.' })).not.toBeInTheDocument()
+    expect(within(screen.getByTestId('manual-risk-stack-status')).getByText('졸음')).toBeInTheDocument()
+    expect(within(screen.getByTestId('manual-risk-stack-status')).getByText('1/3')).toBeInTheDocument()
+  })
+
+  it('renders manual risk response options at the bottom of the manual control panel', async () => {
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '핸드폰 위험 상황 선택' }))
+    expect(await screen.findByText('휴대폰은 잠시 내려두고 전방을 봐주세요.')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '핸드폰 위험 상황 선택' }))
+    expect(await screen.findByText('휴대폰으로 할 일이 있으면 제가 도와드릴게요. 어떤 도움이 필요하세요?')).toBeInTheDocument()
+
+    const controlPanel = screen.getByTestId('manual-risk-control-panel')
+    const roadiePanel = screen.getByTestId('roadie-assistant-panel')
+    const messageOptionName = '아빠한테 10분 정도 늦을 것 같다고 문자 보내줘.'
+
+    expect(within(controlPanel).getByRole('button', { name: messageOptionName })).toBeInTheDocument()
+    expect(within(roadiePanel).queryByRole('button', { name: messageOptionName })).not.toBeInTheDocument()
+  })
+
+  it('renders the confirmed manual risk text and options for every driver behavior', async () => {
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '핸드폰 위험 상황 선택' }))
+    expect(await screen.findByText('휴대폰은 잠시 내려두고 전방을 봐주세요.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '핸드폰 위험 상황 선택' }))
+    expect(await screen.findByText('휴대폰으로 할 일이 있으면 제가 도와드릴게요. 어떤 도움이 필요하세요?')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '아빠한테 10분 정도 늦을 것 같다고 문자 보내줘.' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '대전역 성심당 근처에 뭐가 있는지 찾아줘.' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '여름 휴가가는 중이야. 신나는 노래 틀어줘.' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '핸드폰 위험 상황 선택' }))
+    expect(await screen.findByText('휴대폰 사용을 즉시 중단하세요. 지금은 전방만 봐야 합니다.')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '졸음 위험 상황 선택' }))
+    expect(await screen.findByText('눈이 무거워 보여요. 전방을 보고 자세를 바로잡아주세요.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '졸음 위험 상황 선택' }))
+    expect(await screen.findByText('졸음이 계속되면 위험해요. 잠 깰 수 있게 도와드릴까요?')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '괜찮아. 조금 더 갈 수 있어.' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '창문 조금만 열어줘.' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '잠 깨는 밝은 음악 틀어줘.' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '졸음 위험 상황 선택' }))
+    expect(await screen.findByText('더 이상 운전하면 안 됩니다. 가까운 곳에 정차하고 반드시 쉬어가세요.')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '기기조작 위험 상황 선택' }))
+    expect(await screen.findByText('기기 조작은 잠시 멈추고 운전에 집중해주세요.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '기기조작 위험 상황 선택' }))
+    expect(await screen.findByText('기기 조작이 필요하면 제가 도와드릴게요. 어떤 기능이 필요하세요?')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '빅뱅의 붉은 노을 틀어줘.' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '성심당으로 도착지 변경해줘.' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '기기조작 위험 상황 선택' }))
+    expect(await screen.findByText('기기 조작을 즉시 중단하세요. 두 손은 운전에만 사용해야 합니다.')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '섭취 위험 상황 선택' }))
+    expect(await screen.findByText('음식이나 음료는 잠시 내려두고 전방을 봐주세요.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '섭취 위험 상황 선택' }))
+    expect(await screen.findByText('먹거나 마시는 행동을 즉시 멈추세요. 지금은 운전에만 집중해야 합니다.')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: '빅뱅의 붉은 노을 틀어줘.' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: '성심당으로 도착지 변경해줘.' })).not.toBeInTheDocument()
+    })
+  })
+
+  it('keeps the sent message panel for two seconds and handles closing it first', async () => {
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '핸드폰 위험 상황 선택' }))
+    fireEvent.click(screen.getByRole('button', { name: '핸드폰 위험 상황 선택' }))
+    fireEvent.click(screen.getByRole('button', { name: '아빠한테 10분 정도 늦을 것 같다고 문자 보내줘.' }))
+
+    expect(screen.getByTestId('roadie-assistant-user-text')).toHaveTextContent('아빠한테 10분 정도 늦을 것 같다고 문자 보내줘.')
+    expect(within(screen.getByTestId('manual-risk-control-panel')).getByRole('button', { name: '다음' })).toBeInTheDocument()
+
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 600))
+    })
+
+    expect(screen.getByTestId('roadie-assistant-user-text')).toHaveTextContent('아빠한테 10분 정도 늦을 것 같다고 문자 보내줘.')
+    expect(screen.queryByText('아빠에게 10분 정도 늦을 것 같다고 보낼게요. 이렇게 보내면 될까요?')).not.toBeInTheDocument()
+
+    clickManualRiskNext()
+    expect(await screen.findByText('아빠에게 10분 정도 늦을 것 같다고 보낼게요. 이렇게 보내면 될까요?')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '응 그렇게 보내줘.' }))
+
+    expect(screen.getByTestId('roadie-assistant-user-text')).toHaveTextContent('응 그렇게 보내줘.')
+    clickManualRiskNext()
+    expect(await screen.findByText('전송 완료되었습니다.')).toBeInTheDocument()
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 1_700))
+    })
+    expect(screen.getByText('전송 완료되었습니다.')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.queryByText('전송 완료되었습니다.')).not.toBeInTheDocument()
+    }, { timeout: 1_000 })
+
+    fireEvent.click(screen.getByRole('button', { name: '핸드폰 위험 상황 선택' }))
+    fireEvent.click(screen.getByRole('button', { name: '핸드폰 위험 상황 선택' }))
+    fireEvent.click(screen.getByRole('button', { name: '아빠한테 10분 정도 늦을 것 같다고 문자 보내줘.' }))
+    clickManualRiskNext()
+    fireEvent.click(await screen.findByRole('button', { name: '응 그렇게 보내줘.' }))
+    clickManualRiskNext()
+    expect(await screen.findByText('전송 완료되었습니다.')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '로디 AI 에이전트 닫기' }))
+    expect(screen.queryByText('전송 완료되었습니다.')).not.toBeInTheDocument()
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 2_100))
+    })
+    expect(screen.queryByText('전송 완료되었습니다.')).not.toBeInTheDocument()
+    expect(screen.getByTestId('manual-risk-control-panel')).toBeInTheDocument()
+  }, 10_000)
+
+  it('closes intake manual risk warnings after the configured timing', async () => {
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '섭취 위험 상황 선택' }))
+    expect(await screen.findByText('음식이나 음료는 잠시 내려두고 전방을 봐주세요.')).toBeInTheDocument()
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 4_700))
+    })
+    expect(screen.getByText('음식이나 음료는 잠시 내려두고 전방을 봐주세요.')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.queryByText('음식이나 음료는 잠시 내려두고 전방을 봐주세요.')).not.toBeInTheDocument()
+    }, { timeout: 1_000 })
+
+    fireEvent.click(screen.getByRole('button', { name: '섭취 위험 상황 선택' }))
+    fireEvent.click(screen.getByRole('button', { name: '섭취 위험 상황 선택' }))
+    expect(await screen.findByText('먹거나 마시는 행동을 즉시 멈추세요. 지금은 운전에만 집중해야 합니다.')).toBeInTheDocument()
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 6_700))
+    })
+    expect(screen.getByText('먹거나 마시는 행동을 즉시 멈추세요. 지금은 운전에만 집중해야 합니다.')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.queryByText('먹거나 마시는 행동을 즉시 멈추세요. 지금은 운전에만 집중해야 합니다.')).not.toBeInTheDocument()
+    }, { timeout: 1_000 })
+  }, 15_000)
+
+  it('closes depth one manual risk warnings after their configured timing', async () => {
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '핸드폰 위험 상황 선택' }))
+    expect(await screen.findByText('휴대폰은 잠시 내려두고 전방을 봐주세요.')).toBeInTheDocument()
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 3_700))
+    })
+    expect(screen.getByText('휴대폰은 잠시 내려두고 전방을 봐주세요.')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.queryByText('휴대폰은 잠시 내려두고 전방을 봐주세요.')).not.toBeInTheDocument()
+    }, { timeout: 1_000 })
+
+    fireEvent.click(screen.getByRole('button', { name: '졸음 위험 상황 선택' }))
+    expect(await screen.findByText('눈이 무거워 보여요. 전방을 보고 자세를 바로잡아주세요.')).toBeInTheDocument()
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 5_700))
+    })
+    expect(screen.getByText('눈이 무거워 보여요. 전방을 보고 자세를 바로잡아주세요.')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.queryByText('눈이 무거워 보여요. 전방을 보고 자세를 바로잡아주세요.')).not.toBeInTheDocument()
+    }, { timeout: 1_000 })
+
+    fireEvent.click(screen.getByRole('button', { name: '기기조작 위험 상황 선택' }))
+    expect(await screen.findByText('기기 조작은 잠시 멈추고 운전에 집중해주세요.')).toBeInTheDocument()
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 3_700))
+    })
+    expect(screen.getByText('기기 조작은 잠시 멈추고 운전에 집중해주세요.')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.queryByText('기기 조작은 잠시 멈추고 운전에 집중해주세요.')).not.toBeInTheDocument()
+    }, { timeout: 1_000 })
+  }, 20_000)
+
+  it('uses configured search cards and real music data for manual risk follow-up cards', async () => {
+    const queryClient = new QueryClient()
+    mockedSearchPlaces.mockResolvedValue([])
+    mockedGetMusicRecommendations.mockResolvedValueOnce([
+      {
+        id: 'red-sunset',
+        title: '붉은 노을',
+        artist: '빅뱅',
+        album: 'Remember',
+        duration: '4:03',
+        durationSeconds: 243,
+        coverUrl: null,
+        sourceUrl: 'https://music.apple.com/kr/song/red-sunset',
+        provider: 'itunes',
+      },
+    ])
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '핸드폰 위험 상황 선택' }))
+    fireEvent.click(screen.getByRole('button', { name: '핸드폰 위험 상황 선택' }))
+    fireEvent.click(await screen.findByRole('button', { name: '대전역 성심당 근처에 뭐가 있는지 찾아줘.' }))
+    clickManualRiskNext()
+    await waitFor(() => expect(screen.getByText('맛집과 관광지 중에서 어떤 걸 찾아볼까요?')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: '대전역 성심당 근처 맛집 찾아줘.' }))
+    clickManualRiskNext()
+
+    expect(mockedSearchPlaces).not.toHaveBeenCalled()
+    expect(await screen.findByText('월산본가')).toBeInTheDocument()
+    expect(screen.getByText('선화동소머리해장국')).toBeInTheDocument()
+    expect(screen.getByText('미도인 대전')).toBeInTheDocument()
+    expect(screen.getByText('대전역 성심당 근처 맛집들은 아래와 같아요. 특히 월산본가가 좋아 보여요.')).toBeInTheDocument()
+    expect(screen.getByTestId('manual-risk-result-cards')).toHaveClass('overflow-hidden')
+    expect(screen.getByTestId('manual-risk-result-cards')).toHaveClass('max-h-[16rem]')
+    expect(screen.getByTestId('manual-risk-result-cards-scroll')).toHaveClass('overflow-y-auto')
+    expect(screen.getByTestId('manual-risk-result-cards-scroll')).toHaveClass('overscroll-contain')
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 8_700))
+    })
+    expect(screen.getByText('월산본가')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.queryByText('월산본가')).not.toBeInTheDocument()
+    }, { timeout: 1_000 })
+
+    fireEvent.click(screen.getByRole('button', { name: '핸드폰 위험 상황 선택' }))
+    fireEvent.click(screen.getByRole('button', { name: '핸드폰 위험 상황 선택' }))
+    fireEvent.click(await screen.findByRole('button', { name: '대전역 성심당 근처에 뭐가 있는지 찾아줘.' }))
+    clickManualRiskNext()
+    fireEvent.click(await screen.findByRole('button', { name: '대전 관광지 찾아줘.' }))
+    clickManualRiskNext()
+
+    expect(mockedSearchPlaces).not.toHaveBeenCalled()
+    expect(await screen.findByText('한밭수목원')).toBeInTheDocument()
+    expect(screen.getByText('국립중앙과학관')).toBeInTheDocument()
+    expect(screen.getByText('대전 관광지는 아래와 같아요. 특히 한밭수목원이 좋아 보여요.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '로디 AI 에이전트 닫기' }))
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 7_100))
+    })
+    expect(screen.queryByText('한밭수목원')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '기기조작 위험 상황 선택' }))
+    expect(await screen.findByText('기기 조작은 잠시 멈추고 운전에 집중해주세요.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '기기조작 위험 상황 선택' }))
+    expect(await screen.findByText('기기 조작이 필요하면 제가 도와드릴게요. 어떤 기능이 필요하세요?')).toBeInTheDocument()
+    fireEvent.click(await screen.findByRole('button', { name: '빅뱅의 붉은 노을 틀어줘.' }))
+    clickManualRiskNext()
+
+    expect(await screen.findByTestId('music-mini-player')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(mockedGetMusicRecommendations).toHaveBeenCalledWith(
+        expect.objectContaining({ keyword: '빅뱅 붉은 노을' }),
+        undefined,
+        expect.any(AbortSignal),
+      )
+    })
+    expect(await screen.findAllByText('붉은 노을')).toHaveLength(2)
+    expect(screen.getAllByText('빅뱅')).toHaveLength(2)
+    expect(screen.getByText('빅뱅의 붉은 노을을 재생해드릴게요.')).toBeInTheDocument()
+    expect(screen.getByTestId('roadie-assistant-music-recommendation-card')).toBeInTheDocument()
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 3_700))
+    })
+    expect(screen.getByTestId('music-mini-player')).toBeInTheDocument()
+    expect(screen.getByTestId('roadie-assistant-music-recommendation-card')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.queryByTestId('music-mini-player')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('roadie-assistant-music-recommendation-card')).not.toBeInTheDocument()
+    }, { timeout: 1_000 })
+
+    fireEvent.click(screen.getByRole('button', { name: '기기조작 위험 상황 선택' }))
+    fireEvent.click(screen.getByRole('button', { name: '기기조작 위험 상황 선택' }))
+    fireEvent.click(await screen.findByRole('button', { name: '빅뱅의 붉은 노을 틀어줘.' }))
+    clickManualRiskNext()
+    expect(await screen.findByTestId('music-mini-player')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '로디 AI 에이전트 닫기' }))
+    expect(screen.queryByTestId('roadie-assistant-music-recommendation-card')).not.toBeInTheDocument()
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 3_600))
+    })
+    expect(screen.queryByTestId('roadie-assistant-music-recommendation-card')).not.toBeInTheDocument()
+  }, 30_000)
+
+  it('keeps the phone music result panel for four seconds before closing it', async () => {
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '핸드폰 위험 상황 선택' }))
+    fireEvent.click(screen.getByRole('button', { name: '핸드폰 위험 상황 선택' }))
+    fireEvent.click(await screen.findByRole('button', { name: '여름 휴가가는 중이야. 신나는 노래 틀어줘.' }))
+    clickManualRiskNext()
+
+    expect(await screen.findByTestId('music-mini-player')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(mockedGetMusicRecommendations).toHaveBeenCalledWith(
+        expect.objectContaining({ keyword: '여름 휴가 신나는 노래', mood: 'drive' }),
+        undefined,
+        expect.any(AbortSignal),
+      )
+    })
+    expect(screen.getByText('신나는 분위기에 맞는 음악을 준비할게요.')).toBeInTheDocument()
+    expect(screen.getByTestId('roadie-assistant-music-recommendation-card')).toBeInTheDocument()
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 3_700))
+    })
+    expect(screen.getByTestId('music-mini-player')).toBeInTheDocument()
+    expect(screen.getByTestId('roadie-assistant-music-recommendation-card')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.queryByTestId('music-mini-player')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('roadie-assistant-music-recommendation-card')).not.toBeInTheDocument()
+    }, { timeout: 1_000 })
+  }, 10_000)
+
+  it('clears configured search cards when another manual risk is selected', async () => {
+    const queryClient = new QueryClient()
+    mockedSearchPlaces.mockResolvedValue([])
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '핸드폰 위험 상황 선택' }))
+    fireEvent.click(screen.getByRole('button', { name: '핸드폰 위험 상황 선택' }))
+    fireEvent.click(await screen.findByRole('button', { name: '대전역 성심당 근처에 뭐가 있는지 찾아줘.' }))
+    clickManualRiskNext()
+    await waitFor(() => expect(screen.getByText('맛집과 관광지 중에서 어떤 걸 찾아볼까요?')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: '대전역 성심당 근처 맛집 찾아줘.' }))
+    clickManualRiskNext()
+    expect(screen.getByText('월산본가')).toBeInTheDocument()
+    expect(mockedSearchPlaces).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: '졸음 위험 상황 선택' }))
+    expect(await screen.findByText('눈이 무거워 보여요. 전방을 보고 자세를 바로잡아주세요.')).toBeInTheDocument()
+
+    expect(screen.getByText('눈이 무거워 보여요. 전방을 보고 자세를 바로잡아주세요.')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.queryByText('월산본가')).not.toBeInTheDocument()
+    })
+  })
+
+  it('runs drowsiness follow-up actions with the configured close timing', async () => {
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '졸음 위험 상황 선택' }))
+    fireEvent.click(screen.getByRole('button', { name: '졸음 위험 상황 선택' }))
+    fireEvent.click(await screen.findByRole('button', { name: '괜찮아. 조금 더 갈 수 있어.' }))
+    clickManualRiskNext()
+
+    expect(await screen.findByText('알겠습니다. 그래도 졸리면 바로 쉬어가야 해요.')).toBeInTheDocument()
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 4_700))
+    })
+    expect(screen.getByText('알겠습니다. 그래도 졸리면 바로 쉬어가야 해요.')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.queryByText('알겠습니다. 그래도 졸리면 바로 쉬어가야 해요.')).not.toBeInTheDocument()
+    }, { timeout: 1_000 })
+
+    fireEvent.click(screen.getByRole('button', { name: '졸음 위험 상황 선택' }))
+    fireEvent.click(screen.getByRole('button', { name: '졸음 위험 상황 선택' }))
+    fireEvent.click(await screen.findByRole('button', { name: '창문 조금만 열어줘.' }))
+    clickManualRiskNext()
+
+    expect(await screen.findByText('창문을 살짝 열게요. 그래도 잠이 깨지 않는다면 쉬어가는걸 추천드려요.')).toBeInTheDocument()
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 6_200))
+    })
+    expect(screen.getByText('창문을 살짝 열게요. 그래도 잠이 깨지 않는다면 쉬어가는걸 추천드려요.')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.queryByText('창문을 살짝 열게요. 그래도 잠이 깨지 않는다면 쉬어가는걸 추천드려요.')).not.toBeInTheDocument()
+    }, { timeout: 1_000 })
+
+    fireEvent.click(screen.getByRole('button', { name: '졸음 위험 상황 선택' }))
+    fireEvent.click(screen.getByRole('button', { name: '졸음 위험 상황 선택' }))
+    fireEvent.click(await screen.findByRole('button', { name: '잠 깨는 밝은 음악 틀어줘.' }))
+    clickManualRiskNext()
+
+    expect(await screen.findByTestId('music-mini-player')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(mockedGetMusicRecommendations).toHaveBeenCalledWith(
+        expect.objectContaining({ keyword: '잠 깨는 밝은 노래', mood: 'bright' }),
+        undefined,
+        expect.any(AbortSignal),
+      )
+    })
+    expect(screen.getByTestId('roadie-assistant-music-recommendation-card')).toBeInTheDocument()
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 7_700))
+    })
+    expect(screen.getByTestId('music-mini-player')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.queryByTestId('music-mini-player')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('roadie-assistant-music-recommendation-card')).not.toBeInTheDocument()
+    }, { timeout: 1_000 })
+  }, 20_000)
+
+  it('does not apply an older destination change after another manual risk is selected', async () => {
+    const queryClient = new QueryClient()
+    let resolveRouteOptions!: (options: Awaited<ReturnType<typeof getRouteOptions>>) => void
+    mockedSearchPlaces.mockResolvedValue([
+      {
+        id: 'wrong-sungsimdang',
+        name: '성심당 한의원',
+        address: '대전 서구',
+        coordinate: { lat: 36.3501, lng: 127.3849 },
+      },
+    ])
+    mockedGetRouteOptions.mockReturnValue(new Promise((resolve) => {
+      resolveRouteOptions = resolve
+    }))
+    const route = {
+      coordinates: [
+        { lat: 37.5547, lng: 126.9706 },
+        { lat: 36.3326, lng: 127.4347 },
+      ],
+      summary: {
+        distanceMeters: 154_300,
+        durationSeconds: 7_860,
+      },
+      maneuvers: [],
+    }
+    const routeOption = createMockRouteOption(route)
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '기기조작 위험 상황 선택' }))
+    fireEvent.click(screen.getByRole('button', { name: '기기조작 위험 상황 선택' }))
+    fireEvent.click(await screen.findByRole('button', { name: '성심당으로 도착지 변경해줘.' }))
+    clickManualRiskNext()
+    await waitFor(() => {
+      expect(mockedSearchPlaces).not.toHaveBeenCalled()
+      expect(mockedGetRouteOptions).toHaveBeenCalledWith(
+        expect.any(Object),
+        { lat: 36.3326, lng: 127.4347 },
+        undefined,
+        expect.any(AbortSignal),
+      )
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: '졸음 위험 상황 선택' }))
+    expect(await screen.findByText('눈이 무거워 보여요. 전방을 보고 자세를 바로잡아주세요.')).toBeInTheDocument()
+
+    await act(async () => {
+      resolveRouteOptions([routeOption])
+    })
+
+    expect(screen.getByText('눈이 무거워 보여요. 전방을 보고 자세를 바로잡아주세요.')).toBeInTheDocument()
+    expect(screen.queryByText('성심당 대전역점까지 약 154.3 km, 131분 소요됩니다.')).not.toBeInTheDocument()
+    expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-route-selection-mode', 'false')
+  })
+
+  it('applies strong manual warnings and destination route changes', async () => {
+    const queryClient = new QueryClient()
+    mockedSearchPlaces.mockResolvedValue([
+      {
+        id: 'wrong-sungsimdang',
+        name: '성심당 한의원',
+        address: '대전 서구',
+        coordinate: { lat: 36.3501, lng: 127.3849 },
+      },
+    ])
+    mockedGetRoute.mockResolvedValue({
+      coordinates: [
+        { lat: 37.5547, lng: 126.9706 },
+        { lat: 36.3326, lng: 127.4347 },
+      ],
+      summary: {
+        distanceMeters: 154_300,
+        durationSeconds: 7_860,
+      },
+      maneuvers: [],
+    })
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '섭취 위험 상황 선택' }))
+    fireEvent.click(screen.getByRole('button', { name: '섭취 위험 상황 선택' }))
+    expect(await screen.findByText('먹거나 마시는 행동을 즉시 멈추세요. 지금은 운전에만 집중해야 합니다.')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '기기조작 위험 상황 선택' }))
+    fireEvent.click(screen.getByRole('button', { name: '기기조작 위험 상황 선택' }))
+    fireEvent.click(await screen.findByRole('button', { name: '성심당으로 도착지 변경해줘.' }))
+    clickManualRiskNext()
+
+    await waitFor(() => {
+      expect(mockedSearchPlaces).not.toHaveBeenCalled()
+      expect(mockedGetRouteOptions).toHaveBeenCalledWith(
+        expect.any(Object),
+        { lat: 36.3326, lng: 127.4347 },
+        undefined,
+        expect.any(AbortSignal),
+      )
+    })
+    expect(await screen.findByText('성심당 대전역점까지 약 154.3 km, 131분 소요됩니다.')).toBeInTheDocument()
+    expect(screen.getByText('대전 동구 중앙로 215 대전역사')).toBeInTheDocument()
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 7_700))
+    })
+    expect(screen.getByText('성심당 대전역점까지 약 154.3 km, 131분 소요됩니다.')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.queryByText('성심당 대전역점까지 약 154.3 km, 131분 소요됩니다.')).not.toBeInTheDocument()
+    }, { timeout: 1_000 })
+  }, 10_000)
 
   it('starts a fixed demo scenario after profile selection', async () => {
     const queryClient = new QueryClient()
@@ -1423,6 +2007,7 @@ describe('NavigationShell', () => {
     const videoPanel = screen.getByTestId('driver-video-panel')
     const viewport = screen.getByTestId('navigation-viewport')
     const manualControlPanel = screen.getByTestId('manual-risk-control-panel')
+    const manualRiskStackStatus = screen.getByTestId('manual-risk-stack-status')
 
     expect(stage).toHaveClass('grid')
     expect(stage).toHaveClass('grid-cols-[minmax(0,1fr)_24rem]')
@@ -1440,6 +2025,11 @@ describe('NavigationShell', () => {
     expect(manualControlPanel).not.toHaveClass('row-span-2')
     expect(manualControlPanel).not.toHaveClass('h-full')
     expect(manualControlPanel).toHaveClass('self-start')
+    expect(manualRiskStackStatus).toHaveClass('col-start-2')
+    expect(manualRiskStackStatus).toHaveClass('row-start-1')
+    expect(manualRiskStackStatus).toHaveClass('self-end')
+    expect(manualRiskStackStatus).toHaveClass('justify-self-start')
+    expect(within(videoPanel).queryByTestId('manual-risk-stack-status')).not.toBeInTheDocument()
   })
 
   it('loads a selected local driver video into the top video panel', () => {
@@ -2759,6 +3349,77 @@ describe('NavigationShell', () => {
       expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-route-options', '2')
     })
     expect(screen.getByText('2개 경로')).toBeInTheDocument()
+  })
+
+  it('ends route selection from the summary control bar', async () => {
+    mockedGetRouteOptions.mockResolvedValue([
+      {
+        id: 'route-recommended',
+        label: '추천',
+        searchOption: '0',
+        color: '#0EA5E9',
+        isRecommended: true,
+        route: {
+          coordinates: [
+            { lat: 37.5665, lng: 126.978 },
+            { lat: 37.4979, lng: 127.0276 },
+          ],
+          summary: {
+            distanceMeters: 12340,
+            durationSeconds: 1320,
+          },
+        },
+      },
+      {
+        id: 'route-fastest',
+        label: '최소시간',
+        searchOption: '2',
+        color: '#F97316',
+        isRecommended: false,
+        route: {
+          coordinates: [
+            { lat: 37.5665, lng: 126.978 },
+            { lat: 37.51, lng: 127.01 },
+            { lat: 37.4979, lng: 127.0276 },
+          ],
+          summary: {
+            distanceMeters: 12800,
+            durationSeconds: 1260,
+          },
+        },
+      },
+    ])
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
+      </QueryClientProvider>,
+    )
+
+    await openDestinationEditor()
+    fireEvent.click(await screen.findByRole('button', { name: '도착지를 회사로 설정' }))
+
+    const summary = await screen.findByTestId('route-selection-summary')
+    expect(within(summary).getByRole('button', { name: '종료' })).toBeInTheDocument()
+    expect(within(summary).getByRole('button', { name: '변경' })).toBeInTheDocument()
+    const summaryButtons = within(summary).getAllByRole('button').map((button) => button.textContent)
+    expect(summaryButtons.indexOf('종료')).toBeGreaterThan(summaryButtons.indexOf('변경'))
+    await waitFor(() => {
+      expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-route-options', '2')
+    })
+
+    fireEvent.click(within(summary).getByRole('button', { name: '종료' }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-route-options', '0')
+    })
+    expect(screen.queryByTestId('route-selection-summary')).not.toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.queryByPlaceholderText('목적지 검색')).not.toBeInTheDocument()
+    })
   })
 
   it('hides stale route candidates when the destination draft no longer matches the selected place', async () => {

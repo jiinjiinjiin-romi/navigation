@@ -807,6 +807,189 @@ const DEMO_DESTINATION_PLACE: Place = {
   address: DEMO_DESTINATION.address,
   coordinate: { lat: 36.3378, lng: 127.4309 },
 }
+type ManualRiskId = 'phone' | 'drowsiness' | 'device' | 'intake'
+type ManualRiskConversationNodeId =
+  | 'depth-1'
+  | 'depth-2'
+  | 'strong'
+  | 'phone-message-confirm'
+  | 'phone-message-complete'
+  | 'phone-search-category'
+  | 'phone-search-restaurants'
+  | 'phone-search-attractions'
+  | 'phone-music-result'
+  | 'drowsiness-ok'
+  | 'drowsiness-window'
+  | 'drowsiness-music'
+  | 'device-music-result'
+  | 'device-route-result'
+type ManualRiskEffectId =
+  | 'phone-search-restaurants'
+  | 'phone-search-attractions'
+  | 'phone-music'
+  | 'drowsiness-ok'
+  | 'drowsiness-window'
+  | 'drowsiness-music'
+  | 'device-music'
+  | 'device-route'
+
+interface ManualRiskAssistantConversation {
+  kind: 'assistant'
+  riskId: ManualRiskId
+  depth: number
+  nodeId: ManualRiskConversationNodeId
+  text?: string
+  resultCards?: ManualRiskResultCard[]
+}
+
+interface ManualRiskUserConversation {
+  kind: 'user'
+  riskId: ManualRiskId
+  depth: number
+  text: string
+  nextNodeId: ManualRiskConversationNodeId
+  effectId?: ManualRiskEffectId
+}
+
+type ManualRiskConversation = ManualRiskAssistantConversation | ManualRiskUserConversation
+
+interface ManualRiskResponseOption {
+  id: string
+  label: string
+}
+
+interface ManualRiskResultCard {
+  id: string
+  title: string
+  meta: string
+  detail?: string
+}
+
+interface ManualRiskStackInfo {
+  label: string
+  depth: number
+  maxDepth: number
+}
+
+interface ManualRiskResponseTransition {
+  nextNodeId: ManualRiskConversationNodeId
+  effectId?: ManualRiskEffectId
+}
+
+const MANUAL_RISK_MESSAGE_DISMISS_DELAY_MS = 2_000
+const MANUAL_RISK_RESTAURANT_DISMISS_DELAY_MS = 9_000
+const MANUAL_RISK_ATTRACTION_DISMISS_DELAY_MS = 7_000
+const MANUAL_RISK_MUSIC_DISMISS_DELAY_MS = 3_000
+const MANUAL_RISK_PHONE_MUSIC_DISMISS_DELAY_MS = 4_000
+const MANUAL_RISK_DEVICE_MUSIC_DISMISS_DELAY_MS = 4_000
+const MANUAL_RISK_DROWSINESS_MUSIC_DISMISS_DELAY_MS = 8_000
+const MANUAL_RISK_DROWSINESS_OK_DISMISS_DELAY_MS = 5_000
+const MANUAL_RISK_WINDOW_DISMISS_DELAY_MS = 6_500
+const MANUAL_RISK_ROUTE_DISMISS_DELAY_MS = 8_000
+const MANUAL_RISK_PHONE_DEPTH_ONE_DISMISS_DELAY_MS = 4_000
+const MANUAL_RISK_DROWSINESS_DEPTH_ONE_DISMISS_DELAY_MS = 6_000
+const MANUAL_RISK_DEVICE_DEPTH_ONE_DISMISS_DELAY_MS = 4_000
+const MANUAL_RISK_INTAKE_DEPTH_ONE_DISMISS_DELAY_MS = 5_000
+const MANUAL_RISK_INTAKE_STRONG_DISMISS_DELAY_MS = 7_000
+const MANUAL_RISK_MAX_DEPTH: Record<ManualRiskId, number> = {
+  phone: 3,
+  drowsiness: 3,
+  device: 3,
+  intake: 2,
+}
+const MANUAL_RISK_LABELS: Record<ManualRiskId, string> = {
+  phone: '핸드폰',
+  drowsiness: '졸음',
+  device: '기기조작',
+  intake: '섭취',
+}
+const MANUAL_RISK_DEPTH_ONE_TEXT: Record<ManualRiskId, string> = {
+  phone: '휴대폰은 잠시 내려두고 전방을 봐주세요.',
+  drowsiness: '눈이 무거워 보여요. 전방을 보고 자세를 바로잡아주세요.',
+  device: '기기 조작은 잠시 멈추고 운전에 집중해주세요.',
+  intake: '음식이나 음료는 잠시 내려두고 전방을 봐주세요.',
+}
+const MANUAL_RISK_STRONG_TEXT: Record<ManualRiskId, string> = {
+  phone: '휴대폰 사용을 즉시 중단하세요. 지금은 전방만 봐야 합니다.',
+  drowsiness: '더 이상 운전하면 안 됩니다. 가까운 곳에 정차하고 반드시 쉬어가세요.',
+  device: '기기 조작을 즉시 중단하세요. 두 손은 운전에만 사용해야 합니다.',
+  intake: '먹거나 마시는 행동을 즉시 멈추세요. 지금은 운전에만 집중해야 합니다.',
+}
+const MANUAL_RISK_DEPTH_TWO_TEXT: Partial<Record<ManualRiskId, string>> = {
+  phone: '휴대폰으로 할 일이 있으면 제가 도와드릴게요. 어떤 도움이 필요하세요?',
+  drowsiness: '졸음이 계속되면 위험해요. 잠 깰 수 있게 도와드릴까요?',
+  device: '기기 조작이 필요하면 제가 도와드릴게요. 어떤 기능이 필요하세요?',
+}
+const MANUAL_RISK_RESTAURANT_CARDS: ManualRiskResultCard[] = [
+  {
+    id: 'manual-restaurant-wolsan',
+    title: '월산본가',
+    meta: '대전 중구 대종로 455',
+    detail: '성심당 본점에서 도보로 가깝고 석갈비와 한식 메뉴가 좋은 곳',
+  },
+  {
+    id: 'manual-restaurant-seonhwa',
+    title: '선화동소머리해장국',
+    meta: '대전 중구 선화동',
+    detail: '진한 소머리곰탕과 실비김치 조합으로 알려진 근처 식당',
+  },
+  {
+    id: 'manual-restaurant-boksu',
+    title: '복수분식',
+    meta: '대전 중구 은행동',
+    detail: '성심당 본점 근처에서 분식과 매운 한식 메뉴를 가볍게 먹기 좋은 곳',
+  },
+  {
+    id: 'manual-restaurant-mido',
+    title: '미도인 대전',
+    meta: '대전 중구 은행동',
+    detail: '성심당 본점 근처에서 들르기 좋은 덮밥과 스테이크 계열 식당',
+  },
+  {
+    id: 'manual-restaurant-myeongokheon',
+    title: '명옥헌 삼대진곰탕',
+    meta: '대전 중구 중앙로 일대',
+    detail: '곰탕류 식사 후보로 함께 보기 좋은 중앙로 근처 식당',
+  },
+]
+const MANUAL_RISK_ATTRACTION_CARDS: ManualRiskResultCard[] = [
+  {
+    id: 'manual-attraction-hanbat',
+    title: '한밭수목원',
+    meta: '대전 서구 둔산대로 169',
+    detail: '도심 속 대형 수목원으로 산책과 전시 연계 코스가 좋은 명소',
+  },
+  {
+    id: 'manual-attraction-science',
+    title: '국립중앙과학관',
+    meta: '대전 유성구 대덕대로 481',
+    detail: '과학 도시 대전을 대표하는 전시와 체험 중심 관광지',
+  },
+  {
+    id: 'manual-attraction-expo',
+    title: '엑스포과학공원',
+    meta: '대전 유성구 대덕대로 480 일대',
+    detail: '엑스포다리와 갑천 산책로를 함께 보기 좋은 야경 명소',
+  },
+  {
+    id: 'manual-attraction-oworld',
+    title: '대전 오월드',
+    meta: '대전 중구 사정공원로 70',
+    detail: '주랜드, 플라워랜드, 조이랜드를 함께 즐길 수 있는 테마공원',
+  },
+  {
+    id: 'manual-attraction-gyeryeok',
+    title: '계족산황톳길',
+    meta: '대전 대덕구 장동 일대',
+    detail: '맨발 황톳길 산책으로 알려진 자연 휴식 코스',
+  },
+]
+const SUNGSIMDANG_DAEJEON_STATION_PLACE: Place = {
+  id: 'sungsimdang-daejeon-station',
+  name: '성심당 대전역점',
+  address: '대전 동구 중앙로 215 대전역사',
+  coordinate: { lat: 36.3326, lng: 127.4347 },
+}
 const DRIVER_VIDEO_MIME_TYPES = new Set([
   'video/mp4',
   'video/webm',
@@ -1072,6 +1255,7 @@ export function NavigationShell({
   const [musicSearchKeyword, setMusicSearchKeyword] = useState('')
   const [assistantScenarioId, setAssistantScenarioId] = useState<RoadieAssistantScenarioId>('drowsiness-rest-area')
   const [assistantStepIndex, setAssistantStepIndex] = useState(0)
+  const [manualRiskConversation, setManualRiskConversation] = useState<ManualRiskConversation | null>(null)
   const [driverVideo, setDriverVideo] = useState<DriverVideoSource | null>(null)
   const [driverVideoError, setDriverVideoError] = useState(false)
   const [showLocationFallbackToast, setShowLocationFallbackToast] = useState(false)
@@ -1092,6 +1276,7 @@ export function NavigationShell({
   const [simulationSpeedKph, setSimulationSpeedKph] = useState(0)
   const [guidanceDistanceUpdateKey, setGuidanceDistanceUpdateKey] = useState(0)
   const animationFrameRef = useRef<number | undefined>(undefined)
+  const manualRiskConversationRef = useRef<ManualRiskConversation | null>(null)
   const simulationStartedAtRef = useRef<number | undefined>(undefined)
   const simulationElapsedMsRef = useRef(0)
   const activeSimulationPlanRef = useRef<ReturnType<typeof createRouteSimulationPlan> | undefined>(undefined)
@@ -1103,19 +1288,40 @@ export function NavigationShell({
   const guidanceDistanceDisplayRef = useRef<GuidanceDistanceDisplayStore>(new Map())
   const routeSelectionCameraSettingsRef = useRef<MapCameraSettings | undefined>(undefined)
   const routeSearchEditorTimerRef = useRef<number | undefined>(undefined)
+  const manualRiskDismissTimerRef = useRef<number | undefined>(undefined)
   const debouncedOriginKeyword = useDebouncedValue(originKeyword.trim(), SEARCH_DEBOUNCE_MS)
   const debouncedDestinationKeyword = useDebouncedValue(destinationKeyword.trim(), SEARCH_DEBOUNCE_MS)
   const debouncedMusicSearchKeyword = useDebouncedValue(musicSearchKeyword.trim(), SEARCH_DEBOUNCE_MS)
+  const manualMusicSearchKeyword = manualRiskConversation?.kind === 'assistant'
+    ? manualRiskConversation.nodeId === 'device-music-result'
+      ? '빅뱅 붉은 노을'
+      : manualRiskConversation.nodeId === 'phone-music-result'
+        ? '여름 휴가 신나는 노래'
+        : manualRiskConversation.nodeId === 'drowsiness-music'
+          ? '잠 깨는 밝은 노래'
+          : undefined
+    : undefined
+  const activeMusicSearchKeyword = manualMusicSearchKeyword ?? debouncedMusicSearchKeyword
   const assistantMusicRecommendationVisible = useMemo(() => {
     const scenario = ROADIE_ASSISTANT_SCENARIOS.find((item) => item.id === assistantScenarioId) ?? ROADIE_ASSISTANT_SCENARIOS[0]
     const step = scenario.steps[Math.min(assistantStepIndex, scenario.steps.length - 1)]
+    const manualMusicRecommendationVisible = manualRiskConversation?.kind === 'assistant'
+      && (
+        manualRiskConversation.nodeId === 'device-music-result'
+        || manualRiskConversation.nodeId === 'phone-music-result'
+        || manualRiskConversation.nodeId === 'drowsiness-music'
+      )
 
-    return Boolean(step.recommendations?.some((recommendation) => recommendation.type === 'music'))
-  }, [assistantScenarioId, assistantStepIndex])
+    return manualMusicRecommendationVisible || Boolean(step.recommendations?.some((recommendation) => recommendation.type === 'music'))
+  }, [assistantScenarioId, assistantStepIndex, manualRiskConversation])
   const musicMood = useMemo<MusicMood>(() => {
     const eventId = demoScenarioState?.scenarioEvent?.id
 
     if (eventId?.startsWith('drowsy_music') || assistantScenarioId === 'fatigue-music') {
+      return 'bright'
+    }
+
+    if (manualRiskConversation?.kind === 'assistant' && manualRiskConversation.nodeId === 'drowsiness-music') {
       return 'bright'
     }
 
@@ -1124,7 +1330,7 @@ export function NavigationShell({
     }
 
     return 'drive'
-  }, [demoScenarioState?.scenarioEvent?.id])
+  }, [assistantScenarioId, demoScenarioState?.scenarioEvent?.id, manualRiskConversation])
   const addressQueryCoordinate = useMemo(
     () => currentPosition ? roundCoordinate(currentPosition, ADDRESS_COORDINATE_PRECISION) : undefined,
     [currentPosition],
@@ -1138,14 +1344,16 @@ export function NavigationShell({
     [currentPosition],
   )
 
+  manualRiskConversationRef.current = manualRiskConversation
+
   const bootstrapQuery = useQuery({
     queryKey: ['bootstrap'],
     queryFn: ({ signal }) => getBootstrap(undefined, signal),
   })
   const musicRecommendationsQuery = useQuery({
-    queryKey: ['music-recommendations', musicMood, debouncedMusicSearchKeyword],
+    queryKey: ['music-recommendations', musicMood, activeMusicSearchKeyword],
     queryFn: ({ signal }) => getMusicRecommendations(
-      { mood: musicMood, keyword: debouncedMusicSearchKeyword, limit: 10 },
+      { mood: musicMood, keyword: activeMusicSearchKeyword, limit: 10 },
       undefined,
       signal,
     ),
@@ -1573,7 +1781,21 @@ export function NavigationShell({
   const demoAssistantStep = demoScenarioState
     ? createDemoAssistantStep(demoScenarioState, selectedProfileName, selectedProfile?.agentPersonality ?? 'FRIENDLY')
     : undefined
-  const visibleAssistantStep = demoAssistantStep ?? assistantStep
+  const manualRiskAssistantStep = manualRiskConversation
+    ? createManualRiskAssistantStep(manualRiskConversation)
+    : undefined
+  const manualRiskResponseOptions = getManualRiskResponseOptions(manualRiskConversation)
+  const manualRiskResultCards = manualRiskConversation?.kind === 'assistant'
+    ? manualRiskConversation.resultCards ?? []
+    : []
+  const manualRiskStackInfo = manualRiskConversation
+    ? {
+      label: MANUAL_RISK_LABELS[manualRiskConversation.riskId],
+      depth: manualRiskConversation.depth,
+      maxDepth: MANUAL_RISK_MAX_DEPTH[manualRiskConversation.riskId],
+    }
+    : null
+  const visibleAssistantStep = demoAssistantStep ?? manualRiskAssistantStep ?? assistantStep
   const motionTiming = shouldReduceMotion
     ? { duration: 0 }
     : { duration: 0.22, ease: PRODUCT_EASE }
@@ -1586,6 +1808,13 @@ export function NavigationShell({
       URL.revokeObjectURL(driverVideo.url)
     }
   }, [driverVideo?.url])
+
+  useEffect(() => () => {
+    if (manualRiskDismissTimerRef.current !== undefined) {
+      window.clearTimeout(manualRiskDismissTimerRef.current)
+      manualRiskDismissTimerRef.current = undefined
+    }
+  }, [])
 
   const selectDriverVideo = useCallback((file: File) => {
     setDriverVideo({
@@ -1663,6 +1892,297 @@ export function NavigationShell({
   const resetAssistantScenario = useCallback(() => {
     setAssistantStepIndex(0)
   }, [])
+
+  const clearManualRiskDismissTimer = useCallback(() => {
+    if (manualRiskDismissTimerRef.current !== undefined) {
+      window.clearTimeout(manualRiskDismissTimerRef.current)
+      manualRiskDismissTimerRef.current = undefined
+    }
+  }, [])
+
+  const resetManualRiskConversation = useCallback(() => {
+    clearManualRiskDismissTimer()
+    setManualRiskConversation(null)
+  }, [clearManualRiskDismissTimer])
+
+  const updateManualRiskAssistantConversation = useCallback((
+    target: Pick<ManualRiskAssistantConversation, 'riskId' | 'depth' | 'nodeId'>,
+    update: Partial<Pick<ManualRiskAssistantConversation, 'text' | 'resultCards'>>,
+  ) => {
+    setManualRiskConversation((currentConversation) => {
+      if (isSameManualRiskAssistantConversation(currentConversation, target)) {
+        return { ...currentConversation, ...update }
+      }
+
+      if (
+        currentConversation?.kind === 'user'
+        && currentConversation.riskId === target.riskId
+        && currentConversation.depth === target.depth
+        && currentConversation.nextNodeId === target.nodeId
+      ) {
+        return {
+          kind: 'assistant',
+          ...target,
+          ...update,
+        }
+      }
+
+      return currentConversation
+    })
+  }, [])
+
+  const isManualRiskTargetActive = useCallback((
+    target: Pick<ManualRiskAssistantConversation, 'riskId' | 'depth' | 'nodeId'>,
+  ) => (
+    isSameManualRiskAssistantConversation(manualRiskConversationRef.current, target)
+    || (
+      manualRiskConversationRef.current?.kind === 'user'
+      && manualRiskConversationRef.current.riskId === target.riskId
+      && manualRiskConversationRef.current.depth === target.depth
+      && manualRiskConversationRef.current.nextNodeId === target.nodeId
+    )
+  ), [])
+
+  const scheduleManualRiskDismiss = useCallback((
+    target: Pick<ManualRiskAssistantConversation, 'riskId' | 'depth' | 'nodeId'>,
+    options?: { delayMs?: number; stopMusic?: boolean },
+  ) => {
+    clearManualRiskDismissTimer()
+    manualRiskDismissTimerRef.current = window.setTimeout(() => {
+      if (isManualRiskTargetActive(target)) {
+        setManualRiskConversation(null)
+      }
+
+      if (options?.stopMusic) {
+        setMusicPlaying(false)
+      }
+
+      manualRiskDismissTimerRef.current = undefined
+    }, options?.delayMs ?? MANUAL_RISK_MESSAGE_DISMISS_DELAY_MS)
+  }, [clearManualRiskDismissTimer, isManualRiskTargetActive])
+
+  const runManualRiskEffect = useCallback(async (
+    effectId: ManualRiskEffectId,
+    target: Pick<ManualRiskAssistantConversation, 'riskId' | 'depth' | 'nodeId'>,
+  ) => {
+    if (effectId === 'phone-music') {
+      setMusicSearchKeyword('여름 휴가 신나는 노래')
+      setMusicProgressSeconds(0)
+      setMusicPlaying(true)
+      setMusicModalOpen(false)
+      updateManualRiskAssistantConversation(target, {
+        text: '신나는 분위기에 맞는 음악을 준비할게요.',
+      })
+      return
+    }
+
+    if (effectId === 'drowsiness-ok') {
+      scheduleManualRiskDismiss(target, { delayMs: MANUAL_RISK_DROWSINESS_OK_DISMISS_DELAY_MS })
+      return
+    }
+
+    if (effectId === 'drowsiness-window') {
+      scheduleManualRiskDismiss(target, { delayMs: MANUAL_RISK_WINDOW_DISMISS_DELAY_MS })
+      return
+    }
+
+    if (effectId === 'drowsiness-music') {
+      setMusicSearchKeyword('잠 깨는 밝은 노래')
+      setMusicProgressSeconds(0)
+      setMusicPlaying(true)
+      setMusicModalOpen(false)
+      updateManualRiskAssistantConversation(target, {
+        text: '밝은 음악을 재생할게요. 그래도 잠이 깨지 않는다면 쉬어가는걸 추천드려요.',
+      })
+      return
+    }
+
+    if (effectId === 'device-music') {
+      setMusicSearchKeyword('빅뱅 붉은 노을')
+      setMusicProgressSeconds(0)
+      setMusicPlaying(true)
+      setMusicModalOpen(false)
+      updateManualRiskAssistantConversation(target, {
+        text: '빅뱅의 붉은 노을을 재생해드릴게요.',
+      })
+      return
+    }
+
+    if (effectId === 'phone-search-restaurants' || effectId === 'phone-search-attractions') {
+      const isRestaurantSearch = effectId === 'phone-search-restaurants'
+      const cards = isRestaurantSearch ? MANUAL_RISK_RESTAURANT_CARDS : MANUAL_RISK_ATTRACTION_CARDS
+      const subject = isRestaurantSearch ? '대전역 성심당 근처 맛집들은' : '대전 관광지는'
+      const featuredTitle = cards[0]?.title ?? ''
+      updateManualRiskAssistantConversation(target, {
+        text: `${subject} 아래와 같아요. 특히 ${featuredTitle}${getKoreanSubjectParticle(featuredTitle)} 좋아 보여요.`,
+        resultCards: cards,
+      })
+      scheduleManualRiskDismiss(target, {
+        delayMs: isRestaurantSearch
+          ? MANUAL_RISK_RESTAURANT_DISMISS_DELAY_MS
+          : MANUAL_RISK_ATTRACTION_DISMISS_DELAY_MS,
+      })
+      return
+    }
+
+    if (effectId === 'device-route') {
+      const controller = new AbortController()
+      const place = SUNGSIMDANG_DAEJEON_STATION_PLACE
+
+      updateManualRiskAssistantConversation(target, {
+        text: '성심당 경로를 확인하고 있어요.',
+        resultCards: [],
+      })
+
+      try {
+        const originCoordinate = origin?.coordinate ?? currentPosition
+
+        if (!isManualRiskTargetActive(target)) {
+          return
+        }
+
+        const routeOptionsResult = await getRouteOptions(originCoordinate, place.coordinate, undefined, controller.signal)
+        const route = routeOptionsResult[0]?.route
+
+        if (!isManualRiskTargetActive(target)) {
+          return
+        }
+
+        setDestination(place)
+        setDestinationKeyword(place.name)
+        setSelectedRouteOptionId(undefined)
+        setRouteSearchOpen(false)
+        setActiveField(null)
+
+        updateManualRiskAssistantConversation(target, {
+          text: route
+            ? `${place.name}까지 약 ${formatRouteOptionDistance(route.summary.distanceMeters)}, ${formatRouteOptionDuration(route.summary.durationSeconds)} 소요됩니다.`
+            : '성심당까지 경로를 확인했습니다.',
+          resultCards: route
+            ? [{
+              id: 'sungsimdang-route',
+              title: place.name,
+              meta: `${formatRouteOptionDistance(route.summary.distanceMeters)} · ${formatRouteOptionDuration(route.summary.durationSeconds)}`,
+              detail: place.address,
+            }]
+            : [],
+        })
+        scheduleManualRiskDismiss(target, { delayMs: MANUAL_RISK_ROUTE_DISMISS_DELAY_MS })
+      } catch {
+        updateManualRiskAssistantConversation(target, {
+          text: '성심당 경로를 불러오지 못했습니다.',
+          resultCards: [],
+        })
+      }
+    }
+  }, [currentPosition, isManualRiskTargetActive, origin?.coordinate, scheduleManualRiskDismiss, updateManualRiskAssistantConversation])
+
+  const selectManualRisk = useCallback((riskId: ManualRiskId) => {
+    clearManualRiskDismissTimer()
+    setManualRiskConversation((currentConversation) => {
+      const maxDepth = MANUAL_RISK_MAX_DEPTH[riskId]
+      const nextDepth = currentConversation?.riskId === riskId
+        ? currentConversation.depth >= maxDepth ? 1 : currentConversation.depth + 1
+        : 1
+      const nextNodeId = getManualRiskNodeIdForDepth(riskId, nextDepth)
+
+      if (nextDepth === 1) {
+        scheduleManualRiskDismiss({
+          riskId,
+          depth: nextDepth,
+          nodeId: nextNodeId,
+        }, {
+          delayMs: getManualRiskDepthOneDismissDelayMs(riskId),
+        })
+      } else if (riskId === 'intake') {
+        scheduleManualRiskDismiss({
+          riskId,
+          depth: nextDepth,
+          nodeId: nextNodeId,
+        }, {
+          delayMs: MANUAL_RISK_INTAKE_STRONG_DISMISS_DELAY_MS,
+        })
+      }
+
+      return {
+        kind: 'assistant',
+        riskId,
+        depth: nextDepth,
+        nodeId: nextNodeId,
+      }
+    })
+  }, [clearManualRiskDismissTimer, scheduleManualRiskDismiss])
+
+  const selectManualRiskResponseOption = useCallback((option: ManualRiskResponseOption) => {
+    if (!manualRiskConversation || manualRiskConversation.kind !== 'assistant') {
+      return
+    }
+
+    const transition = getManualRiskResponseTransition(option.id)
+
+    if (!transition) {
+      return
+    }
+
+    setManualRiskConversation({
+      kind: 'user',
+      riskId: manualRiskConversation.riskId,
+      depth: manualRiskConversation.depth,
+      text: option.label,
+      nextNodeId: transition.nextNodeId,
+      effectId: transition.effectId,
+    })
+  }, [manualRiskConversation])
+
+  const advanceManualRiskResponse = useCallback(() => {
+    if (!manualRiskConversation || manualRiskConversation.kind !== 'user') {
+      return
+    }
+
+    const nextAssistantTarget = {
+      riskId: manualRiskConversation.riskId,
+      depth: manualRiskConversation.depth,
+      nodeId: manualRiskConversation.nextNodeId,
+    }
+
+    setManualRiskConversation({
+      kind: 'assistant',
+      ...nextAssistantTarget,
+    })
+
+    if (nextAssistantTarget.nodeId === 'phone-message-complete') {
+      scheduleManualRiskDismiss(nextAssistantTarget, { delayMs: MANUAL_RISK_MESSAGE_DISMISS_DELAY_MS })
+    }
+
+    if (manualRiskConversation.effectId) {
+      void runManualRiskEffect(manualRiskConversation.effectId, nextAssistantTarget)
+    }
+  }, [manualRiskConversation, runManualRiskEffect, scheduleManualRiskDismiss])
+
+  useEffect(() => {
+    if (
+      !manualRiskConversation
+      || manualRiskConversation.kind !== 'assistant'
+      || !musicPlaying
+      || musicRecommendationsLoading
+      || (
+        manualRiskConversation.nodeId !== 'phone-music-result'
+        && manualRiskConversation.nodeId !== 'drowsiness-music'
+        && manualRiskConversation.nodeId !== 'device-music-result'
+      )
+    ) {
+      return
+    }
+
+    scheduleManualRiskDismiss({
+      riskId: manualRiskConversation.riskId,
+      depth: manualRiskConversation.depth,
+      nodeId: manualRiskConversation.nodeId,
+    }, {
+      delayMs: getManualRiskMusicDismissDelayMs(manualRiskConversation.nodeId),
+      stopMusic: true,
+    })
+  }, [manualRiskConversation, musicPlaying, musicRecommendationsLoading, scheduleManualRiskDismiss])
 
   useEffect(() => {
     if (!profileSetupComplete) {
@@ -1817,6 +2337,19 @@ export function NavigationShell({
     guidanceDistanceDisplayRef.current.clear()
     restoreRouteSelectionCameraSettings()
   }, [restoreRouteSelectionCameraSettings])
+
+  const cancelRouteSelection = useCallback(() => {
+    clearPendingRouteSearchEditor()
+    setDestination(undefined)
+    setDestinationKeyword('')
+    setSelectedRouteOptionId(undefined)
+    setPreviewRouteOptionId(undefined)
+    setRouteOptionsSearchReady(false)
+    setRouteSearchOpen(false)
+    setActiveField(null)
+    setHighlightedIndex(0)
+    guidanceDistanceDisplayRef.current.clear()
+  }, [clearPendingRouteSearchEditor])
 
   useEffect(() => {
     if (
@@ -2367,6 +2900,10 @@ export function NavigationShell({
         onError={() => setDriverVideoError(true)}
         onSelectVideo={selectDriverVideo}
       />
+      <ManualRiskStackStatus
+        manualRiskStack={manualRiskStackInfo}
+        motionTiming={motionTiming}
+      />
       <section
         data-testid="navigation-viewport"
         className={navigationViewportClassName}
@@ -2402,10 +2939,11 @@ export function NavigationShell({
             <RoadieOrbControl
               assistantStep={visibleAssistantStep}
               hidden={Boolean(activeSidePanel || (musicModalOpen && demoScenarioState?.scenario?.scenarioId !== 'device_operation'))}
+              manualResultCards={demoAssistantStep ? [] : manualRiskResultCards}
               motionTiming={motionTiming}
               musicRecommendationLoading={musicRecommendationsLoading}
               musicRecommendationTrack={selectedMusicTrack}
-              onClose={resetAssistantScenario}
+              onClose={manualRiskAssistantStep && !demoAssistantStep ? resetManualRiskConversation : resetAssistantScenario}
               onWakeCall={() => {
                 selectAssistantScenario('route-search-voice')
                 setAssistantStepIndex(1)
@@ -2442,6 +2980,7 @@ export function NavigationShell({
                     originLabel={origin?.name || originKeyword || currentOriginLabel}
                     activeRouteOptionId={activeRouteOptionId}
                     routeOptions={visibleRouteOptions ?? []}
+                    onCancelRouteSelection={cancelRouteSelection}
                     onEditRoute={() => {
                       openRouteSearchEditor('destination')
                     }}
@@ -2786,7 +3325,14 @@ export function NavigationShell({
             onSelectScenario={selectAssistantScenario}
           />
         ) : (
-          <ManualRiskControlPanel motionTiming={motionTiming} />
+          <ManualRiskControlPanel
+            canAdvanceResponse={manualRiskConversation?.kind === 'user'}
+            motionTiming={motionTiming}
+            onAdvanceResponse={advanceManualRiskResponse}
+            onResponseOptionSelect={selectManualRiskResponseOption}
+            onSelectRisk={selectManualRisk}
+            responseOptions={demoAssistantStep ? [] : manualRiskResponseOptions}
+          />
         )
       ) : (
         <div className="col-start-2 row-start-2 self-start rounded-[1.1rem] border border-white/70 bg-white p-4 text-[var(--nav-ink)] shadow-[0_18px_46px_rgb(0_0_0/0.24)]">
@@ -3870,9 +4416,53 @@ export function DriverVideoPanel({
   )
 }
 
+function ManualRiskStackStatus({
+  manualRiskStack,
+  motionTiming,
+}: {
+  manualRiskStack: ManualRiskStackInfo | null
+  motionTiming: MotionTiming
+}) {
+  return (
+    <motion.aside
+      aria-label="위험 누적 상태"
+      className="col-start-2 row-start-1 mb-0 w-[12.5rem] self-end justify-self-start rounded-xl border border-white/70 bg-white px-3 py-2 text-left text-[var(--nav-ink)] shadow-[0_12px_26px_rgb(15_23_42/0.18)]"
+      data-testid="manual-risk-stack-status"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={motionTiming}
+    >
+      <p className="text-[11px] font-semibold text-[var(--nav-muted)]">위험 누적</p>
+      {manualRiskStack ? (
+        <div className="mt-1">
+          <p className="text-sm font-bold text-[var(--nav-ink)]">{manualRiskStack.label}</p>
+          <div className="mt-1.5 flex items-center gap-1.5">
+            {Array.from({ length: manualRiskStack.maxDepth }, (_, index) => (
+              <span
+                aria-hidden="true"
+                className={[
+                  'h-1.5 flex-1 rounded-full',
+                  index < manualRiskStack.depth ? 'bg-[var(--nav-primary)]' : 'bg-[var(--nav-border)]',
+                ].join(' ')}
+                key={index}
+              />
+            ))}
+            <span className="ml-1 text-[11px] font-bold text-[var(--nav-muted)]">
+              {manualRiskStack.depth}/{manualRiskStack.maxDepth}
+            </span>
+          </div>
+        </div>
+      ) : (
+        <p className="mt-1 text-sm font-bold text-[var(--nav-muted)]">대기 중</p>
+      )}
+    </motion.aside>
+  )
+}
+
 function RoadieOrbControl({
   assistantStep,
   hidden,
+  manualResultCards,
   musicRecommendationLoading,
   musicRecommendationTrack,
   motionTiming,
@@ -3885,6 +4475,7 @@ function RoadieOrbControl({
 }: {
   assistantStep: RoadieAssistantStep
   hidden: boolean
+  manualResultCards: ManualRiskResultCard[]
   musicRecommendationLoading: boolean
   musicRecommendationTrack: UiMusicTrack
   motionTiming: MotionTiming
@@ -3896,6 +4487,10 @@ function RoadieOrbControl({
   ttsOptions: Required<VoiceTtsOptions>
 }) {
   const expanded = assistantStep.mode !== 'idle'
+  const hasAssistantAddons = Boolean(
+    assistantStep.recommendations?.length
+    || manualResultCards.length,
+  )
   const visibleOrbState = getAssistantVisibleOrbState(assistantStep)
   const showVoiceWave = isAssistantVoiceWaveVisible(assistantStep)
   const contentRevealDelay = assistantStep.text || assistantStep.userText
@@ -3991,12 +4586,12 @@ function RoadieOrbControl({
         animate={{
           borderRadius: expanded ? 20 : 999,
           height: expanded
-            ? assistantStep.recommendations?.length ? 'auto' : 328
+            ? hasAssistantAddons ? 'auto' : 328
             : 132,
           opacity: 1,
           width: getRoadieAssistantPanelWidth({
             expanded,
-            hasRecommendations: Boolean(assistantStep.recommendations?.length),
+            hasRecommendations: hasAssistantAddons,
           }),
         }}
         transition={{
@@ -4148,6 +4743,12 @@ function RoadieOrbControl({
                     recommendations={assistantStep.recommendations}
                   />
                 ) : null}
+                {manualResultCards.length ? (
+                  <ManualRiskResultCardList
+                    cards={manualResultCards}
+                    motionTiming={motionTiming}
+                  />
+                ) : null}
               </AnimatePresence>
             </div>
           ) : null}
@@ -4256,6 +4857,101 @@ function AssistantUserText({
         })}
       </span>
     </p>
+  )
+}
+
+function ManualRiskResponseOptionList({
+  motionTiming,
+  onSelect,
+  options,
+}: {
+  motionTiming: MotionTiming
+  onSelect: (option: ManualRiskResponseOption) => void
+  options: ManualRiskResponseOption[]
+}) {
+  return (
+    <motion.div
+      className="pointer-events-auto mt-4 grid w-full gap-2 border-t border-[var(--nav-border)] pt-3"
+      data-testid="manual-risk-response-options"
+      exit={{ opacity: 0, height: 0, y: 8 }}
+      initial={{ opacity: 0, height: 0, y: 8 }}
+      animate={{ opacity: 1, height: 'auto', y: 0 }}
+      transition={{
+        ease: motionTiming.duration === 0 ? undefined : [0.34, 0, 0.2, 1],
+        duration: motionTiming.duration === 0 ? 0 : 0.28,
+      }}
+    >
+      {options.map((option, index) => (
+        <motion.button
+          aria-label={option.label}
+          className="min-w-0 rounded-xl border border-[var(--nav-border)] bg-white px-3 py-2.5 text-left text-sm font-semibold text-[var(--nav-ink)] shadow-[0_8px_18px_rgb(15_23_42/0.05)] transition hover:border-[var(--nav-primary-soft)] hover:bg-[var(--nav-primary-soft)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
+          key={option.id}
+          onClick={() => onSelect(option)}
+          title={option.label}
+          type="button"
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{
+            ...motionTiming,
+            delay: motionTiming.duration === 0 ? 0 : index * 0.035,
+            duration: motionTiming.duration === 0 ? 0 : 0.18,
+          }}
+        >
+          <span className="block truncate">{option.label}</span>
+        </motion.button>
+      ))}
+    </motion.div>
+  )
+}
+
+function ManualRiskResultCardList({
+  cards,
+  motionTiming,
+}: {
+  cards: ManualRiskResultCard[]
+  motionTiming: MotionTiming
+}) {
+  return (
+    <motion.div
+      className="pointer-events-auto mt-2 flex min-h-0 max-h-[16rem] w-full shrink flex-col overflow-hidden rounded-2xl bg-[var(--nav-panel)] p-3 text-left"
+      data-testid="manual-risk-result-cards"
+      exit={{ opacity: 0, height: 0, y: 8 }}
+      initial={{ opacity: 0, height: 0, y: 8 }}
+      animate={{ opacity: 1, height: 'auto', y: 0 }}
+      transition={{
+        ease: motionTiming.duration === 0 ? undefined : [0.34, 0, 0.2, 1],
+        duration: motionTiming.duration === 0 ? 0 : 0.28,
+      }}
+    >
+      <div
+        className="min-h-0 overflow-x-hidden overflow-y-auto overscroll-contain pr-1"
+        data-testid="manual-risk-result-cards-scroll"
+        onTouchMove={(event) => event.stopPropagation()}
+        onWheel={(event) => event.stopPropagation()}
+      >
+        <div className="grid gap-2">
+          {cards.map((card, index) => (
+            <motion.div
+              className="rounded-xl border border-[var(--nav-border)] bg-white px-3 py-2.5 shadow-[0_8px_18px_rgb(15_23_42/0.05)]"
+              key={card.id}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{
+                ...motionTiming,
+                delay: motionTiming.duration === 0 ? 0 : index * 0.035,
+                duration: motionTiming.duration === 0 ? 0 : 0.18,
+              }}
+            >
+              <p className="truncate text-sm font-bold text-[var(--nav-ink)]">{card.title}</p>
+              <p className="mt-0.5 truncate text-xs font-semibold text-[var(--nav-primary)]">{card.meta}</p>
+              {card.detail ? (
+                <p className="mt-1 line-clamp-2 text-xs leading-4 text-[var(--nav-muted)]">{card.detail}</p>
+              ) : null}
+            </motion.div>
+          ))}
+        </div>
+      </div>
+    </motion.div>
   )
 }
 
@@ -4623,6 +5319,222 @@ function getRouteDestinationLabel(recommendation: Extract<RoadieAssistantRecomme
   return destination || recommendation.meta
 }
 
+function createManualRiskAssistantStep(conversation: ManualRiskConversation): RoadieAssistantStep {
+  if (conversation.kind === 'user') {
+    return {
+      id: `manual-risk-${conversation.riskId}-user-${conversation.nextNodeId}`,
+      label: MANUAL_RISK_LABELS[conversation.riskId],
+      mode: 'user-listening',
+      orbState: 'listening',
+      energy: 0.72,
+      statusLabel: '듣는 중...',
+      userText: conversation.text,
+    }
+  }
+
+  const recommendations = getManualRiskAssistantRecommendations(conversation.nodeId)
+
+  return {
+    id: `manual-risk-${conversation.riskId}-${conversation.nodeId}-${conversation.depth}`,
+    label: MANUAL_RISK_LABELS[conversation.riskId],
+    mode: recommendations?.length ? 'recommendation' : 'assistant-speaking',
+    orbState: conversation.nodeId === 'strong' ? 'error' : recommendations?.length ? 'thinking' : 'speaking',
+    energy: conversation.nodeId === 'strong' ? 0.9 : 0.68,
+    statusLabel: conversation.nodeId === 'strong' ? '강한 경고' : undefined,
+    text: conversation.text ?? getManualRiskAssistantText(conversation),
+    recommendations,
+  }
+}
+
+function getManualRiskAssistantText(conversation: ManualRiskAssistantConversation) {
+  if (conversation.nodeId === 'depth-1') {
+    return MANUAL_RISK_DEPTH_ONE_TEXT[conversation.riskId]
+  }
+
+  if (conversation.nodeId === 'strong') {
+    return MANUAL_RISK_STRONG_TEXT[conversation.riskId]
+  }
+
+  if (conversation.nodeId === 'depth-2') {
+    return MANUAL_RISK_DEPTH_TWO_TEXT[conversation.riskId] ?? MANUAL_RISK_STRONG_TEXT[conversation.riskId]
+  }
+
+  switch (conversation.nodeId) {
+    case 'phone-message-confirm':
+      return '아빠에게 10분 정도 늦을 것 같다고 보낼게요. 이렇게 보내면 될까요?'
+    case 'phone-message-complete':
+      return '전송 완료되었습니다.'
+    case 'phone-search-category':
+      return '맛집과 관광지 중에서 어떤 걸 찾아볼까요?'
+    case 'phone-search-restaurants':
+      return '대전역 성심당 근처 맛집을 찾고 있어요.'
+    case 'phone-search-attractions':
+      return '대전 관광지를 찾고 있어요.'
+    case 'phone-music-result':
+      return '신나는 분위기에 맞는 음악을 준비할게요.'
+    case 'drowsiness-ok':
+      return '알겠습니다. 그래도 졸리면 바로 쉬어가야 해요.'
+    case 'drowsiness-window':
+      return '창문을 살짝 열게요. 그래도 잠이 깨지 않는다면 쉬어가는걸 추천드려요.'
+    case 'drowsiness-music':
+      return '밝은 음악을 재생할게요. 그래도 잠이 깨지 않는다면 쉬어가는걸 추천드려요.'
+    case 'device-music-result':
+      return '빅뱅의 붉은 노을을 재생해드릴게요.'
+    case 'device-route-result':
+      return '성심당 경로를 확인하고 있어요.'
+  }
+}
+
+function getManualRiskAssistantRecommendations(nodeId: ManualRiskConversationNodeId): RoadieAssistantRecommendation[] | undefined {
+  if (nodeId !== 'phone-music-result' && nodeId !== 'drowsiness-music' && nodeId !== 'device-music-result') {
+    return undefined
+  }
+
+  return [{
+    type: 'music',
+    title: '음악 정보',
+    meta: '실제 음악 API',
+    detail: '선택한 곡 정보를 표시합니다.',
+    action: '재생',
+  }]
+}
+
+function getManualRiskDepthOneDismissDelayMs(riskId: ManualRiskId) {
+  switch (riskId) {
+    case 'phone':
+      return MANUAL_RISK_PHONE_DEPTH_ONE_DISMISS_DELAY_MS
+    case 'drowsiness':
+      return MANUAL_RISK_DROWSINESS_DEPTH_ONE_DISMISS_DELAY_MS
+    case 'device':
+      return MANUAL_RISK_DEVICE_DEPTH_ONE_DISMISS_DELAY_MS
+    case 'intake':
+      return MANUAL_RISK_INTAKE_DEPTH_ONE_DISMISS_DELAY_MS
+  }
+}
+
+function getManualRiskMusicDismissDelayMs(nodeId: ManualRiskConversationNodeId) {
+  if (nodeId === 'phone-music-result') {
+    return MANUAL_RISK_PHONE_MUSIC_DISMISS_DELAY_MS
+  }
+
+  if (nodeId === 'device-music-result') {
+    return MANUAL_RISK_DEVICE_MUSIC_DISMISS_DELAY_MS
+  }
+
+  if (nodeId === 'drowsiness-music') {
+    return MANUAL_RISK_DROWSINESS_MUSIC_DISMISS_DELAY_MS
+  }
+
+  return MANUAL_RISK_MUSIC_DISMISS_DELAY_MS
+}
+
+function getManualRiskResponseOptions(conversation: ManualRiskConversation | null): ManualRiskResponseOption[] {
+  if (!conversation || conversation.kind !== 'assistant') {
+    return []
+  }
+
+  if (conversation.nodeId === 'depth-2') {
+    switch (conversation.riskId) {
+      case 'phone':
+        return [
+          { id: 'phone-message-request', label: '아빠한테 10분 정도 늦을 것 같다고 문자 보내줘.' },
+          { id: 'phone-search-request', label: '대전역 성심당 근처에 뭐가 있는지 찾아줘.' },
+          { id: 'phone-music-request', label: '여름 휴가가는 중이야. 신나는 노래 틀어줘.' },
+        ]
+      case 'drowsiness':
+        return [
+          { id: 'drowsiness-ok', label: '괜찮아. 조금 더 갈 수 있어.' },
+          { id: 'drowsiness-window', label: '창문 조금만 열어줘.' },
+          { id: 'drowsiness-music', label: '잠 깨는 밝은 음악 틀어줘.' },
+        ]
+      case 'device':
+        return [
+          { id: 'device-music-request', label: '빅뱅의 붉은 노을 틀어줘.' },
+          { id: 'device-route-request', label: '성심당으로 도착지 변경해줘.' },
+        ]
+      case 'intake':
+        return []
+    }
+  }
+
+  if (conversation.nodeId === 'phone-message-confirm') {
+    return [{ id: 'phone-message-confirm-yes', label: '응 그렇게 보내줘.' }]
+  }
+
+  if (conversation.nodeId === 'phone-search-category') {
+    return [
+      { id: 'phone-search-restaurants', label: '대전역 성심당 근처 맛집 찾아줘.' },
+      { id: 'phone-search-attractions', label: '대전 관광지 찾아줘.' },
+    ]
+  }
+
+  return []
+}
+
+function getManualRiskResponseTransition(optionId: string): ManualRiskResponseTransition | undefined {
+  switch (optionId) {
+    case 'phone-message-request':
+      return { nextNodeId: 'phone-message-confirm' }
+    case 'phone-message-confirm-yes':
+      return { nextNodeId: 'phone-message-complete' }
+    case 'phone-search-request':
+      return { nextNodeId: 'phone-search-category' }
+    case 'phone-search-restaurants':
+      return { nextNodeId: 'phone-search-restaurants', effectId: 'phone-search-restaurants' }
+    case 'phone-search-attractions':
+      return { nextNodeId: 'phone-search-attractions', effectId: 'phone-search-attractions' }
+    case 'phone-music-request':
+      return { nextNodeId: 'phone-music-result', effectId: 'phone-music' }
+    case 'drowsiness-ok':
+      return { nextNodeId: 'drowsiness-ok', effectId: 'drowsiness-ok' }
+    case 'drowsiness-window':
+      return { nextNodeId: 'drowsiness-window', effectId: 'drowsiness-window' }
+    case 'drowsiness-music':
+      return { nextNodeId: 'drowsiness-music', effectId: 'drowsiness-music' }
+    case 'device-music-request':
+      return { nextNodeId: 'device-music-result', effectId: 'device-music' }
+    case 'device-route-request':
+      return { nextNodeId: 'device-route-result', effectId: 'device-route' }
+    default:
+      return undefined
+  }
+}
+
+function getKoreanSubjectParticle(text: string) {
+  const lastCharacterCode = text.charCodeAt(text.length - 1)
+
+  if (lastCharacterCode < 0xac00 || lastCharacterCode > 0xd7a3) {
+    return '가'
+  }
+
+  return (lastCharacterCode - 0xac00) % 28 === 0 ? '가' : '이'
+}
+
+function getManualRiskNodeIdForDepth(riskId: ManualRiskId, depth: number): ManualRiskConversationNodeId {
+  if (depth === 1) {
+    return 'depth-1'
+  }
+
+  if (riskId !== 'intake' && depth === 2) {
+    return 'depth-2'
+  }
+
+  return 'strong'
+}
+
+function isSameManualRiskAssistantConversation(
+  conversation: ManualRiskConversation | null,
+  target: Pick<ManualRiskAssistantConversation, 'riskId' | 'depth' | 'nodeId'>,
+) : conversation is ManualRiskAssistantConversation {
+  return Boolean(
+    conversation
+    && conversation.kind === 'assistant'
+    && conversation.riskId === target.riskId
+    && conversation.depth === target.depth
+    && conversation.nodeId === target.nodeId,
+  )
+}
+
 export function createDemoAssistantStep(
   state: DemoScenarioControllerState,
   profileName: string | null,
@@ -4905,14 +5817,14 @@ function DemoScenarioSelection({
           </p>
         </div>
         <button
-          className="absolute left-0 top-0 h-11 rounded-xl bg-white px-4 text-sm font-bold text-[var(--nav-ink)] shadow-[0_10px_24px_rgb(15_23_42/0.10)] transition hover:bg-[var(--nav-selection)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
+          className="absolute left-0 top-0 h-9 rounded-lg bg-white px-3 text-xs font-semibold text-[var(--nav-ink)] shadow-[0_8px_18px_rgb(15_23_42/0.08)] transition hover:bg-[var(--nav-selection)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
           onClick={onBackToEntryMode}
           type="button"
         >
           데모 모드 선택
         </button>
         <button
-          className="absolute right-0 top-0 h-11 rounded-xl bg-white px-4 text-sm font-bold text-[var(--nav-ink)] shadow-[0_10px_24px_rgb(15_23_42/0.10)] transition hover:bg-[var(--nav-selection)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
+          className="absolute right-0 top-0 h-9 rounded-lg bg-white px-3 text-xs font-semibold text-[var(--nav-ink)] shadow-[0_8px_18px_rgb(15_23_42/0.08)] transition hover:bg-[var(--nav-selection)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
           onClick={onStartFreeNavigation}
           type="button"
         >
@@ -5211,20 +6123,26 @@ function getDemoRiskBadgeClassName(riskLevel: 'LOW' | 'MEDIUM' | 'HIGH') {
   }
 }
 
-type ManualRiskControlId = 'phone' | 'drowsiness' | 'device' | 'intake' | 'warning'
-
 function ManualRiskControlPanel({
+  canAdvanceResponse,
   motionTiming,
+  onAdvanceResponse,
+  onResponseOptionSelect,
+  onSelectRisk,
+  responseOptions,
 }: {
+  canAdvanceResponse: boolean
   motionTiming: MotionTiming
+  onAdvanceResponse: () => void
+  onResponseOptionSelect: (option: ManualRiskResponseOption) => void
+  onSelectRisk: (riskId: ManualRiskId) => void
+  responseOptions: ManualRiskResponseOption[]
 }) {
-  const [selectedRiskId, setSelectedRiskId] = useState<ManualRiskControlId | null>(null)
   const controls: Array<{
-    id: ManualRiskControlId
+    id: ManualRiskId
     label: string
     description: string
     icon: ReactNode
-    selectedClassName: string
     idleClassName: string
     iconClassName: string
   }> = [
@@ -5233,7 +6151,6 @@ function ManualRiskControlPanel({
       label: '핸드폰',
       description: '주행 중 휴대폰 주시',
       icon: <Phone className="size-5" weight="bold" />,
-      selectedClassName: 'border-[var(--nav-danger)] bg-[rgb(255_241_242)] text-[var(--nav-danger)]',
       idleClassName: 'border-[var(--nav-border)] bg-white text-[var(--nav-ink)] hover:border-[var(--nav-danger)]',
       iconClassName: 'text-[var(--nav-danger)]',
     },
@@ -5242,7 +6159,6 @@ function ManualRiskControlPanel({
       label: '졸음',
       description: '눈 감김과 피로 신호',
       icon: <Moon className="size-5" weight="bold" />,
-      selectedClassName: 'border-[var(--nav-warning)] bg-[rgb(255_247_237)] text-[var(--nav-warning)]',
       idleClassName: 'border-[var(--nav-border)] bg-white text-[var(--nav-ink)] hover:border-[var(--nav-warning)]',
       iconClassName: 'text-[var(--nav-warning)]',
     },
@@ -5251,7 +6167,6 @@ function ManualRiskControlPanel({
       label: '기기조작',
       description: '내비·콘솔 조작',
       icon: <GearSix className="size-5" weight="bold" />,
-      selectedClassName: 'border-[var(--nav-primary)] bg-[var(--nav-primary-soft)] text-[var(--nav-primary)]',
       idleClassName: 'border-[var(--nav-border)] bg-white text-[var(--nav-ink)] hover:border-[var(--nav-primary)]',
       iconClassName: 'text-[var(--nav-primary)]',
     },
@@ -5260,7 +6175,6 @@ function ManualRiskControlPanel({
       label: '섭취',
       description: '음식·음료 섭취',
       icon: <ForkKnife className="size-5" weight="bold" />,
-      selectedClassName: 'border-[var(--nav-guidance)] bg-[rgb(240_253_244)] text-[var(--nav-guidance)]',
       idleClassName: 'border-[var(--nav-border)] bg-white text-[var(--nav-ink)] hover:border-[var(--nav-guidance)]',
       iconClassName: 'text-[var(--nav-guidance)]',
     },
@@ -5270,7 +6184,6 @@ function ManualRiskControlPanel({
     label: '경고',
     description: '즉시 경고 상황',
     icon: <Warning className="size-5" weight="bold" />,
-    selectedClassName: 'border-[var(--nav-danger)] bg-[rgb(255_241_242)] text-[var(--nav-ink)]',
     idleClassName: 'border-[rgb(254_205_211)] bg-[rgb(255_241_242)] text-[var(--nav-ink)] hover:border-[var(--nav-danger)]',
     iconClassName: 'text-[var(--nav-danger)]',
   }
@@ -5293,28 +6206,23 @@ function ManualRiskControlPanel({
 
       <div className="mt-4 grid grid-cols-2 gap-2" data-testid="manual-risk-control-grid">
         {controls.map((control) => {
-          const selected = selectedRiskId === control.id
-
           return (
             <button
               aria-label={`${control.label} 위험 상황 선택`}
-              aria-pressed={selected}
               className={[
                 'flex h-[4.25rem] flex-col items-center justify-center rounded-lg border px-3 text-center transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]',
-                selected
-                  ? control.selectedClassName
-                  : control.idleClassName,
+                control.idleClassName,
               ].join(' ')}
               data-testid={`manual-risk-control-${control.id}`}
               key={control.id}
-              onClick={() => setSelectedRiskId(control.id)}
+              onClick={() => onSelectRisk(control.id)}
               type="button"
               >
               <span className="inline-flex items-center justify-center gap-2">
                 <span
                   className={[
                     'grid size-5 place-items-center',
-                    selected ? '' : control.iconClassName,
+                    control.iconClassName,
                   ].join(' ')}
                 >
                   {control.icon}
@@ -5327,22 +6235,18 @@ function ManualRiskControlPanel({
         })}
         <button
           aria-label={`${warningControl.label} 위험 상황 선택`}
-          aria-pressed={selectedRiskId === warningControl.id}
           className={[
             'col-span-2 flex h-[4.25rem] flex-col items-center justify-center rounded-lg border px-3 text-center transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]',
-            selectedRiskId === warningControl.id
-              ? warningControl.selectedClassName
-              : warningControl.idleClassName,
+            warningControl.idleClassName,
           ].join(' ')}
           data-testid="manual-risk-control-warning"
-          onClick={() => setSelectedRiskId(warningControl.id)}
           type="button"
         >
           <span className="inline-flex items-center justify-center gap-2">
             <span
               className={[
                 'grid size-5 place-items-center',
-                selectedRiskId === warningControl.id ? '' : warningControl.iconClassName,
+                warningControl.iconClassName,
               ].join(' ')}
             >
               {warningControl.icon}
@@ -5352,6 +6256,36 @@ function ManualRiskControlPanel({
           <span className="mt-0.5 text-[11px] font-semibold leading-3 text-[var(--nav-ink)]">{warningControl.description}</span>
         </button>
       </div>
+      <AnimatePresence initial={false}>
+        {responseOptions.length ? (
+          <ManualRiskResponseOptionList
+            motionTiming={motionTiming}
+            onSelect={onResponseOptionSelect}
+            options={responseOptions}
+          />
+        ) : null}
+        {canAdvanceResponse ? (
+          <motion.div
+            className="pointer-events-auto mt-4 border-t border-[var(--nav-border)] pt-3"
+            data-testid="manual-risk-response-advance"
+            exit={{ opacity: 0, height: 0, y: 8 }}
+            initial={{ opacity: 0, height: 0, y: 8 }}
+            animate={{ opacity: 1, height: 'auto', y: 0 }}
+            transition={{
+              ease: motionTiming.duration === 0 ? undefined : [0.34, 0, 0.2, 1],
+              duration: motionTiming.duration === 0 ? 0 : 0.22,
+            }}
+          >
+            <button
+              className="flex h-11 w-full items-center justify-center rounded-lg border border-[var(--nav-primary)] bg-[var(--nav-primary)] px-3 text-sm font-semibold text-white transition hover:bg-[var(--nav-primary-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
+              onClick={onAdvanceResponse}
+              type="button"
+            >
+              다음
+            </button>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
     </motion.section>
   )
 }
@@ -8355,6 +9289,7 @@ function RouteSelectionSummary({
   motionTiming,
   optionCount,
   originLabel,
+  onCancelRouteSelection,
   onEditRoute,
   onPreviewRouteOption,
   onSelectRouteOption,
@@ -8367,6 +9302,7 @@ function RouteSelectionSummary({
   motionTiming: MotionTiming
   optionCount: number
   originLabel: string
+  onCancelRouteSelection: () => void
   onEditRoute: () => void
   onPreviewRouteOption: (id: string | undefined) => void
   onSelectRouteOption: (id: string) => void
@@ -8491,6 +9427,13 @@ function RouteSelectionSummary({
           type="button"
         >
           변경
+        </button>
+        <button
+          className="shrink-0 rounded-full bg-[var(--nav-panel)] px-3 py-1.5 text-xs font-bold text-[var(--nav-muted)] transition hover:bg-[var(--nav-selection)] hover:text-[var(--nav-ink)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
+          onClick={onCancelRouteSelection}
+          type="button"
+        >
+          종료
         </button>
       </div>
     </motion.div>
