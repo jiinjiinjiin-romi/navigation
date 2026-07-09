@@ -59,6 +59,9 @@ export interface RoadieAssistantStep {
   statusLabel?: string
   text?: string
   userText?: string
+  preSpeechAudioSrc?: string
+  speechAudioPromise?: Promise<Blob>
+  speechPlaybackGain?: number
   recommendations?: RoadieAssistantRecommendation[]
   ttsOptions?: {
     volume?: number

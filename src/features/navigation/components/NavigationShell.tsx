@@ -808,10 +808,12 @@ const DEMO_DESTINATION_PLACE: Place = {
   coordinate: { lat: 36.3378, lng: 127.4309 },
 }
 type ManualRiskId = 'phone' | 'drowsiness' | 'device' | 'intake'
+type EmergencyManualRiskId = Exclude<ManualRiskId, 'intake'>
 type ManualRiskConversationNodeId =
   | 'depth-1'
   | 'depth-2'
   | 'strong'
+  | 'emergency-warning'
   | 'phone-message-confirm'
   | 'phone-message-complete'
   | 'phone-search-category'
@@ -840,6 +842,7 @@ interface ManualRiskAssistantConversation {
   nodeId: ManualRiskConversationNodeId
   text?: string
   resultCards?: ManualRiskResultCard[]
+  speechAudioPromise?: Promise<Blob>
 }
 
 interface ManualRiskUserConversation {
@@ -891,6 +894,15 @@ const MANUAL_RISK_DROWSINESS_DEPTH_ONE_DISMISS_DELAY_MS = 6_000
 const MANUAL_RISK_DEVICE_DEPTH_ONE_DISMISS_DELAY_MS = 4_000
 const MANUAL_RISK_INTAKE_DEPTH_ONE_DISMISS_DELAY_MS = 5_000
 const MANUAL_RISK_INTAKE_STRONG_DISMISS_DELAY_MS = 7_000
+const MANUAL_RISK_STRONG_PRE_SPEECH_AUDIO_SRC = '/sounds/manual-risk-stage-3.wav'
+const MANUAL_RISK_EMERGENCY_WARNING_DELAY_MS = 3_000
+const MANUAL_RISK_EMERGENCY_PRE_SPEECH_AUDIO_SRC = '/sounds/manual-risk-emergency-warning.wav'
+const MANUAL_RISK_EMERGENCY_TTS_OPTIONS: Required<VoiceTtsOptions> = {
+  speed: -3,
+  pitch: 4,
+  volume: 5,
+}
+const MANUAL_RISK_EMERGENCY_TTS_PLAYBACK_GAIN = 1.8
 const MANUAL_RISK_MAX_DEPTH: Record<ManualRiskId, number> = {
   phone: 3,
   drowsiness: 3,
@@ -902,6 +914,11 @@ const MANUAL_RISK_LABELS: Record<ManualRiskId, string> = {
   drowsiness: '졸음',
   device: '기기조작',
   intake: '섭취',
+}
+const MANUAL_RISK_EMERGENCY_WARNING_TEXT: Record<EmergencyManualRiskId, string> = {
+  phone: '핸드폰 사용 경고! 핸드폰 사용 경고!',
+  drowsiness: '졸음 경고! 졸음 경고!',
+  device: '기기조작 경고! 기기조작 경고!',
 }
 const MANUAL_RISK_DEPTH_ONE_TEXT: Record<ManualRiskId, string> = {
   phone: '휴대폰은 잠시 내려두고 전방을 봐주세요.',
@@ -1256,6 +1273,8 @@ export function NavigationShell({
   const [assistantScenarioId, setAssistantScenarioId] = useState<RoadieAssistantScenarioId>('drowsiness-rest-area')
   const [assistantStepIndex, setAssistantStepIndex] = useState(0)
   const [manualRiskConversation, setManualRiskConversation] = useState<ManualRiskConversation | null>(null)
+  const [lastManualEmergencyRiskId, setLastManualEmergencyRiskId] = useState<EmergencyManualRiskId>('drowsiness')
+  const [manualEmergencyWarningCountdown, setManualEmergencyWarningCountdown] = useState<number | null>(null)
   const [driverVideo, setDriverVideo] = useState<DriverVideoSource | null>(null)
   const [driverVideoError, setDriverVideoError] = useState(false)
   const [showLocationFallbackToast, setShowLocationFallbackToast] = useState(false)
@@ -1289,6 +1308,9 @@ export function NavigationShell({
   const routeSelectionCameraSettingsRef = useRef<MapCameraSettings | undefined>(undefined)
   const routeSearchEditorTimerRef = useRef<number | undefined>(undefined)
   const manualRiskDismissTimerRef = useRef<number | undefined>(undefined)
+  const manualEmergencyWarningTimerRef = useRef<number | undefined>(undefined)
+  const manualEmergencyWarningCountdownTimerRef = useRef<number | undefined>(undefined)
+  const manualEmergencyWarningAbortControllerRef = useRef<AbortController | undefined>(undefined)
   const debouncedOriginKeyword = useDebouncedValue(originKeyword.trim(), SEARCH_DEBOUNCE_MS)
   const debouncedDestinationKeyword = useDebouncedValue(destinationKeyword.trim(), SEARCH_DEBOUNCE_MS)
   const debouncedMusicSearchKeyword = useDebouncedValue(musicSearchKeyword.trim(), SEARCH_DEBOUNCE_MS)
@@ -1788,6 +1810,7 @@ export function NavigationShell({
   const manualRiskResultCards = manualRiskConversation?.kind === 'assistant'
     ? manualRiskConversation.resultCards ?? []
     : []
+  const manualEmergencyWarningPending = manualEmergencyWarningCountdown !== null
   const manualRiskStackInfo = manualRiskConversation
     ? {
       label: MANUAL_RISK_LABELS[manualRiskConversation.riskId],
@@ -1814,6 +1837,19 @@ export function NavigationShell({
       window.clearTimeout(manualRiskDismissTimerRef.current)
       manualRiskDismissTimerRef.current = undefined
     }
+
+    if (manualEmergencyWarningTimerRef.current !== undefined) {
+      window.clearTimeout(manualEmergencyWarningTimerRef.current)
+      manualEmergencyWarningTimerRef.current = undefined
+    }
+
+    if (manualEmergencyWarningCountdownTimerRef.current !== undefined) {
+      window.clearInterval(manualEmergencyWarningCountdownTimerRef.current)
+      manualEmergencyWarningCountdownTimerRef.current = undefined
+    }
+
+    manualEmergencyWarningAbortControllerRef.current?.abort()
+    manualEmergencyWarningAbortControllerRef.current = undefined
   }, [])
 
   const selectDriverVideo = useCallback((file: File) => {
@@ -1900,10 +1936,27 @@ export function NavigationShell({
     }
   }, [])
 
+  const cancelManualEmergencyWarning = useCallback(() => {
+    if (manualEmergencyWarningTimerRef.current !== undefined) {
+      window.clearTimeout(manualEmergencyWarningTimerRef.current)
+      manualEmergencyWarningTimerRef.current = undefined
+    }
+
+    if (manualEmergencyWarningCountdownTimerRef.current !== undefined) {
+      window.clearInterval(manualEmergencyWarningCountdownTimerRef.current)
+      manualEmergencyWarningCountdownTimerRef.current = undefined
+    }
+
+    manualEmergencyWarningAbortControllerRef.current?.abort()
+    manualEmergencyWarningAbortControllerRef.current = undefined
+    setManualEmergencyWarningCountdown(null)
+  }, [])
+
   const resetManualRiskConversation = useCallback(() => {
     clearManualRiskDismissTimer()
+    cancelManualEmergencyWarning()
     setManualRiskConversation(null)
-  }, [clearManualRiskDismissTimer])
+  }, [cancelManualEmergencyWarning, clearManualRiskDismissTimer])
 
   const updateManualRiskAssistantConversation = useCallback((
     target: Pick<ManualRiskAssistantConversation, 'riskId' | 'depth' | 'nodeId'>,
@@ -1960,6 +2013,61 @@ export function NavigationShell({
       manualRiskDismissTimerRef.current = undefined
     }, options?.delayMs ?? MANUAL_RISK_MESSAGE_DISMISS_DELAY_MS)
   }, [clearManualRiskDismissTimer, isManualRiskTargetActive])
+
+  const startManualEmergencyWarning = useCallback(() => {
+    cancelManualEmergencyWarning()
+
+    const riskId = lastManualEmergencyRiskId
+    const controller = new AbortController()
+    const text = getManualRiskEmergencyWarningText(riskId)
+    const speechAudioPromise = synthesizeVoice(
+      {
+        text,
+        speakerRole: 'assistant',
+        profileName: selectedProfileName,
+        ...MANUAL_RISK_EMERGENCY_TTS_OPTIONS,
+      },
+      undefined,
+      controller.signal,
+    )
+
+    speechAudioPromise
+      .catch(() => undefined)
+      .finally(() => {
+        if (manualEmergencyWarningAbortControllerRef.current === controller) {
+          manualEmergencyWarningAbortControllerRef.current = undefined
+        }
+    })
+    manualEmergencyWarningAbortControllerRef.current = controller
+    setManualEmergencyWarningCountdown(3)
+    manualEmergencyWarningCountdownTimerRef.current = window.setInterval(() => {
+      setManualEmergencyWarningCountdown((currentCountdown) => {
+        if (currentCountdown === null) {
+          return null
+        }
+
+        return Math.max(1, currentCountdown - 1)
+      })
+    }, 1_000)
+
+    manualEmergencyWarningTimerRef.current = window.setTimeout(() => {
+      manualEmergencyWarningTimerRef.current = undefined
+      if (manualEmergencyWarningCountdownTimerRef.current !== undefined) {
+        window.clearInterval(manualEmergencyWarningCountdownTimerRef.current)
+        manualEmergencyWarningCountdownTimerRef.current = undefined
+      }
+      setManualEmergencyWarningCountdown(null)
+      clearManualRiskDismissTimer()
+      setManualRiskConversation({
+        kind: 'assistant',
+        riskId,
+        depth: MANUAL_RISK_MAX_DEPTH[riskId],
+        nodeId: 'emergency-warning',
+        text,
+        speechAudioPromise,
+      })
+    }, MANUAL_RISK_EMERGENCY_WARNING_DELAY_MS)
+  }, [cancelManualEmergencyWarning, clearManualRiskDismissTimer, lastManualEmergencyRiskId, selectedProfileName])
 
   const runManualRiskEffect = useCallback(async (
     effectId: ManualRiskEffectId,
@@ -2079,6 +2187,10 @@ export function NavigationShell({
 
   const selectManualRisk = useCallback((riskId: ManualRiskId) => {
     clearManualRiskDismissTimer()
+    if (riskId !== 'intake') {
+      setLastManualEmergencyRiskId(riskId)
+    }
+
     setManualRiskConversation((currentConversation) => {
       const maxDepth = MANUAL_RISK_MAX_DEPTH[riskId]
       const nextDepth = currentConversation?.riskId === riskId
@@ -3327,8 +3439,12 @@ export function NavigationShell({
         ) : (
           <ManualRiskControlPanel
             canAdvanceResponse={manualRiskConversation?.kind === 'user'}
+            emergencyWarningCountdown={manualEmergencyWarningCountdown}
+            emergencyWarningPending={manualEmergencyWarningPending}
             motionTiming={motionTiming}
             onAdvanceResponse={advanceManualRiskResponse}
+            onCancelEmergencyWarning={cancelManualEmergencyWarning}
+            onEmergencyWarning={startManualEmergencyWarning}
             onResponseOptionSelect={selectManualRiskResponseOption}
             onSelectRisk={selectManualRisk}
             responseOptions={demoAssistantStep ? [] : manualRiskResponseOptions}
@@ -4499,7 +4615,12 @@ function RoadieOrbControl({
   const speechText = assistantStep.text ?? assistantStep.userText ?? ''
   const speakerRole = assistantStep.text ? 'assistant' : assistantStep.userText ? 'user' : null
   const activeTtsOptions = assistantStep.ttsOptions ?? ttsOptions
+  const preSpeechAudioSrc = assistantStep.preSpeechAudioSrc
+  const speechAudioPromise = assistantStep.speechAudioPromise
+  const speechPlaybackGain = assistantStep.speechPlaybackGain ?? 1
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  const preSpeechAudioRef = useRef<HTMLAudioElement | null>(null)
+  const speechAudioContextRef = useRef<AudioContext | null>(null)
   const audioUrlRef = useRef<string | null>(null)
 
   useEffect(() => {
@@ -4516,6 +4637,9 @@ function RoadieOrbControl({
 
     const controller = new AbortController()
     let disposed = false
+    let synthesizedAudio: HTMLAudioElement | null = null
+    let preSpeechAudioCompleted = !preSpeechAudioSrc
+    let cleanupPreSpeechAudio: () => void = () => undefined
 
     const revokeAudioUrl = () => {
       if (audioUrlRef.current) {
@@ -4524,19 +4648,81 @@ function RoadieOrbControl({
       }
     }
 
+    preSpeechAudioRef.current?.pause()
+    preSpeechAudioRef.current = null
+    void speechAudioContextRef.current?.close().catch(() => undefined)
+    speechAudioContextRef.current = null
     audioRef.current?.pause()
     audioRef.current = null
 
-    void synthesizeVoice(
-      {
-        text: speechText,
-        speakerRole,
-        profileName,
-        ...activeTtsOptions,
-      },
-      undefined,
-      controller.signal,
-    )
+    const playSynthesizedAudio = () => {
+      if (disposed || !preSpeechAudioCompleted || !synthesizedAudio) {
+        return
+      }
+
+      audioRef.current = synthesizedAudio
+      const AudioContextConstructor = window.AudioContext
+
+      if (speechPlaybackGain > 1 && AudioContextConstructor) {
+        try {
+          const audioContext = new AudioContextConstructor()
+          const source = audioContext.createMediaElementSource(synthesizedAudio)
+          const gainNode = audioContext.createGain()
+          gainNode.gain.value = speechPlaybackGain
+          source.connect(gainNode)
+          gainNode.connect(audioContext.destination)
+          speechAudioContextRef.current = audioContext
+        } catch {
+          speechAudioContextRef.current = null
+        }
+      }
+
+      void synthesizedAudio.play().catch(() => undefined)
+    }
+
+    if (preSpeechAudioSrc) {
+      const preSpeechAudio = new Audio(preSpeechAudioSrc)
+      let preSpeechSettled = false
+      preSpeechAudioRef.current = preSpeechAudio
+
+      const finishPreSpeechAudio = () => {
+        if (preSpeechSettled) {
+          return
+        }
+
+        preSpeechSettled = true
+        cleanupPreSpeechAudio()
+
+        if (preSpeechAudioRef.current === preSpeechAudio) {
+          preSpeechAudioRef.current = null
+        }
+
+        preSpeechAudioCompleted = true
+        playSynthesizedAudio()
+      }
+
+      cleanupPreSpeechAudio = () => {
+        preSpeechAudio.removeEventListener('ended', finishPreSpeechAudio)
+        preSpeechAudio.removeEventListener('error', finishPreSpeechAudio)
+      }
+
+      preSpeechAudio.addEventListener('ended', finishPreSpeechAudio)
+      preSpeechAudio.addEventListener('error', finishPreSpeechAudio)
+      void preSpeechAudio.play().catch(finishPreSpeechAudio)
+    }
+
+    const activeSpeechAudioPromise = speechAudioPromise ?? synthesizeVoice(
+        {
+          text: speechText,
+          speakerRole,
+          profileName,
+          ...activeTtsOptions,
+        },
+        undefined,
+        controller.signal,
+      )
+
+    void activeSpeechAudioPromise
       .then((audioBlob) => {
         if (disposed) {
           return
@@ -4547,14 +4733,19 @@ function RoadieOrbControl({
         audioUrlRef.current = audioUrl
 
         const audio = new Audio(audioUrl)
-        audioRef.current = audio
-        void audio.play().catch(() => undefined)
+        synthesizedAudio = audio
+        playSynthesizedAudio()
       })
       .catch(() => undefined)
 
     return () => {
       disposed = true
       controller.abort()
+      cleanupPreSpeechAudio()
+      preSpeechAudioRef.current?.pause()
+      preSpeechAudioRef.current = null
+      void speechAudioContextRef.current?.close().catch(() => undefined)
+      speechAudioContextRef.current = null
       audioRef.current?.pause()
       audioRef.current = null
       revokeAudioUrl()
@@ -4565,8 +4756,11 @@ function RoadieOrbControl({
     activeTtsOptions.volume,
     expanded,
     hidden,
+    preSpeechAudioSrc,
     profileName,
     speakerRole,
+    speechPlaybackGain,
+    speechAudioPromise,
     speechText,
   ])
 
@@ -5333,15 +5527,23 @@ function createManualRiskAssistantStep(conversation: ManualRiskConversation): Ro
   }
 
   const recommendations = getManualRiskAssistantRecommendations(conversation.nodeId)
+  const emergencyWarning = conversation.nodeId === 'emergency-warning'
+  const strongWarning = conversation.nodeId === 'strong'
 
   return {
     id: `manual-risk-${conversation.riskId}-${conversation.nodeId}-${conversation.depth}`,
     label: MANUAL_RISK_LABELS[conversation.riskId],
     mode: recommendations?.length ? 'recommendation' : 'assistant-speaking',
-    orbState: conversation.nodeId === 'strong' ? 'error' : recommendations?.length ? 'thinking' : 'speaking',
-    energy: conversation.nodeId === 'strong' ? 0.9 : 0.68,
-    statusLabel: conversation.nodeId === 'strong' ? '강한 경고' : undefined,
+    orbState: strongWarning || emergencyWarning ? 'error' : recommendations?.length ? 'thinking' : 'speaking',
+    energy: emergencyWarning ? 1 : strongWarning ? 0.9 : 0.68,
+    statusLabel: emergencyWarning ? '긴급 경고' : strongWarning ? '강한 경고' : undefined,
     text: conversation.text ?? getManualRiskAssistantText(conversation),
+    preSpeechAudioSrc: emergencyWarning
+      ? MANUAL_RISK_EMERGENCY_PRE_SPEECH_AUDIO_SRC
+      : strongWarning ? MANUAL_RISK_STRONG_PRE_SPEECH_AUDIO_SRC : undefined,
+    speechAudioPromise: conversation.speechAudioPromise,
+    speechPlaybackGain: emergencyWarning ? MANUAL_RISK_EMERGENCY_TTS_PLAYBACK_GAIN : undefined,
+    ttsOptions: emergencyWarning ? MANUAL_RISK_EMERGENCY_TTS_OPTIONS : undefined,
     recommendations,
   }
 }
@@ -5353,6 +5555,10 @@ function getManualRiskAssistantText(conversation: ManualRiskAssistantConversatio
 
   if (conversation.nodeId === 'strong') {
     return MANUAL_RISK_STRONG_TEXT[conversation.riskId]
+  }
+
+  if (conversation.nodeId === 'emergency-warning' && conversation.riskId !== 'intake') {
+    return getManualRiskEmergencyWarningText(conversation.riskId)
   }
 
   if (conversation.nodeId === 'depth-2') {
@@ -5383,6 +5589,10 @@ function getManualRiskAssistantText(conversation: ManualRiskAssistantConversatio
     case 'device-route-result':
       return '성심당 경로를 확인하고 있어요.'
   }
+}
+
+function getManualRiskEmergencyWarningText(riskId: EmergencyManualRiskId) {
+  return MANUAL_RISK_EMERGENCY_WARNING_TEXT[riskId]
 }
 
 function getManualRiskAssistantRecommendations(nodeId: ManualRiskConversationNodeId): RoadieAssistantRecommendation[] | undefined {
@@ -6125,15 +6335,23 @@ function getDemoRiskBadgeClassName(riskLevel: 'LOW' | 'MEDIUM' | 'HIGH') {
 
 function ManualRiskControlPanel({
   canAdvanceResponse,
+  emergencyWarningCountdown,
+  emergencyWarningPending,
   motionTiming,
   onAdvanceResponse,
+  onCancelEmergencyWarning,
+  onEmergencyWarning,
   onResponseOptionSelect,
   onSelectRisk,
   responseOptions,
 }: {
   canAdvanceResponse: boolean
+  emergencyWarningCountdown: number | null
+  emergencyWarningPending: boolean
   motionTiming: MotionTiming
   onAdvanceResponse: () => void
+  onCancelEmergencyWarning: () => void
+  onEmergencyWarning: () => void
   onResponseOptionSelect: (option: ManualRiskResponseOption) => void
   onSelectRisk: (riskId: ManualRiskId) => void
   responseOptions: ManualRiskResponseOption[]
@@ -6240,6 +6458,7 @@ function ManualRiskControlPanel({
             warningControl.idleClassName,
           ].join(' ')}
           data-testid="manual-risk-control-warning"
+          onClick={onEmergencyWarning}
           type="button"
         >
           <span className="inline-flex items-center justify-center gap-2">
@@ -6282,6 +6501,30 @@ function ManualRiskControlPanel({
               type="button"
             >
               다음
+            </button>
+          </motion.div>
+        ) : null}
+        {emergencyWarningPending ? (
+          <motion.div
+            className="pointer-events-auto mt-4 rounded-lg border border-[rgb(254_205_211)] bg-[rgb(255_241_242)] p-3"
+            data-testid="manual-risk-emergency-warning-pending"
+            exit={{ opacity: 0, height: 0, y: 8 }}
+            initial={{ opacity: 0, height: 0, y: 8 }}
+            animate={{ opacity: 1, height: 'auto', y: 0 }}
+            transition={{
+              ease: motionTiming.duration === 0 ? undefined : [0.34, 0, 0.2, 1],
+              duration: motionTiming.duration === 0 ? 0 : 0.22,
+            }}
+          >
+            <p className="text-sm font-semibold text-[var(--nav-danger)]">
+              {emergencyWarningCountdown ?? 0}초 후 경고 안내가 진행됩니다.
+            </p>
+            <button
+              className="mt-2 h-9 w-full rounded-lg border border-[rgb(254_205_211)] bg-white px-3 text-sm font-semibold text-[var(--nav-ink)] transition hover:border-[var(--nav-danger)] hover:text-[var(--nav-danger)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
+              onClick={onCancelEmergencyWarning}
+              type="button"
+            >
+              취소
             </button>
           </motion.div>
         ) : null}

@@ -1549,6 +1549,338 @@ describe('NavigationShell', () => {
     }, { timeout: 1_000 })
   }, 10_000)
 
+  it('plays the strong warning sound before strong manual risk TTS', async () => {
+    const queryClient = new QueryClient()
+    const resolveVoiceRequests: Array<(blob: Blob) => void> = []
+    const audioPlayOrder: string[] = []
+    const audioInstances: Array<{
+      src: string
+      dispatch: (eventName: string) => void
+    }> = []
+
+    class MockAudio {
+      src: string
+      private listeners = new Map<string, Set<() => void>>()
+
+      constructor(src: string) {
+        this.src = src
+        audioInstances.push({
+          src,
+          dispatch: (eventName: string) => {
+            this.listeners.get(eventName)?.forEach((listener) => listener())
+          },
+        })
+      }
+
+      play = vi.fn(() => {
+        audioPlayOrder.push(this.src)
+        return Promise.resolve()
+      })
+
+      pause = vi.fn()
+
+      addEventListener(eventName: string, listener: () => void) {
+        const listeners = this.listeners.get(eventName) ?? new Set<() => void>()
+        listeners.add(listener)
+        this.listeners.set(eventName, listeners)
+      }
+
+      removeEventListener(eventName: string, listener: () => void) {
+        this.listeners.get(eventName)?.delete(listener)
+      }
+    }
+
+    const createObjectURL = vi.fn(() => 'blob:manual-risk-strong-tts')
+    const revokeObjectURL = vi.fn()
+    const originalCreateObjectURL = URL.createObjectURL
+    const originalRevokeObjectURL = URL.revokeObjectURL
+
+    vi.stubGlobal('Audio', MockAudio)
+    Object.defineProperty(URL, 'createObjectURL', {
+      configurable: true,
+      value: createObjectURL,
+    })
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      configurable: true,
+      value: revokeObjectURL,
+    })
+    mockedSynthesizeVoice.mockImplementation(() => new Promise((resolve) => {
+      resolveVoiceRequests.push(resolve)
+    }))
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '핸드폰 위험 상황 선택' }))
+    fireEvent.click(screen.getByRole('button', { name: '핸드폰 위험 상황 선택' }))
+    fireEvent.click(screen.getByRole('button', { name: '핸드폰 위험 상황 선택' }))
+
+    expect(await screen.findByText('휴대폰 사용을 즉시 중단하세요. 지금은 전방만 봐야 합니다.')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(audioPlayOrder).toEqual(['/sounds/manual-risk-stage-3.wav'])
+    })
+    expect(createObjectURL).not.toHaveBeenCalled()
+
+    await waitFor(() => {
+      expect(resolveVoiceRequests.length).toBeGreaterThanOrEqual(3)
+    })
+
+    act(() => {
+      resolveVoiceRequests.forEach((resolve) => resolve(new Blob(['audio'], { type: 'audio/mpeg' })))
+    })
+
+    await waitFor(() => {
+      expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob))
+    })
+
+    const warningAudio = [...audioInstances]
+      .reverse()
+      .find((audio) => audio.src === '/sounds/manual-risk-stage-3.wav')
+    expect(warningAudio).toBeDefined()
+
+    act(() => {
+      warningAudio?.dispatch('ended')
+    })
+
+    await waitFor(() => {
+      expect(audioPlayOrder[audioPlayOrder.length - 1]).toBe('blob:manual-risk-strong-tts')
+    })
+
+    vi.unstubAllGlobals()
+    Object.defineProperty(URL, 'createObjectURL', {
+      configurable: true,
+      value: originalCreateObjectURL,
+    })
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      configurable: true,
+      value: originalRevokeObjectURL,
+    })
+  })
+
+  it('starts and cancels the emergency warning countdown from the warning button', async () => {
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '경고 위험 상황 선택' }))
+
+    expect(screen.getByText('3초 후 경고 안내가 진행됩니다.')).toBeInTheDocument()
+    expect(mockedSynthesizeVoice).toHaveBeenCalledWith(
+      expect.objectContaining({
+        text: '졸음 경고! 졸음 경고!',
+        speakerRole: 'assistant',
+        speed: -3,
+        pitch: 4,
+        volume: 5,
+      }),
+      undefined,
+      expect.any(AbortSignal),
+    )
+
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 1_100))
+    })
+    expect(screen.getByText('2초 후 경고 안내가 진행됩니다.')).toBeInTheDocument()
+
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 1_000))
+    })
+    expect(screen.getByText('1초 후 경고 안내가 진행됩니다.')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '취소' }))
+    await waitFor(() => {
+      expect(screen.queryByText(/초 후 경고 안내가 진행됩니다./)).not.toBeInTheDocument()
+    })
+
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 1_100))
+    })
+
+    expect(screen.queryByText('졸음 경고! 졸음 경고!')).not.toBeInTheDocument()
+  }, 8_000)
+
+  it('uses the last non-intake manual risk for the emergency warning even after the stack clears', async () => {
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '핸드폰 위험 상황 선택' }))
+    expect(await screen.findByText('휴대폰은 잠시 내려두고 전방을 봐주세요.')).toBeInTheDocument()
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 4_100))
+    })
+    expect(screen.queryByText('휴대폰은 잠시 내려두고 전방을 봐주세요.')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '경고 위험 상황 선택' }))
+    expect(screen.getByText('3초 후 경고 안내가 진행됩니다.')).toBeInTheDocument()
+    expect(mockedSynthesizeVoice).toHaveBeenCalledWith(
+      expect.objectContaining({ text: '핸드폰 사용 경고! 핸드폰 사용 경고!' }),
+      undefined,
+      expect.any(AbortSignal),
+    )
+
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 3_100))
+    })
+
+    expect(await screen.findByText('핸드폰 사용 경고! 핸드폰 사용 경고!')).toBeInTheDocument()
+  }, 10_000)
+
+  it('plays the emergency warning sound before the preloaded emergency warning TTS', async () => {
+    const queryClient = new QueryClient()
+    const resolveVoiceRequests: Array<(blob: Blob) => void> = []
+    const audioPlayOrder: string[] = []
+    const audioInstances: Array<{
+      src: string
+      dispatch: (eventName: string) => void
+    }> = []
+
+    class MockAudio {
+      src: string
+      private listeners = new Map<string, Set<() => void>>()
+
+      constructor(src: string) {
+        this.src = src
+        audioInstances.push({
+          src,
+          dispatch: (eventName: string) => {
+            this.listeners.get(eventName)?.forEach((listener) => listener())
+          },
+        })
+      }
+
+      play = vi.fn(() => {
+        audioPlayOrder.push(this.src)
+        return Promise.resolve()
+      })
+
+      pause = vi.fn()
+
+      addEventListener(eventName: string, listener: () => void) {
+        const listeners = this.listeners.get(eventName) ?? new Set<() => void>()
+        listeners.add(listener)
+        this.listeners.set(eventName, listeners)
+      }
+
+      removeEventListener(eventName: string, listener: () => void) {
+        this.listeners.get(eventName)?.delete(listener)
+      }
+    }
+
+    const createObjectURL = vi.fn(() => 'blob:manual-risk-emergency-tts')
+    const revokeObjectURL = vi.fn()
+    const originalCreateObjectURL = URL.createObjectURL
+    const originalRevokeObjectURL = URL.revokeObjectURL
+    const audioGainValues: number[] = []
+    const mockConnect = vi.fn()
+    const mockClose = vi.fn(() => Promise.resolve())
+
+    class MockAudioContext {
+      destination = {}
+
+      createMediaElementSource = vi.fn(() => ({
+        connect: mockConnect,
+      }))
+
+      createGain = vi.fn(() => {
+        const gainNode = {
+          gain: {
+            set value(nextValue: number) {
+              audioGainValues.push(nextValue)
+            },
+            get value() {
+              return audioGainValues[audioGainValues.length - 1] ?? 1
+            },
+          },
+          connect: mockConnect,
+        }
+
+        return gainNode
+      })
+
+      close = mockClose
+    }
+
+    vi.stubGlobal('Audio', MockAudio)
+    vi.stubGlobal('AudioContext', MockAudioContext)
+    Object.defineProperty(URL, 'createObjectURL', {
+      configurable: true,
+      value: createObjectURL,
+    })
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      configurable: true,
+      value: revokeObjectURL,
+    })
+    mockedSynthesizeVoice.mockImplementation(() => new Promise((resolve) => {
+      resolveVoiceRequests.push(resolve)
+    }))
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '경고 위험 상황 선택' }))
+    expect(screen.getByText('3초 후 경고 안내가 진행됩니다.')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(resolveVoiceRequests).toHaveLength(1)
+    })
+
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 3_100))
+    })
+
+    expect(screen.getByText('졸음 경고! 졸음 경고!')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(audioPlayOrder).toEqual(['/sounds/manual-risk-emergency-warning.wav'])
+    })
+    expect(createObjectURL).not.toHaveBeenCalled()
+
+    act(() => {
+      resolveVoiceRequests.forEach((resolve) => resolve(new Blob(['audio'], { type: 'audio/mpeg' })))
+    })
+
+    await waitFor(() => {
+      expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob))
+    })
+
+    const warningAudio = [...audioInstances]
+      .reverse()
+      .find((audio) => audio.src === '/sounds/manual-risk-emergency-warning.wav')
+    expect(warningAudio).toBeDefined()
+
+    act(() => {
+      warningAudio?.dispatch('ended')
+    })
+
+    await waitFor(() => {
+      expect(audioPlayOrder[audioPlayOrder.length - 1]).toBe('blob:manual-risk-emergency-tts')
+    })
+    expect(audioGainValues).toContain(1.8)
+
+    vi.unstubAllGlobals()
+    Object.defineProperty(URL, 'createObjectURL', {
+      configurable: true,
+      value: originalCreateObjectURL,
+    })
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      configurable: true,
+      value: originalRevokeObjectURL,
+    })
+  }, 10_000)
+
   it('starts a fixed demo scenario after profile selection', async () => {
     const queryClient = new QueryClient()
 
