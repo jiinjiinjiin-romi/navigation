@@ -49,7 +49,9 @@ const ROUTE_SELECTION_ZOOM_OUT_MARGIN = 0.9
 const ROUTE_OPTION_HOVER_DISTANCE_PX = 20
 const ROUTE_OPTION_HIT_TEST_MIN_DISTANCE_SQUARED = 0.00000004
 const ROUTE_OPTION_POLYLINE_CHUNK_SIZE = 8
-const CAMERA_FOLLOW_OFFSET_Y = 180
+const CAMERA_FOLLOW_DEFAULT_OFFSET_Y = 180
+const CAMERA_FOLLOW_MIN_OFFSET_Y = 56
+const CAMERA_FOLLOW_HEIGHT_RATIO = 0.18
 const CAMERA_ANIMATION_MS = 220
 const MAP_MODE_TRANSITION_MS = 960
 const COMPASS_CAMERA_ANIMATION_MS = 640
@@ -301,7 +303,7 @@ export function TmapPanel({
 
     const x = getPointX(screenPoint)
     const y = getPointY(screenPoint)
-    const offsetPoint = new tmap.Point(x, y - CAMERA_FOLLOW_OFFSET_Y)
+    const offsetPoint = new tmap.Point(x, y - getCameraFollowOffsetY(mapElementRef.current))
     const offsetLatLng = map.screenToReal(offsetPoint)
 
     if (!offsetLatLng || typeof offsetLatLng !== 'object') {
@@ -1970,6 +1972,19 @@ function easeInOutCubic(progress: number) {
   return progress < 0.5
     ? 4 * progress * progress * progress
     : 1 - Math.pow(-2 * progress + 2, 3) / 2
+}
+
+function getCameraFollowOffsetY(mapElement: HTMLElement | null) {
+  const measuredHeight = mapElement?.getBoundingClientRect().height ?? mapElement?.clientHeight ?? 0
+
+  if (!Number.isFinite(measuredHeight) || measuredHeight <= 0) {
+    return CAMERA_FOLLOW_DEFAULT_OFFSET_Y
+  }
+
+  return Math.min(
+    CAMERA_FOLLOW_DEFAULT_OFFSET_Y,
+    Math.max(CAMERA_FOLLOW_MIN_OFFSET_Y, measuredHeight * CAMERA_FOLLOW_HEIGHT_RATIO),
+  )
 }
 
 function applyMapCamera(

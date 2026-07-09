@@ -325,6 +325,51 @@ describe('TmapPanel', () => {
     expect(screenToReal).toHaveBeenCalledWith({ x: 720, y: 290 })
   })
 
+  it('keeps the navigation marker only slightly below center on a short map', async () => {
+    const realToScreen = vi.fn(() => ({ x: 720, y: 470 }))
+    const screenToReal = vi.fn((_point: { x: number; y: number }) => ({ lat: 37.5508, lng: 127.073 }))
+    const getBoundingClientRectSpy = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockReturnValue({
+        bottom: 360,
+        height: 360,
+        left: 0,
+        right: 720,
+        top: 0,
+        width: 720,
+        x: 0,
+        y: 0,
+        toJSON: () => undefined,
+      })
+    window.Tmapv3!.Map = vi.fn(function () {
+      return {
+        getCenter,
+        getBearing,
+        getPitch,
+        getZoom,
+        setCenter,
+        setZoom,
+        setBearing,
+        setPitch,
+        setInteractive,
+        realToScreen,
+        screenToReal,
+      }
+    }) as unknown as NonNullable<Window['Tmapv3']>['Map']
+
+    render(<TmapPanel currentPosition={{ lat: 37.5502, lng: 127.073 }} />)
+
+    await waitFor(() => {
+      expect(screenToReal).toHaveBeenCalled()
+    })
+
+    const offsetPoint = screenToReal.mock.calls[screenToReal.mock.calls.length - 1]?.[0]
+    expect(offsetPoint.x).toBe(720)
+    expect(offsetPoint.y).toBeCloseTo(405.2)
+
+    getBoundingClientRectSpy.mockRestore()
+  })
+
   it('draws traffic congestion colors only on the active route option candidate', async () => {
     const previewRouteOption = vi.fn()
     const { rerender } = render(
