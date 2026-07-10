@@ -6513,7 +6513,7 @@ function ManualRiskControlPanel({
         ) : null}
         {emergencyWarningPending ? (
           <motion.div
-            className="pointer-events-auto mt-4 rounded-lg border border-[rgb(254_205_211)] bg-[rgb(255_241_242)] p-3"
+            className="pointer-events-auto mt-3 flex min-h-12 items-center justify-between gap-3 rounded-md border border-[rgb(254_205_211)] bg-[rgb(255_241_242)] px-3 py-2"
             data-testid="manual-risk-emergency-warning-pending"
             exit={{ opacity: 0, height: 0, y: 8 }}
             initial={{ opacity: 0, height: 0, y: 8 }}
@@ -6524,10 +6524,10 @@ function ManualRiskControlPanel({
             }}
           >
             <p className="text-sm font-semibold text-[var(--nav-danger)]">
-              {emergencyWarningCountdown ?? 0}초 후 경고 안내가 진행됩니다.
+              {emergencyWarningCountdown ?? 0}초 후 긴급 경고가 시작됩니다.
             </p>
             <button
-              className="mt-2 h-9 w-full rounded-lg border border-[rgb(254_205_211)] bg-white px-3 text-sm font-semibold text-[var(--nav-ink)] transition hover:border-[var(--nav-danger)] hover:text-[var(--nav-danger)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
+              className="h-8 shrink-0 rounded-md border border-[rgb(254_205_211)] bg-white px-3 text-sm font-semibold text-[var(--nav-ink)] transition hover:border-[var(--nav-danger)] hover:text-[var(--nav-danger)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
               onClick={onCancelEmergencyWarning}
               type="button"
             >

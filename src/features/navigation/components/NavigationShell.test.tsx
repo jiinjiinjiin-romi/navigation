@@ -1683,7 +1683,7 @@ describe('NavigationShell', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '경고 위험 상황 선택' }))
 
-    expect(screen.getByText('3초 후 경고 안내가 진행됩니다.')).toBeInTheDocument()
+    expect(screen.getByText('3초 후 긴급 경고가 시작됩니다.')).toBeInTheDocument()
     expect(mockedSynthesizeVoice).toHaveBeenCalledWith(
       expect.objectContaining({
         text: '졸음 경고! 졸음 경고!',
@@ -1699,16 +1699,16 @@ describe('NavigationShell', () => {
     await act(async () => {
       await new Promise((resolve) => window.setTimeout(resolve, 1_100))
     })
-    expect(screen.getByText('2초 후 경고 안내가 진행됩니다.')).toBeInTheDocument()
+    expect(screen.getByText('2초 후 긴급 경고가 시작됩니다.')).toBeInTheDocument()
 
     await act(async () => {
       await new Promise((resolve) => window.setTimeout(resolve, 1_000))
     })
-    expect(screen.getByText('1초 후 경고 안내가 진행됩니다.')).toBeInTheDocument()
+    expect(screen.getByText('1초 후 긴급 경고가 시작됩니다.')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '취소' }))
     await waitFor(() => {
-      expect(screen.queryByText(/초 후 경고 안내가 진행됩니다./)).not.toBeInTheDocument()
+      expect(screen.queryByText(/초 후 긴급 경고가 시작됩니다./)).not.toBeInTheDocument()
     })
 
     await act(async () => {
@@ -1735,7 +1735,7 @@ describe('NavigationShell', () => {
     expect(screen.queryByText('휴대폰은 잠시 내려두고 전방을 봐주세요.')).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '경고 위험 상황 선택' }))
-    expect(screen.getByText('3초 후 경고 안내가 진행됩니다.')).toBeInTheDocument()
+    expect(screen.getByText('3초 후 긴급 경고가 시작됩니다.')).toBeInTheDocument()
     expect(mockedSynthesizeVoice).toHaveBeenCalledWith(
       expect.objectContaining({ text: '핸드폰 사용 경고! 핸드폰 사용 경고!' }),
       undefined,
@@ -1845,7 +1845,7 @@ describe('NavigationShell', () => {
     )
 
     fireEvent.click(screen.getByRole('button', { name: '경고 위험 상황 선택' }))
-    expect(screen.getByText('3초 후 경고 안내가 진행됩니다.')).toBeInTheDocument()
+    expect(screen.getByText('3초 후 긴급 경고가 시작됩니다.')).toBeInTheDocument()
     await waitFor(() => {
       expect(resolveVoiceRequests).toHaveLength(1)
     })
