@@ -1065,7 +1065,7 @@ describe('NavigationShell', () => {
     expect(screen.getByTestId('demo-scenario-card-reaching_behind_check')).toHaveTextContent('뒷좌석 확인 감지')
     expect(within(screen.getByTestId('demo-scenario-card-drowsy_driver')).getByText('01')).toHaveClass('text-2xl')
     expect(screen.queryByTestId('demo-scenario-placeholder-card')).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: '데모 모드 선택' }))
+    fireEvent.click(screen.getByRole('button', { name: '< 데모 모드 선택' }))
     expect(screen.getByTestId('demo-entry-mode-selection')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /실시간 위험 상황 조작/ }))
     expect(await screen.findByTestId('manual-risk-control-panel')).toBeInTheDocument()
@@ -1093,7 +1093,7 @@ describe('NavigationShell', () => {
     expect(screen.queryByRole('button', { name: '네비게이션 이용하기' })).not.toBeInTheDocument()
   })
 
-  it('returns to profile selection from the demo entry mode screen', async () => {
+  it('returns between demo selection screens with labeled back buttons', async () => {
     const queryClient = new QueryClient()
 
     render(
@@ -1105,9 +1105,16 @@ describe('NavigationShell', () => {
     fireEvent.click(await screen.findByRole('button', { name: /민준 프로필 선택/ }))
     fireEvent.click(screen.getByRole('button', { name: '민준(으)로 시작' }))
 
-    fireEvent.click(await screen.findByRole('button', { name: '프로필 선택' }))
+    fireEvent.click(await screen.findByRole('button', { name: '< 프로필 선택' }))
 
     expect(await screen.findByRole('heading', { name: '오늘은 누가 운전할까요?' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /민준 프로필 선택/ }))
+    fireEvent.click(screen.getByRole('button', { name: '민준(으)로 시작' }))
+    fireEvent.click(await screen.findByRole('button', { name: /대표 시나리오 보기/ }))
+    fireEvent.click(await screen.findByRole('button', { name: '< 데모 모드 선택' }))
+
+    expect(screen.getByTestId('demo-entry-mode-selection')).toBeInTheDocument()
   })
 
   it('stacks manual risk depth only for the same driver behavior', async () => {

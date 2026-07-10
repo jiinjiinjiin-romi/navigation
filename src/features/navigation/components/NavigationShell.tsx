@@ -6016,18 +6016,19 @@ function DemoEntryModeSelection({
       animate={{ opacity: 1, y: 0 }}
       transition={motionTiming}
     >
-      <div className="relative mx-auto w-full max-w-[42rem] text-center">
-        <h2 className="text-2xl font-black leading-tight">데모 모드 선택</h2>
-        <p className="mt-2 text-sm font-semibold text-[var(--nav-muted)]">
-          {profileName} 프로필 · 원하는 방식으로 로디 데모를 시작하세요
-        </p>
+      <div className="relative mx-auto w-full max-w-[56rem]">
+        <div className="mx-auto max-w-[42rem] text-center">
+          <h2 className="text-2xl font-black leading-tight">데모 모드 선택</h2>
+          <p className="mt-2 text-sm font-semibold text-[var(--nav-muted)]">
+            {profileName} 프로필 · 원하는 방식으로 로디 데모를 시작하세요
+          </p>
+        </div>
         <button
-          className="absolute left-0 top-0 inline-flex h-8 items-center gap-1 rounded-md px-1.5 text-xs font-semibold text-[var(--nav-muted)] transition hover:bg-white hover:text-[var(--nav-ink)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
+          className="absolute left-0 top-0 inline-flex h-9 items-center rounded-lg border border-white/80 bg-white px-3 text-xs font-semibold text-[var(--nav-ink)] shadow-[0_8px_18px_rgb(15_23_42/0.08)] transition hover:border-[var(--nav-primary)] hover:bg-[var(--nav-selection)] hover:shadow-[0_12px_24px_rgb(15_23_42/0.12)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
           onClick={onReturnToProfileSelection}
           type="button"
         >
-          <CaretLeft className="size-3.5" weight="bold" />
-          프로필 선택
+          {'< 프로필 선택'}
         </button>
       </div>
 
@@ -6097,7 +6098,7 @@ function DemoScenarioSelection({
       animate={{ opacity: 1, y: 0 }}
       transition={motionTiming}
     >
-      <div className="relative flex justify-center">
+      <div className="relative mx-auto flex w-full max-w-[76rem] justify-center">
         <div className="max-w-[38rem] text-center">
           <h2 className="text-2xl font-black leading-tight">대표 위험행동 데모 선택</h2>
           <p className="mt-2 text-sm font-semibold text-[var(--nav-muted)]">
@@ -6105,11 +6106,11 @@ function DemoScenarioSelection({
           </p>
         </div>
         <button
-          className="absolute left-0 top-0 h-9 rounded-lg bg-white px-3 text-xs font-semibold text-[var(--nav-ink)] shadow-[0_8px_18px_rgb(15_23_42/0.08)] transition hover:bg-[var(--nav-selection)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
+          className="absolute left-0 top-0 inline-flex h-9 items-center rounded-lg border border-white/80 bg-white px-3 text-xs font-semibold text-[var(--nav-ink)] shadow-[0_8px_18px_rgb(15_23_42/0.08)] transition hover:border-[var(--nav-primary)] hover:bg-[var(--nav-selection)] hover:shadow-[0_12px_24px_rgb(15_23_42/0.12)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
           onClick={onBackToEntryMode}
           type="button"
         >
-          데모 모드 선택
+          {'< 데모 모드 선택'}
         </button>
       </div>
 
