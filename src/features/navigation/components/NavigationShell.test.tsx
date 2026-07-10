@@ -1718,7 +1718,7 @@ describe('NavigationShell', () => {
     expect(screen.queryByText('졸음 경고! 졸음 경고!')).not.toBeInTheDocument()
   }, 8_000)
 
-  it('uses the last non-intake manual risk for the emergency warning even after the stack clears', async () => {
+  it('dismisses first-stage and emergency manual warnings after six seconds', async () => {
     const queryClient = new QueryClient()
 
     render(
@@ -1730,7 +1730,11 @@ describe('NavigationShell', () => {
     fireEvent.click(screen.getByRole('button', { name: '핸드폰 위험 상황 선택' }))
     expect(await screen.findByText('휴대폰은 잠시 내려두고 전방을 봐주세요.')).toBeInTheDocument()
     await act(async () => {
-      await new Promise((resolve) => window.setTimeout(resolve, 4_100))
+      await new Promise((resolve) => window.setTimeout(resolve, 5_100))
+    })
+    expect(screen.getByText('휴대폰은 잠시 내려두고 전방을 봐주세요.')).toBeInTheDocument()
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 1_100))
     })
     expect(screen.queryByText('휴대폰은 잠시 내려두고 전방을 봐주세요.')).not.toBeInTheDocument()
 
@@ -1747,7 +1751,35 @@ describe('NavigationShell', () => {
     })
 
     expect(await screen.findByText('핸드폰 사용 경고! 핸드폰 사용 경고!')).toBeInTheDocument()
-  }, 10_000)
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 6_100))
+    })
+    expect(screen.queryByText('핸드폰 사용 경고! 핸드폰 사용 경고!')).not.toBeInTheDocument()
+  }, 20_000)
+
+  it('dismisses strong manual warnings after six seconds', async () => {
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '섭취 위험 상황 선택' }))
+    fireEvent.click(screen.getByRole('button', { name: '섭취 위험 상황 선택' }))
+
+    const warningText = '먹거나 마시는 행동을 즉시 멈추세요. 지금은 운전에만 집중해야 합니다.'
+    expect(await screen.findByText(warningText)).toBeInTheDocument()
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 5_100))
+    })
+    expect(screen.getByText(warningText)).toBeInTheDocument()
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 1_100))
+    })
+    expect(screen.queryByText(warningText)).not.toBeInTheDocument()
+  }, 8_000)
 
   it('limits the emergency warning sound to 2.2 seconds before preloaded emergency TTS', async () => {
     const queryClient = new QueryClient()

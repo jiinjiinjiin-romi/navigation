@@ -889,11 +889,7 @@ const MANUAL_RISK_DROWSINESS_MUSIC_DISMISS_DELAY_MS = 8_000
 const MANUAL_RISK_DROWSINESS_OK_DISMISS_DELAY_MS = 5_000
 const MANUAL_RISK_WINDOW_DISMISS_DELAY_MS = 6_500
 const MANUAL_RISK_ROUTE_DISMISS_DELAY_MS = 8_000
-const MANUAL_RISK_PHONE_DEPTH_ONE_DISMISS_DELAY_MS = 4_000
-const MANUAL_RISK_DROWSINESS_DEPTH_ONE_DISMISS_DELAY_MS = 6_000
-const MANUAL_RISK_DEVICE_DEPTH_ONE_DISMISS_DELAY_MS = 4_000
-const MANUAL_RISK_INTAKE_DEPTH_ONE_DISMISS_DELAY_MS = 5_000
-const MANUAL_RISK_INTAKE_STRONG_DISMISS_DELAY_MS = 7_000
+const MANUAL_RISK_WARNING_DISMISS_DELAY_MS = 6_000
 const MANUAL_RISK_STRONG_PRE_SPEECH_AUDIO_SRC = '/sounds/manual-risk-stage-3.wav'
 const MANUAL_RISK_STRONG_TTS_OPTIONS: Required<VoiceTtsOptions> = {
   speed: -2,
@@ -2072,8 +2068,19 @@ export function NavigationShell({
         text,
         speechAudioPromise,
       })
+      scheduleManualRiskDismiss({
+        riskId,
+        depth: MANUAL_RISK_MAX_DEPTH[riskId],
+        nodeId: 'emergency-warning',
+      }, { delayMs: MANUAL_RISK_WARNING_DISMISS_DELAY_MS })
     }, MANUAL_RISK_EMERGENCY_WARNING_DELAY_MS)
-  }, [cancelManualEmergencyWarning, clearManualRiskDismissTimer, lastManualEmergencyRiskId, selectedProfileName])
+  }, [
+    cancelManualEmergencyWarning,
+    clearManualRiskDismissTimer,
+    lastManualEmergencyRiskId,
+    scheduleManualRiskDismiss,
+    selectedProfileName,
+  ])
 
   const runManualRiskEffect = useCallback(async (
     effectId: ManualRiskEffectId,
@@ -2204,21 +2211,13 @@ export function NavigationShell({
         : 1
       const nextNodeId = getManualRiskNodeIdForDepth(riskId, nextDepth)
 
-      if (nextDepth === 1) {
+      if (nextDepth === 1 || nextNodeId === 'strong') {
         scheduleManualRiskDismiss({
           riskId,
           depth: nextDepth,
           nodeId: nextNodeId,
         }, {
-          delayMs: getManualRiskDepthOneDismissDelayMs(riskId),
-        })
-      } else if (riskId === 'intake') {
-        scheduleManualRiskDismiss({
-          riskId,
-          depth: nextDepth,
-          nodeId: nextNodeId,
-        }, {
-          delayMs: MANUAL_RISK_INTAKE_STRONG_DISMISS_DELAY_MS,
+          delayMs: MANUAL_RISK_WARNING_DISMISS_DELAY_MS,
         })
       }
 
@@ -5632,19 +5631,6 @@ function getManualRiskAssistantRecommendations(nodeId: ManualRiskConversationNod
     detail: '선택한 곡 정보를 표시합니다.',
     action: '재생',
   }]
-}
-
-function getManualRiskDepthOneDismissDelayMs(riskId: ManualRiskId) {
-  switch (riskId) {
-    case 'phone':
-      return MANUAL_RISK_PHONE_DEPTH_ONE_DISMISS_DELAY_MS
-    case 'drowsiness':
-      return MANUAL_RISK_DROWSINESS_DEPTH_ONE_DISMISS_DELAY_MS
-    case 'device':
-      return MANUAL_RISK_DEVICE_DEPTH_ONE_DISMISS_DELAY_MS
-    case 'intake':
-      return MANUAL_RISK_INTAKE_DEPTH_ONE_DISMISS_DELAY_MS
-  }
 }
 
 function getManualRiskMusicDismissDelayMs(nodeId: ManualRiskConversationNodeId) {
