@@ -8766,24 +8766,10 @@ function MusicPopover({
   onSearchKeywordChange: (value: string) => void
   onStartPlayback: () => void
 }) {
-  const filteredTracks = tracks.filter((track) => {
-    const keyword = musicSearchKeyword.trim().toLowerCase()
-
-    if (!keyword) {
-      return true
-    }
-
-    return (
-      track.title.toLowerCase().includes(keyword) ||
-      track.artist.toLowerCase().includes(keyword) ||
-      track.album.toLowerCase().includes(keyword)
-    )
-  })
-
   return (
     <motion.section
       aria-label="음악"
-      className="pointer-events-auto absolute bottom-14 right-[4.25rem] z-50 rounded-[1.15rem] bg-white/94 text-[var(--nav-ink)] shadow-[0_12px_30px_rgb(15_23_42/0.12)] backdrop-blur-xl max-sm:bottom-13 max-sm:right-2"
+      className="pointer-events-auto absolute bottom-14 right-[4.25rem] z-50 flex max-h-[calc(100%-4.25rem)] min-h-0 flex-col overflow-hidden rounded-[1.15rem] bg-white/94 text-[var(--nav-ink)] shadow-[0_12px_30px_rgb(15_23_42/0.12)] backdrop-blur-xl max-sm:bottom-13 max-sm:right-2"
       id="music-popover"
       data-testid="music-popover"
       exit={{ opacity: 0, y: -8, scale: 0.985 }}
@@ -8814,7 +8800,7 @@ function MusicPopover({
       </div>
       <motion.div
         animate="visible"
-        className="grid gap-3 px-4 py-4"
+        className="flex min-h-0 flex-1 flex-col gap-3 px-4 py-4"
         initial="hidden"
         variants={{
           hidden: {
@@ -8844,17 +8830,17 @@ function MusicPopover({
             />
           </div>
         </motion.label>
-        <motion.div className="grid gap-2" variants={{ hidden: { opacity: 0, y: 8 }, visible: { opacity: 1, y: 0 } }}>
+        <motion.div className="flex min-h-0 flex-1 flex-col gap-2" variants={{ hidden: { opacity: 0, y: 8 }, visible: { opacity: 1, y: 0 } }}>
           <div className="flex items-center justify-between">
             <span className="text-sm font-bold">추천 트랙</span>
             <span className="text-xs font-semibold text-[var(--nav-muted)]">
-              {loading ? '불러오는 중' : `${filteredTracks.length}곡`}
+              {loading ? '불러오는 중' : `${tracks.length}곡`}
             </span>
           </div>
-          <div className="grid max-h-[18rem] gap-1 overflow-auto pr-1">
+          <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto pr-1" data-testid="music-track-list">
             {loading ? (
               <MusicRecommendationLoadingCard />
-            ) : filteredTracks.length ? filteredTracks.map((track) => {
+            ) : tracks.length ? tracks.map((track) => {
               const active = track.id === selectedTrack.id
 
               return (
@@ -8891,7 +8877,7 @@ function MusicPopover({
             <p className="text-xs font-semibold text-[var(--nav-muted)]">추천을 불러오지 못해 기본 목록을 표시합니다.</p>
           ) : null}
         </motion.div>
-        <motion.div className="flex gap-2" variants={{ hidden: { opacity: 0, y: 8 }, visible: { opacity: 1, y: 0 } }}>
+        <motion.div className="flex shrink-0 gap-2" variants={{ hidden: { opacity: 0, y: 8 }, visible: { opacity: 1, y: 0 } }}>
           <button
             className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[var(--nav-primary)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--nav-primary-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
             onClick={onStartPlayback}

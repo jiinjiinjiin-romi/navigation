@@ -2940,7 +2940,11 @@ describe('NavigationShell', () => {
     expect(await screen.findByRole('dialog', { name: '음악' })).toBeInTheDocument()
     expect(screen.getByTestId('music-popover')).toBeInTheDocument()
     expect(screen.getByTestId('music-popover')).toHaveClass('bottom-14')
-    expect(screen.getByTestId('music-popover')).not.toHaveClass('top-3')
+    expect(screen.getByTestId('music-popover')).toHaveClass('max-h-[calc(100%-4.25rem)]')
+    expect(screen.getByTestId('music-popover')).toHaveClass('flex')
+    expect(screen.getByTestId('music-track-list')).toHaveClass('min-h-0')
+    expect(screen.getByTestId('music-track-list')).toHaveClass('flex-1')
+    expect(screen.getByTestId('music-track-list')).toHaveClass('overflow-y-auto')
     expect(screen.getByLabelText('음악 검색')).toBeInTheDocument()
     expect(await screen.findByRole('button', { name: /Drive Neon/ })).toBeInTheDocument()
     expect(screen.getByText('City Pulse')).toBeInTheDocument()
@@ -2958,6 +2962,105 @@ describe('NavigationShell', () => {
     expect(screen.getByText((content) => content.includes('0:00 / 3:08'))).toBeInTheDocument()
     expect(screen.getByText('Evening Route')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '음악 일시정지' })).toBeInTheDocument()
+  })
+
+  it('keeps tracks matching a combined title and artist search visible', async () => {
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '음악' }))
+    expect(await screen.findByRole('button', { name: /Soft Focus/ })).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('음악 검색'), { target: { value: 'Soft Evening' } })
+
+    expect(screen.getByRole('button', { name: /Soft Focus/ })).toBeInTheDocument()
+  })
+
+  it('matches music titles regardless of spaces in the search keyword', async () => {
+    const queryClient = new QueryClient()
+    mockedGetMusicRecommendations.mockResolvedValueOnce([
+      {
+        id: 'red-sunset-original',
+        title: '붉은 노을',
+        artist: '빅뱅',
+        album: 'Remember',
+        duration: '4:03',
+        durationSeconds: 243,
+        coverUrl: null,
+        sourceUrl: 'https://music.apple.com/kr/song/red-sunset-original',
+        provider: 'itunes',
+      },
+      {
+        id: 'red-sunset-live',
+        title: '붉은 노을 Live',
+        artist: '빅뱅',
+        album: 'BIGBANG 10',
+        duration: '4:12',
+        durationSeconds: 252,
+        coverUrl: null,
+        sourceUrl: 'https://music.apple.com/kr/song/red-sunset-live',
+        provider: 'itunes',
+      },
+    ])
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '음악' }))
+    expect(await screen.findAllByRole('button', { name: /붉은 노을/ })).toHaveLength(2)
+
+    fireEvent.change(screen.getByLabelText('음악 검색'), { target: { value: '붉은노을' } })
+
+    expect(screen.getAllByRole('button', { name: /붉은 노을/ })).toHaveLength(2)
+  })
+
+  it('keeps API results visible when a Korean artist search returns an English artist name', async () => {
+    const queryClient = new QueryClient()
+    mockedGetMusicRecommendations.mockResolvedValueOnce([
+      {
+        id: 'bigbang-blue',
+        title: 'Blue',
+        artist: 'BIGBANG',
+        album: 'Alive',
+        duration: '3:54',
+        durationSeconds: 234,
+        coverUrl: null,
+        sourceUrl: 'https://music.apple.com/kr/song/bigbang-blue',
+        provider: 'itunes',
+      },
+      {
+        id: 'bigbang-if-you',
+        title: 'IF YOU',
+        artist: 'BIGBANG',
+        album: 'MADE',
+        duration: '3:44',
+        durationSeconds: 224,
+        coverUrl: null,
+        sourceUrl: 'https://music.apple.com/kr/song/bigbang-if-you',
+        provider: 'itunes',
+      },
+    ])
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '음악' }))
+    expect(await screen.findAllByText('BIGBANG')).toHaveLength(2)
+
+    fireEvent.change(screen.getByLabelText('음악 검색'), { target: { value: '빅뱅' } })
+
+    expect(screen.getAllByText('BIGBANG')).toHaveLength(2)
   })
 
   it('advances visible playback time and loads the next track when the current track ends', async () => {
