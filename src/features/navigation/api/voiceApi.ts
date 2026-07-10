@@ -9,6 +9,7 @@ export type VoiceSpeakerRole = 'assistant' | 'user'
 export interface VoiceTtsRequest {
   text: string
   speakerRole: VoiceSpeakerRole
+  speakerId?: string | null
   profileName?: string | null
   format?: 'mp3' | 'wav'
   volume?: number

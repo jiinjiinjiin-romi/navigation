@@ -82,6 +82,7 @@ import {
   createProfile,
   DEFAULT_BEHAVIOR_WARNING_SENSITIVITY,
   DEFAULT_PROFILE_CREATE_REQUEST,
+  TTS_VOICE_OPTIONS,
   deleteProfile,
   selectProfile,
   updateProfile,
@@ -91,6 +92,7 @@ import {
   type ProfileBehaviorType,
   type ProfileCreateRequest,
   type ProfileSummary,
+  type TtsVoiceId,
 } from '../api/profileApi'
 import { getBootstrap } from '../api/bootstrapApi'
 import {
@@ -896,11 +898,12 @@ const MANUAL_RISK_STRONG_TTS_OPTIONS: Required<VoiceTtsOptions> = {
   pitch: 2,
   volume: 5,
 }
+const MANUAL_RISK_WARNING_SPEAKER_ID = 'dara_ang'
 const MANUAL_RISK_EMERGENCY_WARNING_DELAY_MS = 3_000
 const MANUAL_RISK_EMERGENCY_PRE_SPEECH_AUDIO_SRC = '/sounds/manual-risk-emergency-warning.wav'
 const MANUAL_RISK_EMERGENCY_PRE_SPEECH_AUDIO_MAX_DURATION_MS = 2_200
 const MANUAL_RISK_EMERGENCY_TTS_OPTIONS: Required<VoiceTtsOptions> = {
-  speed: -3,
+  speed: -2,
   pitch: 4,
   volume: 5,
 }
@@ -1273,6 +1276,7 @@ export function NavigationShell({
   const [musicProgressSeconds, setMusicProgressSeconds] = useState(0)
   const [musicSearchKeyword, setMusicSearchKeyword] = useState('')
   const [manualRiskAgentPersonalityOverride, setManualRiskAgentPersonalityOverride] = useState<AgentPersonality>()
+  const [manualRiskVoiceIdOverride, setManualRiskVoiceIdOverride] = useState<TtsVoiceId>()
   const [assistantScenarioId, setAssistantScenarioId] = useState<RoadieAssistantScenarioId>('drowsiness-rest-area')
   const [assistantStepIndex, setAssistantStepIndex] = useState(0)
   const [manualRiskConversation, setManualRiskConversation] = useState<ManualRiskConversation | null>(null)
@@ -1472,6 +1476,14 @@ export function NavigationShell({
       await queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
     },
   })
+  const updateManualRiskSpeakerMutation = useMutation({
+    mutationFn: ({ profileId, ttsVoiceId }: { profileId: string; ttsVoiceId: TtsVoiceId }) => (
+      updateProfile(profileId, { ttsVoiceId })
+    ),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
+    },
+  })
   const deleteProfileMutation = useMutation({
     mutationFn: (profileId: string) => deleteProfile(profileId),
     onSuccess: async (_, profileId) => {
@@ -1499,6 +1511,8 @@ export function NavigationShell({
   const selectProfileMutation = useMutation({
     mutationFn: (profileId: string) => selectProfile(profileId),
     onSuccess: () => {
+      setManualRiskAgentPersonalityOverride(undefined)
+      setManualRiskVoiceIdOverride(undefined)
       setProfileSetupComplete(true)
     },
   })
@@ -1809,6 +1823,11 @@ export function NavigationShell({
     Math.min(assistantStepIndex, assistantScenario.steps.length - 1)
   ]
   const selectedProfileName = selectedProfile?.displayName ?? null
+  const selectedProfileVoiceId = manualRiskVoiceIdOverride ?? selectedProfile?.ttsVoiceId ?? 'nara'
+  const activeAssistantVoiceId = manualRiskConversation?.kind === 'assistant'
+    && manualRiskConversation.nodeId === 'strong'
+    ? MANUAL_RISK_WARNING_SPEAKER_ID
+    : selectedProfileVoiceId
   const manualRiskAgentPersonality = manualRiskAgentPersonalityOverride
     ?? selectedProfile?.agentPersonality
     ?? 'FRIENDLY'
@@ -1818,6 +1837,7 @@ export function NavigationShell({
 
   useEffect(() => {
     setManualRiskAgentPersonalityOverride(undefined)
+    setManualRiskVoiceIdOverride(undefined)
   }, [selectedProfileId])
 
   const updateManualRiskAgentPersonality = useCallback((agentPersonality: AgentPersonality) => {
@@ -1831,6 +1851,18 @@ export function NavigationShell({
       { onError: () => setManualRiskAgentPersonalityOverride(undefined) },
     )
   }, [selectedProfile, updateManualRiskVoiceStyleMutation])
+
+  const updateManualRiskSpeaker = useCallback((ttsVoiceId: TtsVoiceId) => {
+    if (!selectedProfile) {
+      return
+    }
+
+    setManualRiskVoiceIdOverride(ttsVoiceId)
+    updateManualRiskSpeakerMutation.mutate(
+      { profileId: selectedProfile.id, ttsVoiceId },
+      { onError: () => setManualRiskVoiceIdOverride(undefined) },
+    )
+  }, [selectedProfile, updateManualRiskSpeakerMutation])
 
   const demoActive = navigationEntryMode === 'demo-scenario' && Boolean(demoScenarioState)
   const demoNavigationLocked = demoActive
@@ -2058,6 +2090,7 @@ export function NavigationShell({
       {
         text,
         speakerRole: 'assistant',
+        speakerId: MANUAL_RISK_WARNING_SPEAKER_ID,
         profileName: selectedProfileName,
         ...MANUAL_RISK_EMERGENCY_TTS_OPTIONS,
       },
@@ -3106,6 +3139,7 @@ export function NavigationShell({
                 }
               }}
               profileName={selectedProfileName}
+              assistantVoiceId={activeAssistantVoiceId}
               reducedMotion={Boolean(shouldReduceMotion)}
               ttsOptions={resolveAgentPersonalityTtsOptions(activeRoadieAgentPersonality)}
             />
@@ -3482,12 +3516,24 @@ export function NavigationShell({
             motionTiming={motionTiming}
             onAdvanceResponse={advanceManualRiskResponse}
             onAgentPersonalityChange={updateManualRiskAgentPersonality}
+            onAgentVoiceChange={updateManualRiskSpeaker}
             onCancelEmergencyWarning={cancelManualEmergencyWarning}
             onEmergencyWarning={startManualEmergencyWarning}
             onResponseOptionSelect={selectManualRiskResponseOption}
+            onReturnToProfileSelection={() => {
+              cancelManualEmergencyWarning()
+              resetManualRiskConversation()
+              setActiveSidePanel(null)
+              setNavigationEntryMode(null)
+              setProfileSetupView('list')
+              setProfileSetupComplete(false)
+            }}
             onSelectRisk={selectManualRisk}
             responseOptions={demoAssistantStep ? [] : manualRiskResponseOptions}
+            agentVoiceId={selectedProfileVoiceId as TtsVoiceId}
             voiceStyleAvailable={Boolean(selectedProfile)}
+            voiceSaveError={updateManualRiskSpeakerMutation.isError}
+            voiceSaving={updateManualRiskSpeakerMutation.isPending}
             voiceStyleSaveError={updateManualRiskVoiceStyleMutation.isError}
             voiceStyleSaving={updateManualRiskVoiceStyleMutation.isPending}
           />
@@ -4013,6 +4059,12 @@ function ProfileSettingsForm({
                 value={form.agentPersonality}
                 onChange={(value) => updateForm('agentPersonality', value)}
               />
+              <ProfileSelectField<TtsVoiceId>
+                label="안내 화자"
+                options={TTS_VOICE_OPTIONS}
+                value={(form.ttsVoiceId ?? 'nara') as TtsVoiceId}
+                onChange={(value) => updateForm('ttsVoiceId', value)}
+              />
               <ProfileNumberField
                 label="TTS 속도"
                 max={2}
@@ -4288,7 +4340,7 @@ function normalizeProfileForm(form: ProfileCreateRequest): ProfileCreateRequest 
     guidanceVolume: normalizeProfileNumber(form.guidanceVolume, DEFAULT_PROFILE_CREATE_REQUEST.guidanceVolume),
     reportEmail: normalizeOptionalProfileText(form.reportEmail),
     ttsSpeed: normalizeProfileNumber(form.ttsSpeed, DEFAULT_PROFILE_CREATE_REQUEST.ttsSpeed),
-    ttsVoiceId: normalizeOptionalProfileText(form.ttsVoiceId),
+    ttsVoiceId: normalizeOptionalProfileText(form.ttsVoiceId) ?? 'nara',
   }
 }
 
@@ -4306,7 +4358,7 @@ function createProfileFormFromProfile(profile: NavigationProfile): ProfileCreate
     reportEmail: fullProfile?.reportEmail ?? null,
     agentPersonality: profile.agentPersonality,
     behaviorWarningSensitivity: normalizeBehaviorWarningSensitivity(profile.behaviorWarningSensitivity),
-    ttsVoiceId: fullProfile?.ttsVoiceId ?? null,
+    ttsVoiceId: fullProfile?.ttsVoiceId ?? 'nara',
     ttsSpeed: normalizeProfileNumber(fullProfile?.ttsSpeed, DEFAULT_PROFILE_CREATE_REQUEST.ttsSpeed),
     guidanceVolume: normalizeProfileNumber(fullProfile?.guidanceVolume, DEFAULT_PROFILE_CREATE_REQUEST.guidanceVolume),
   }
@@ -4627,6 +4679,7 @@ function RoadieOrbControl({
   onClose,
   onRecommendationAction,
   onWakeCall,
+  assistantVoiceId,
   profileName,
   reducedMotion,
   ttsOptions,
@@ -4640,6 +4693,7 @@ function RoadieOrbControl({
   onClose: () => void
   onRecommendationAction: (recommendation: RoadieAssistantRecommendation) => void
   onWakeCall: () => void
+  assistantVoiceId: string
   profileName: string | null
   reducedMotion: boolean
   ttsOptions: Required<VoiceTtsOptions>
@@ -4770,6 +4824,7 @@ function RoadieOrbControl({
         {
           text: speechText,
           speakerRole,
+          speakerId: speakerRole === 'assistant' ? assistantVoiceId : undefined,
           profileName,
           ...activeTtsOptions,
         },
@@ -6383,34 +6438,44 @@ function getDemoRiskBadgeClassName(riskLevel: 'LOW' | 'MEDIUM' | 'HIGH') {
 
 function ManualRiskControlPanel({
   agentPersonality,
+  agentVoiceId,
   canAdvanceResponse,
   emergencyWarningCountdown,
   emergencyWarningPending,
   motionTiming,
   onAdvanceResponse,
   onAgentPersonalityChange,
+  onAgentVoiceChange,
   onCancelEmergencyWarning,
   onEmergencyWarning,
   onResponseOptionSelect,
+  onReturnToProfileSelection,
   onSelectRisk,
   responseOptions,
   voiceStyleAvailable,
+  voiceSaveError,
+  voiceSaving,
   voiceStyleSaveError,
   voiceStyleSaving,
 }: {
   agentPersonality: AgentPersonality
+  agentVoiceId: TtsVoiceId
   canAdvanceResponse: boolean
   emergencyWarningCountdown: number | null
   emergencyWarningPending: boolean
   motionTiming: MotionTiming
   onAdvanceResponse: () => void
   onAgentPersonalityChange: (agentPersonality: AgentPersonality) => void
+  onAgentVoiceChange: (ttsVoiceId: TtsVoiceId) => void
   onCancelEmergencyWarning: () => void
   onEmergencyWarning: () => void
   onResponseOptionSelect: (option: ManualRiskResponseOption) => void
+  onReturnToProfileSelection: () => void
   onSelectRisk: (riskId: ManualRiskId) => void
   responseOptions: ManualRiskResponseOption[]
   voiceStyleAvailable: boolean
+  voiceSaveError: boolean
+  voiceSaving: boolean
   voiceStyleSaveError: boolean
   voiceStyleSaving: boolean
 }) {
@@ -6487,16 +6552,27 @@ function ManualRiskControlPanel({
             운전자 이상 행동을 선택하세요.
           </p>
         </div>
-        <button
-          aria-expanded={voiceStyleSettingsOpen}
-          aria-label="안내 음성 스타일 설정"
-          className="grid size-8 shrink-0 place-items-center rounded-md text-[var(--nav-muted)] transition hover:bg-[var(--nav-panel)] hover:text-[var(--nav-primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
-          disabled={!voiceStyleAvailable}
-          onClick={() => setVoiceStyleSettingsOpen((open) => !open)}
-          type="button"
-        >
-          <GearSix className="size-4" weight="bold" />
-        </button>
+        <div className="flex shrink-0 items-center gap-1">
+          <button
+            aria-label="프로필 선택으로 돌아가기"
+            className="inline-flex h-8 items-center gap-1 rounded-md px-1.5 text-xs font-semibold text-[var(--nav-muted)] transition hover:bg-[var(--nav-panel)] hover:text-[var(--nav-ink)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
+            onClick={onReturnToProfileSelection}
+            type="button"
+          >
+            <CaretLeft className="size-3.5" weight="bold" />
+            <span>프로필</span>
+          </button>
+          <button
+            aria-expanded={voiceStyleSettingsOpen}
+            aria-label="안내 음성 스타일 설정"
+            className="grid size-8 place-items-center rounded-md text-[var(--nav-muted)] transition hover:bg-[var(--nav-panel)] hover:text-[var(--nav-primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
+            disabled={!voiceStyleAvailable}
+            onClick={() => setVoiceStyleSettingsOpen((open) => !open)}
+            type="button"
+          >
+            <GearSix className="size-4" weight="bold" />
+          </button>
+        </div>
         <AnimatePresence initial={false}>
           {voiceStyleSettingsOpen ? (
             <motion.div
@@ -6537,6 +6613,38 @@ function ManualRiskControlPanel({
               {voiceStyleSaveError ? (
                 <p className="px-2 pb-1 pt-2 text-xs font-semibold text-[var(--nav-danger)]">음성 스타일 저장에 실패했습니다.</p>
               ) : null}
+              <div className="mt-2 border-t border-[var(--nav-border)] pt-2">
+                <p className="px-2 pb-1.5 text-xs font-semibold text-[var(--nav-muted)]">안내 화자</p>
+                <div className="grid gap-1">
+                  {TTS_VOICE_OPTIONS.map(([voiceId, voiceLabel]) => {
+                    const selected = voiceId === agentVoiceId
+
+                    return (
+                      <button
+                        aria-pressed={selected}
+                        className={[
+                          'flex min-h-9 items-center rounded-md px-2 text-left text-sm font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]',
+                          selected
+                            ? 'bg-[var(--nav-primary-soft)] text-[var(--nav-primary)]'
+                            : 'text-[var(--nav-ink)] hover:bg-[var(--nav-panel)]',
+                        ].join(' ')}
+                        disabled={voiceSaving}
+                        key={voiceId}
+                        onClick={() => {
+                          onAgentVoiceChange(voiceId)
+                          setVoiceStyleSettingsOpen(false)
+                        }}
+                        type="button"
+                      >
+                        {voiceLabel}
+                      </button>
+                    )
+                  })}
+                </div>
+                {voiceSaveError ? (
+                  <p className="px-2 pb-1 pt-2 text-xs font-semibold text-[var(--nav-danger)]">안내 화자 저장에 실패했습니다.</p>
+                ) : null}
+              </div>
             </motion.div>
           ) : null}
         </AnimatePresence>

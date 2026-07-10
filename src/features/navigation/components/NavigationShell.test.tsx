@@ -389,6 +389,89 @@ describe('NavigationShell', () => {
     })
   })
 
+  it('updates the selected profile speaker from the manual risk settings', async () => {
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
+      </QueryClientProvider>,
+    )
+
+    const settingsButton = screen.getByRole('button', { name: '안내 음성 스타일 설정' })
+    await waitFor(() => {
+      expect(settingsButton).toBeEnabled()
+    })
+    fireEvent.click(settingsButton)
+    fireEvent.click(screen.getByRole('button', { name: '혜리' }))
+
+    await waitFor(() => {
+      expect(mockedUpdateProfile).toHaveBeenCalledWith('profile-1', { ttsVoiceId: 'nes_c_hyeri' })
+    })
+  })
+
+  it('restores profile voice settings after re-entering the selected profile', async () => {
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
+      </QueryClientProvider>,
+    )
+
+    const initialSettingsButton = screen.getByRole('button', { name: '안내 음성 스타일 설정' })
+    await waitFor(() => {
+      expect(initialSettingsButton).toBeEnabled()
+    })
+    fireEvent.click(initialSettingsButton)
+    fireEvent.click(screen.getByRole('button', { name: '크고 또렷한 안내' }))
+    fireEvent.click(screen.getByRole('button', { name: '프로필 선택으로 돌아가기' }))
+    fireEvent.click(await screen.findByRole('button', { name: '민준(으)로 시작' }))
+    fireEvent.click(await screen.findByTestId('demo-entry-manual-control-button'))
+
+    const settingsButton = await screen.findByRole('button', { name: '안내 음성 스타일 설정' })
+    fireEvent.click(settingsButton)
+
+    expect(screen.getByRole('button', { name: '기본 안내' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: '아라' })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('uses the selected profile speaker for Roadie TTS', async () => {
+    mockedGetBootstrap.mockResolvedValue({
+      account: {
+        id: 'account-1',
+        displayName: '안정현',
+        email: 'admin@example.com',
+      },
+      profiles: [{ ...mockProfiles[0], ttsVoiceId: 'nes_c_hyeri' }],
+      selectedProfileId: 'profile-1',
+      profileLimit: 5,
+      capabilities: {
+        vitModelAvailable: true,
+        geminiAvailable: false,
+        emailAvailable: true,
+        demoMode: true,
+      },
+    })
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: '핸드폰 위험 상황 선택' }))
+
+    await waitFor(() => {
+      expect(mockedSynthesizeVoice).toHaveBeenCalledWith(
+        expect.objectContaining({ speakerId: 'nes_c_hyeri', speakerRole: 'assistant' }),
+        undefined,
+        expect.any(AbortSignal),
+      )
+    })
+  })
+
   it('uses the mini scenario personality override for the next Roadie TTS tone', () => {
     const scenario = getDemoScenarios().find((item) => item.scenarioId === 'agent_personality_voice_change')
     const overrideEvent = scenario?.events.find((event) => event.id === 'personality_clear_mode_applied')
@@ -1036,6 +1119,21 @@ describe('NavigationShell', () => {
     expect(within(screen.getByTestId('manual-risk-stack-status')).getByText('1/3')).toBeInTheDocument()
   })
 
+  it('returns to profile selection from the manual risk control panel', async () => {
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
+      </QueryClientProvider>,
+    )
+
+    const controlPanel = screen.getByTestId('manual-risk-control-panel')
+    fireEvent.click(within(controlPanel).getByRole('button', { name: '프로필 선택으로 돌아가기' }))
+
+    expect(await screen.findByRole('heading', { name: '오늘은 누가 운전할까요?' })).toBeInTheDocument()
+  })
+
   it('renders manual risk response options at the bottom of the manual control panel', async () => {
     const queryClient = new QueryClient()
 
@@ -1655,6 +1753,7 @@ describe('NavigationShell', () => {
       expect(mockedSynthesizeVoice).toHaveBeenCalledWith(
         expect.objectContaining({
           text: '휴대폰 사용을 즉시 중단하세요. 지금은 전방만 봐야 합니다.',
+          speakerId: 'dara_ang',
           speed: -2,
           pitch: 2,
           volume: 5,
@@ -1720,7 +1819,8 @@ describe('NavigationShell', () => {
       expect.objectContaining({
         text: '졸음 경고! 졸음 경고!',
         speakerRole: 'assistant',
-        speed: -3,
+        speakerId: 'dara_ang',
+        speed: -2,
         pitch: 4,
         volume: 5,
       }),
@@ -2241,6 +2341,9 @@ describe('NavigationShell', () => {
     fireEvent.change(screen.getByLabelText('안내 음성 스타일'), {
       target: { value: 'WITTY' },
     })
+    fireEvent.change(screen.getByLabelText('안내 화자'), {
+      target: { value: 'nes_c_hyeri' },
+    })
     fireEvent.change(screen.getByLabelText('TTS 속도'), {
       target: { value: '1.4' },
     })
@@ -2270,7 +2373,7 @@ describe('NavigationShell', () => {
           ...DEFAULT_BEHAVIOR_WARNING_SENSITIVITY,
           FOOD_OR_DRINK: 4,
         },
-        ttsVoiceId: null,
+        ttsVoiceId: 'nes_c_hyeri',
         ttsSpeed: 1.4,
         guidanceVolume: 82,
       })
@@ -2355,7 +2458,7 @@ describe('NavigationShell', () => {
         reportEmail: null,
         agentPersonality: 'FRIENDLY',
         behaviorWarningSensitivity: DEFAULT_BEHAVIOR_WARNING_SENSITIVITY,
-        ttsVoiceId: null,
+        ttsVoiceId: 'nara',
         ttsSpeed: 1,
         guidanceVolume: 70,
       })

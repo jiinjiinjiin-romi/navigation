@@ -11,6 +11,7 @@ describe('synthesizeVoice', () => {
       {
         text: '안녕하세요.',
         speakerRole: 'assistant',
+        speakerId: 'nes_c_hyeri',
         profileName: '지우',
         speed: 4,
         pitch: 2,
@@ -24,6 +25,7 @@ describe('synthesizeVoice', () => {
       {
         text: '안녕하세요.',
         speakerRole: 'assistant',
+        speakerId: 'nes_c_hyeri',
         profileName: '지우',
         speed: 4,
         pitch: 2,

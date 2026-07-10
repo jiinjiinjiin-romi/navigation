@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { DashboardApp } from './DashboardApp'
 import { getBootstrap } from '../navigation/api/bootstrapApi'
-import { listProfiles, selectProfile, type Profile } from '../navigation/api/profileApi'
+import { listProfiles, selectProfile, updateProfile, type Profile } from '../navigation/api/profileApi'
 import { searchPlaces } from '../navigation/api/tmapApi'
 
 vi.mock('../navigation/api/bootstrapApi', () => ({
@@ -12,6 +12,14 @@ vi.mock('../navigation/api/bootstrapApi', () => ({
 vi.mock('../navigation/api/profileApi', () => ({
   listProfiles: vi.fn(),
   selectProfile: vi.fn(),
+  TTS_VOICE_OPTIONS: [
+    ['jinho', '지호'],
+    ['nes_c_kihyo', '기효'],
+    ['nes_c_hyeri', '혜리'],
+    ['nara', '아라'],
+    ['ngyeongjun', '경준'],
+  ],
+  updateProfile: vi.fn(),
 }))
 
 vi.mock('../navigation/api/tmapApi', () => ({
@@ -74,6 +82,7 @@ const dashboardProfiles: Profile[] = [
 const mockedGetBootstrap = vi.mocked(getBootstrap)
 const mockedListProfiles = vi.mocked(listProfiles)
 const mockedSelectProfile = vi.mocked(selectProfile)
+const mockedUpdateProfile = vi.mocked(updateProfile)
 const mockedSearchPlaces = vi.mocked(searchPlaces)
 
 beforeEach(() => {
@@ -106,6 +115,7 @@ beforeEach(() => {
     selectedAt: '2026-07-05T00:00:00.000000Z',
     selectedProfileId: 'profile-mom',
   })
+  mockedUpdateProfile.mockResolvedValue({ ...dashboardProfiles[0], ttsVoiceId: 'nes_c_hyeri' })
   mockedSearchPlaces.mockResolvedValue([
     {
       id: 'poi-sejong',
@@ -206,6 +216,27 @@ describe('DashboardApp', () => {
 
     activateTab('즐겨찾기 장소')
     expect(screen.getByRole('button', { name: '장소 추가' })).toBeInTheDocument()
+  })
+
+  test('persists the selected assistant speaker for the dashboard profile', async () => {
+    localStorage.setItem('roadie-dashboard-session', 'active')
+    window.history.replaceState({}, '', '/dashboard/settings/navigation')
+    render(<DashboardApp />)
+
+    const speakerSelect = await screen.findByRole('combobox', { name: '안내 화자' })
+    fireEvent.pointerDown(speakerSelect, {
+      button: 0,
+      ctrlKey: false,
+      pointerId: 1,
+      pointerType: 'mouse',
+    })
+    fireEvent.mouseDown(speakerSelect, { button: 0 })
+    fireEvent.click(await screen.findByRole('option', { name: '혜리' }))
+    fireEvent.click(screen.getByRole('button', { name: '설정 저장' }))
+
+    await waitFor(() => {
+      expect(mockedUpdateProfile).toHaveBeenCalledWith('profile-dad', { ttsVoiceId: 'nes_c_hyeri' })
+    })
   })
 
   test('searches favorite place addresses with navigation autocomplete', async () => {

@@ -8,6 +8,7 @@ interface HttpClient {
 }
 
 export type AgentPersonality = 'FRIENDLY' | 'FORMAL' | 'WARM' | 'WITTY'
+export type TtsVoiceId = 'jinho' | 'nes_c_kihyo' | 'nes_c_hyeri' | 'nara' | 'ngyeongjun'
 export type WarningSensitivity = 'LOW' | 'MEDIUM' | 'HIGH'
 export type ProfileTheme = 'LIGHT' | 'DARK' | 'SYSTEM'
 export type BehaviorWarningSensitivityValue = 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
@@ -30,6 +31,14 @@ export const DEFAULT_BEHAVIOR_WARNING_SENSITIVITY: BehaviorWarningSensitivity = 
   REACHING_BEHIND: 7,
   SMOKING: 7,
 }
+
+export const TTS_VOICE_OPTIONS: Array<[TtsVoiceId, string]> = [
+  ['jinho', '지호'],
+  ['nes_c_kihyo', '기효'],
+  ['nes_c_hyeri', '혜리'],
+  ['nara', '아라'],
+  ['ngyeongjun', '경준'],
+]
 
 export interface Profile {
   id: string
@@ -57,6 +66,7 @@ export interface ProfileSummary {
   agentPersonality: AgentPersonality
   warningSensitivity: WarningSensitivity
   behaviorWarningSensitivity: BehaviorWarningSensitivity
+  ttsVoiceId: string | null
   lastUsedAt: string | null
 }
 
@@ -90,7 +100,7 @@ export const DEFAULT_PROFILE_CREATE_REQUEST: ProfileCreateRequest = {
   reportEmail: null,
   agentPersonality: 'FRIENDLY',
   behaviorWarningSensitivity: DEFAULT_BEHAVIOR_WARNING_SENSITIVITY,
-  ttsVoiceId: null,
+  ttsVoiceId: 'nara',
   ttsSpeed: 1,
   guidanceVolume: 70,
 }

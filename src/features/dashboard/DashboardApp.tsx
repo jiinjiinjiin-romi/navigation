@@ -59,9 +59,12 @@ import { getBootstrap, type BootstrapAccount } from '../navigation/api/bootstrap
 import {
   listProfiles,
   selectProfile,
+  TTS_VOICE_OPTIONS,
+  updateProfile,
   type AgentPersonality,
   type BehaviorWarningSensitivity,
   type Profile,
+  type TtsVoiceId,
 } from '../navigation/api/profileApi'
 import { searchPlaces } from '../navigation/api/tmapApi'
 import type { Place } from '../navigation/types'
@@ -160,6 +163,7 @@ type ProfileSettings = {
   callName: string
   reportEmail: string
   agentPersonality: AgentPersonality
+  ttsVoiceId: TtsVoiceId
   preferences: PreferenceState
   behaviorSensitivity: Record<BehaviorType, number>
 }
@@ -370,6 +374,7 @@ const DEFAULT_PROFILE_SETTINGS: ProfileSettings = {
   callName: '로디야',
   reportEmail: 'driver@example.com',
   agentPersonality: 'FRIENDLY',
+  ttsVoiceId: 'nara',
   preferences: { mapMode: '2D', guidanceVolume: 72, ttsSpeed: 1.05, warningMode: 'balanced' },
   behaviorSensitivity: {
     DROWSINESS: 9,
@@ -513,6 +518,12 @@ function toDashboardAgentPersonality(value: AgentPersonality): ProfileSettings['
   return value
 }
 
+function toDashboardTtsVoiceId(value: string | null): TtsVoiceId {
+  return TTS_VOICE_OPTIONS.some(([voiceId]) => voiceId === value)
+    ? value as TtsVoiceId
+    : 'nara'
+}
+
 function normalizeDashboardSensitivity(
   value: BehaviorWarningSensitivity | undefined,
 ): ProfileSettings['behaviorSensitivity'] {
@@ -528,6 +539,7 @@ function createProfileSettingsFromProfile(profile: Profile): ProfileSettings {
     callName: profile.agentCallName,
     reportEmail: profile.reportEmail ?? '',
     agentPersonality: toDashboardAgentPersonality(profile.agentPersonality),
+    ttsVoiceId: toDashboardTtsVoiceId(profile.ttsVoiceId),
     preferences: {
       mapMode: '2D',
       guidanceVolume: profile.guidanceVolume ?? DEFAULT_PROFILE_SETTINGS.preferences.guidanceVolume,
@@ -718,6 +730,18 @@ export function DashboardApp() {
     })
   }
 
+  const handleSaveDashboardProfileVoice = async (ttsVoiceId: TtsVoiceId) => {
+    if (!selectedDashboardProfile) return
+
+    const updatedProfile = await updateProfile(selectedDashboardProfile.id, { ttsVoiceId })
+    setProfileState((current) => ({
+      ...current,
+      profiles: current.profiles.map((profile) => (
+        profile.id === updatedProfile.id ? updatedProfile : profile
+      )),
+    }))
+  }
+
   if (!authenticated || path === '/dashboard/login') {
     return <MockLoginPage onLogin={handleLogin} reducedMotion={Boolean(reducedMotion)} />
   }
@@ -768,6 +792,7 @@ export function DashboardApp() {
                   setFavoritePlaces={setFavoritePlaces}
                   setNotificationSettings={setNotificationSettings}
                   setProfileSettings={setProfileSettings}
+                  onSaveProfileVoice={handleSaveDashboardProfileVoice}
                   summary={summary}
                 />
               </motion.div>
@@ -1122,6 +1147,7 @@ type DashboardPageProps = {
   navigate: (path: DashboardPath) => void
   notificationSettings: NotificationSettings
   notify: (message: string, tone?: ToastTone) => void
+  onSaveProfileVoice: (ttsVoiceId: TtsVoiceId) => Promise<void>
   path: DashboardPath
   profileSettings: ProfileSettings
   selectedDashboardProfile?: Profile
@@ -1716,7 +1742,7 @@ function BehaviorPage({ behaviorMetrics, dashboardData, dashboardState, embedded
   )
 }
 
-function NavigationSettingsPage({ favoritePlaces, notify, profileSettings, setFavoritePlaces, setProfileSettings }: DashboardPageProps) {
+function NavigationSettingsPage({ favoritePlaces, notify, onSaveProfileVoice, profileSettings, selectedDashboardProfile, setFavoritePlaces, setProfileSettings }: DashboardPageProps) {
   const [draft, setDraft] = useState(profileSettings)
   const [placesDraft, setPlacesDraft] = useState(favoritePlaces)
   const [activeTab, setActiveTab] = useState<'settings' | 'favorites'>('settings')
@@ -1731,8 +1757,18 @@ function NavigationSettingsPage({ favoritePlaces, notify, profileSettings, setFa
     setPlacesDraft(favoritePlaces)
   }, [favoritePlaces])
 
-  const save = () => {
+  const save = async () => {
     if (!hasChanges) return
+
+    if (selectedDashboardProfile && draft.ttsVoiceId !== profileSettings.ttsVoiceId) {
+      try {
+        await onSaveProfileVoice(draft.ttsVoiceId)
+      } catch (error) {
+        console.error('Dashboard profile voice save failed', error)
+        notify('안내 화자 저장에 실패했습니다.', 'error')
+        return
+      }
+    }
 
     setProfileSettings(draft)
     setFavoritePlaces(placesDraft)
@@ -1784,6 +1820,7 @@ function NavigationSettingsPage({ favoritePlaces, notify, profileSettings, setFa
               <TextField label="로디 호출명" value={draft.callName} onChange={(value) => setDraft((current) => ({ ...current, callName: value }))} />
               <TextField label="리포트 이메일" value={draft.reportEmail} onChange={(value) => setDraft((current) => ({ ...current, reportEmail: value }))} />
               <SelectControl label="안내 음성 스타일" value={draft.agentPersonality} onChange={(value) => setDraft((current) => ({ ...current, agentPersonality: value as ProfileSettings['agentPersonality'] }))} options={[['FRIENDLY', '기본 안내'], ['FORMAL', '크고 또렷한 안내'], ['WARM', '차분한 저음 안내'], ['WITTY', '밝고 빠른 안내']]} />
+              <SelectControl label="안내 화자" value={draft.ttsVoiceId} onChange={(value) => setDraft((current) => ({ ...current, ttsVoiceId: value as TtsVoiceId }))} options={TTS_VOICE_OPTIONS} />
             </div>
             <div className="mt-5 grid gap-3 md:grid-cols-2">
               <RangeControl label="안내 음량" min={0} max={100} value={draft.preferences.guidanceVolume} suffix="%" onChange={(value) => setDraft((current) => ({ ...current, preferences: { ...current.preferences, guidanceVolume: value } }))} />
