@@ -60,6 +60,7 @@ export interface RoadieAssistantStep {
   text?: string
   userText?: string
   preSpeechAudioSrc?: string
+  preSpeechAudioMaxDurationMs?: number
   speechAudioPromise?: Promise<Blob>
   speechPlaybackGain?: number
   recommendations?: RoadieAssistantRecommendation[]

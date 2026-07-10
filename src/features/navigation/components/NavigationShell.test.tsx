@@ -1749,13 +1749,14 @@ describe('NavigationShell', () => {
     expect(await screen.findByText('핸드폰 사용 경고! 핸드폰 사용 경고!')).toBeInTheDocument()
   }, 10_000)
 
-  it('plays the emergency warning sound before the preloaded emergency warning TTS', async () => {
+  it('limits the emergency warning sound to 2.2 seconds before preloaded emergency TTS', async () => {
     const queryClient = new QueryClient()
     const resolveVoiceRequests: Array<(blob: Blob) => void> = []
     const audioPlayOrder: string[] = []
     const audioInstances: Array<{
       src: string
       dispatch: (eventName: string) => void
+      pause: ReturnType<typeof vi.fn>
     }> = []
 
     class MockAudio {
@@ -1769,6 +1770,7 @@ describe('NavigationShell', () => {
           dispatch: (eventName: string) => {
             this.listeners.get(eventName)?.forEach((listener) => listener())
           },
+          pause: this.pause,
         })
       }
 
@@ -1873,13 +1875,19 @@ describe('NavigationShell', () => {
       .find((audio) => audio.src === '/sounds/manual-risk-emergency-warning.wav')
     expect(warningAudio).toBeDefined()
 
-    act(() => {
-      warningAudio?.dispatch('ended')
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 2_100))
+    })
+    expect(audioPlayOrder[audioPlayOrder.length - 1]).toBe('/sounds/manual-risk-emergency-warning.wav')
+
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 200))
     })
 
     await waitFor(() => {
       expect(audioPlayOrder[audioPlayOrder.length - 1]).toBe('blob:manual-risk-emergency-tts')
     })
+    expect(warningAudio?.pause).toHaveBeenCalledTimes(1)
     expect(audioGainValues).toContain(1.8)
 
     vi.unstubAllGlobals()

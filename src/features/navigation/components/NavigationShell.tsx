@@ -902,6 +902,7 @@ const MANUAL_RISK_STRONG_TTS_OPTIONS: Required<VoiceTtsOptions> = {
 }
 const MANUAL_RISK_EMERGENCY_WARNING_DELAY_MS = 3_000
 const MANUAL_RISK_EMERGENCY_PRE_SPEECH_AUDIO_SRC = '/sounds/manual-risk-emergency-warning.wav'
+const MANUAL_RISK_EMERGENCY_PRE_SPEECH_AUDIO_MAX_DURATION_MS = 2_200
 const MANUAL_RISK_EMERGENCY_TTS_OPTIONS: Required<VoiceTtsOptions> = {
   speed: -3,
   pitch: 4,
@@ -4621,6 +4622,7 @@ function RoadieOrbControl({
   const speakerRole = assistantStep.text ? 'assistant' : assistantStep.userText ? 'user' : null
   const activeTtsOptions = assistantStep.ttsOptions ?? ttsOptions
   const preSpeechAudioSrc = assistantStep.preSpeechAudioSrc
+  const preSpeechAudioMaxDurationMs = assistantStep.preSpeechAudioMaxDurationMs
   const speechAudioPromise = assistantStep.speechAudioPromise
   const speechPlaybackGain = assistantStep.speechPlaybackGain ?? 1
   const audioRef = useRef<HTMLAudioElement | null>(null)
@@ -4688,6 +4690,7 @@ function RoadieOrbControl({
     if (preSpeechAudioSrc) {
       const preSpeechAudio = new Audio(preSpeechAudioSrc)
       let preSpeechSettled = false
+      let preSpeechAudioTimeout: number | null = null
       preSpeechAudioRef.current = preSpeechAudio
 
       const finishPreSpeechAudio = () => {
@@ -4709,10 +4712,21 @@ function RoadieOrbControl({
       cleanupPreSpeechAudio = () => {
         preSpeechAudio.removeEventListener('ended', finishPreSpeechAudio)
         preSpeechAudio.removeEventListener('error', finishPreSpeechAudio)
+
+        if (preSpeechAudioTimeout !== null) {
+          window.clearTimeout(preSpeechAudioTimeout)
+          preSpeechAudioTimeout = null
+        }
       }
 
       preSpeechAudio.addEventListener('ended', finishPreSpeechAudio)
       preSpeechAudio.addEventListener('error', finishPreSpeechAudio)
+      if (preSpeechAudioMaxDurationMs !== undefined) {
+        preSpeechAudioTimeout = window.setTimeout(() => {
+          preSpeechAudio.pause()
+          finishPreSpeechAudio()
+        }, preSpeechAudioMaxDurationMs)
+      }
       void preSpeechAudio.play().catch(finishPreSpeechAudio)
     }
 
@@ -4761,6 +4775,7 @@ function RoadieOrbControl({
     activeTtsOptions.volume,
     expanded,
     hidden,
+    preSpeechAudioMaxDurationMs,
     preSpeechAudioSrc,
     profileName,
     speakerRole,
@@ -5546,6 +5561,9 @@ function createManualRiskAssistantStep(conversation: ManualRiskConversation): Ro
     preSpeechAudioSrc: emergencyWarning
       ? MANUAL_RISK_EMERGENCY_PRE_SPEECH_AUDIO_SRC
       : strongWarning ? MANUAL_RISK_STRONG_PRE_SPEECH_AUDIO_SRC : undefined,
+    preSpeechAudioMaxDurationMs: emergencyWarning
+      ? MANUAL_RISK_EMERGENCY_PRE_SPEECH_AUDIO_MAX_DURATION_MS
+      : undefined,
     speechAudioPromise: conversation.speechAudioPromise,
     speechPlaybackGain: emergencyWarning ? MANUAL_RISK_EMERGENCY_TTS_PLAYBACK_GAIN : undefined,
     ttsOptions: emergencyWarning
