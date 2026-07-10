@@ -357,6 +357,38 @@ describe('NavigationShell', () => {
     })
   })
 
+  it('updates the selected profile voice style from the manual risk settings', async () => {
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
+      </QueryClientProvider>,
+    )
+
+    const voiceStyleSettingsButton = screen.getByRole('button', { name: '안내 음성 스타일 설정' })
+    await waitFor(() => {
+      expect(voiceStyleSettingsButton).toBeEnabled()
+    })
+    fireEvent.click(voiceStyleSettingsButton)
+    expect(screen.getByText('안내 음성 스타일')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '크고 또렷한 안내' }))
+
+    await waitFor(() => {
+      expect(mockedUpdateProfile).toHaveBeenCalledWith('profile-1', { agentPersonality: 'FORMAL' })
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: '핸드폰 위험 상황 선택' }))
+    await waitFor(() => {
+      expect(mockedSynthesizeVoice).toHaveBeenCalledWith(
+        expect.objectContaining({ speed: -1, pitch: 2, volume: 5 }),
+        undefined,
+        expect.any(AbortSignal),
+      )
+    })
+  })
+
   it('uses the mini scenario personality override for the next Roadie TTS tone', () => {
     const scenario = getDemoScenarios().find((item) => item.scenarioId === 'agent_personality_voice_change')
     const overrideEvent = scenario?.events.find((event) => event.id === 'personality_clear_mode_applied')

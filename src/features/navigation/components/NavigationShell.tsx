@@ -1272,6 +1272,7 @@ export function NavigationShell({
   const [musicTrackId, setMusicTrackId] = useState(FALLBACK_MUSIC_LIBRARY[0].id)
   const [musicProgressSeconds, setMusicProgressSeconds] = useState(0)
   const [musicSearchKeyword, setMusicSearchKeyword] = useState('')
+  const [manualRiskAgentPersonalityOverride, setManualRiskAgentPersonalityOverride] = useState<AgentPersonality>()
   const [assistantScenarioId, setAssistantScenarioId] = useState<RoadieAssistantScenarioId>('drowsiness-rest-area')
   const [assistantStepIndex, setAssistantStepIndex] = useState(0)
   const [manualRiskConversation, setManualRiskConversation] = useState<ManualRiskConversation | null>(null)
@@ -1460,6 +1461,14 @@ export function NavigationShell({
       setProfileSetupView('list')
       setEditingProfileId(undefined)
       setProfileForm(DEFAULT_PROFILE_CREATE_REQUEST)
+      await queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
+    },
+  })
+  const updateManualRiskVoiceStyleMutation = useMutation({
+    mutationFn: ({ profileId, agentPersonality }: { profileId: string; agentPersonality: AgentPersonality }) => (
+      updateProfile(profileId, { agentPersonality })
+    ),
+    onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
     },
   })
@@ -1800,6 +1809,29 @@ export function NavigationShell({
     Math.min(assistantStepIndex, assistantScenario.steps.length - 1)
   ]
   const selectedProfileName = selectedProfile?.displayName ?? null
+  const manualRiskAgentPersonality = manualRiskAgentPersonalityOverride
+    ?? selectedProfile?.agentPersonality
+    ?? 'FRIENDLY'
+  const activeRoadieAgentPersonality = manualRiskConversation
+    ? manualRiskAgentPersonality
+    : selectedProfile?.agentPersonality ?? 'FRIENDLY'
+
+  useEffect(() => {
+    setManualRiskAgentPersonalityOverride(undefined)
+  }, [selectedProfileId])
+
+  const updateManualRiskAgentPersonality = useCallback((agentPersonality: AgentPersonality) => {
+    if (!selectedProfile) {
+      return
+    }
+
+    setManualRiskAgentPersonalityOverride(agentPersonality)
+    updateManualRiskVoiceStyleMutation.mutate(
+      { profileId: selectedProfile.id, agentPersonality },
+      { onError: () => setManualRiskAgentPersonalityOverride(undefined) },
+    )
+  }, [selectedProfile, updateManualRiskVoiceStyleMutation])
+
   const demoActive = navigationEntryMode === 'demo-scenario' && Boolean(demoScenarioState)
   const demoNavigationLocked = demoActive
   const demoAssistantStep = demoScenarioState
@@ -3075,7 +3107,7 @@ export function NavigationShell({
               }}
               profileName={selectedProfileName}
               reducedMotion={Boolean(shouldReduceMotion)}
-              ttsOptions={resolveAgentPersonalityTtsOptions(selectedProfile?.agentPersonality ?? 'FRIENDLY')}
+              ttsOptions={resolveAgentPersonalityTtsOptions(activeRoadieAgentPersonality)}
             />
             {!activeRoute ? (
               <>
@@ -3443,16 +3475,21 @@ export function NavigationShell({
           />
         ) : (
           <ManualRiskControlPanel
+            agentPersonality={manualRiskAgentPersonality}
             canAdvanceResponse={manualRiskConversation?.kind === 'user'}
             emergencyWarningCountdown={manualEmergencyWarningCountdown}
             emergencyWarningPending={manualEmergencyWarningPending}
             motionTiming={motionTiming}
             onAdvanceResponse={advanceManualRiskResponse}
+            onAgentPersonalityChange={updateManualRiskAgentPersonality}
             onCancelEmergencyWarning={cancelManualEmergencyWarning}
             onEmergencyWarning={startManualEmergencyWarning}
             onResponseOptionSelect={selectManualRiskResponseOption}
             onSelectRisk={selectManualRisk}
             responseOptions={demoAssistantStep ? [] : manualRiskResponseOptions}
+            voiceStyleAvailable={Boolean(selectedProfile)}
+            voiceStyleSaveError={updateManualRiskVoiceStyleMutation.isError}
+            voiceStyleSaving={updateManualRiskVoiceStyleMutation.isPending}
           />
         )
       ) : (
@@ -6345,28 +6382,45 @@ function getDemoRiskBadgeClassName(riskLevel: 'LOW' | 'MEDIUM' | 'HIGH') {
 }
 
 function ManualRiskControlPanel({
+  agentPersonality,
   canAdvanceResponse,
   emergencyWarningCountdown,
   emergencyWarningPending,
   motionTiming,
   onAdvanceResponse,
+  onAgentPersonalityChange,
   onCancelEmergencyWarning,
   onEmergencyWarning,
   onResponseOptionSelect,
   onSelectRisk,
   responseOptions,
+  voiceStyleAvailable,
+  voiceStyleSaveError,
+  voiceStyleSaving,
 }: {
+  agentPersonality: AgentPersonality
   canAdvanceResponse: boolean
   emergencyWarningCountdown: number | null
   emergencyWarningPending: boolean
   motionTiming: MotionTiming
   onAdvanceResponse: () => void
+  onAgentPersonalityChange: (agentPersonality: AgentPersonality) => void
   onCancelEmergencyWarning: () => void
   onEmergencyWarning: () => void
   onResponseOptionSelect: (option: ManualRiskResponseOption) => void
   onSelectRisk: (riskId: ManualRiskId) => void
   responseOptions: ManualRiskResponseOption[]
+  voiceStyleAvailable: boolean
+  voiceStyleSaveError: boolean
+  voiceStyleSaving: boolean
 }) {
+  const [voiceStyleSettingsOpen, setVoiceStyleSettingsOpen] = useState(false)
+  const voiceStyleOptions: Array<{ id: AgentPersonality; label: string }> = [
+    { id: 'FRIENDLY', label: '기본 안내' },
+    { id: 'FORMAL', label: '크고 또렷한 안내' },
+    { id: 'WARM', label: '차분한 저음 안내' },
+    { id: 'WITTY', label: '밝고 빠른 안내' },
+  ]
   const controls: Array<{
     id: ManualRiskId
     label: string
@@ -6426,11 +6480,66 @@ function ManualRiskControlPanel({
       animate={{ opacity: 1, y: 0 }}
       transition={motionTiming}
     >
-      <div className="border-b border-[var(--nav-border)] pb-3">
-        <p className="text-sm font-bold">운전자 이상 행동</p>
-        <p className="mt-1 text-xs font-semibold leading-5 text-[var(--nav-muted)]">
-          운전자 이상 행동을 선택하세요.
-        </p>
+      <div className="relative flex items-start justify-between gap-3 border-b border-[var(--nav-border)] pb-3">
+        <div>
+          <p className="text-sm font-bold">운전자 이상 행동</p>
+          <p className="mt-1 text-xs font-semibold leading-5 text-[var(--nav-muted)]">
+            운전자 이상 행동을 선택하세요.
+          </p>
+        </div>
+        <button
+          aria-expanded={voiceStyleSettingsOpen}
+          aria-label="안내 음성 스타일 설정"
+          className="grid size-8 shrink-0 place-items-center rounded-md text-[var(--nav-muted)] transition hover:bg-[var(--nav-panel)] hover:text-[var(--nav-primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
+          disabled={!voiceStyleAvailable}
+          onClick={() => setVoiceStyleSettingsOpen((open) => !open)}
+          type="button"
+        >
+          <GearSix className="size-4" weight="bold" />
+        </button>
+        <AnimatePresence initial={false}>
+          {voiceStyleSettingsOpen ? (
+            <motion.div
+              className="absolute right-0 top-10 z-20 w-56 rounded-lg border border-[var(--nav-border)] bg-white p-2 shadow-[var(--nav-shadow-panel)]"
+              data-testid="manual-risk-voice-style-settings"
+              exit={{ opacity: 0, y: -4 }}
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: motionTiming.duration === 0 ? 0 : 0.16 }}
+            >
+              <p className="px-2 pb-1.5 pt-1 text-xs font-semibold text-[var(--nav-muted)]">안내 음성 스타일</p>
+              <div className="grid gap-1">
+                {voiceStyleOptions.map((option) => {
+                  const selected = option.id === agentPersonality
+
+                  return (
+                    <button
+                      aria-pressed={selected}
+                      className={[
+                        'flex min-h-9 items-center rounded-md px-2 text-left text-sm font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]',
+                        selected
+                          ? 'bg-[var(--nav-primary-soft)] text-[var(--nav-primary)]'
+                          : 'text-[var(--nav-ink)] hover:bg-[var(--nav-panel)]',
+                      ].join(' ')}
+                      disabled={voiceStyleSaving}
+                      key={option.id}
+                      onClick={() => {
+                        onAgentPersonalityChange(option.id)
+                        setVoiceStyleSettingsOpen(false)
+                      }}
+                      type="button"
+                    >
+                      {option.label}
+                    </button>
+                  )
+                })}
+              </div>
+              {voiceStyleSaveError ? (
+                <p className="px-2 pb-1 pt-2 text-xs font-semibold text-[var(--nav-danger)]">음성 스타일 저장에 실패했습니다.</p>
+              ) : null}
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-2" data-testid="manual-risk-control-grid">
