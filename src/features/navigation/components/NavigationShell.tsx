@@ -3340,11 +3340,6 @@ export function NavigationShell({
                 motionTiming={motionTiming}
                 profileName={selectedProfile?.displayName ?? '운전자'}
                 onBackToEntryMode={() => setDemoScenarioSelectionOpen(false)}
-                onStartFreeNavigation={() => {
-                  setNavigationEntryMode('free-navigation')
-                  setDemoScenarioState(null)
-                  setDemoCompleted(false)
-                }}
                 onStartScenario={(scenarioId) => {
                   setNavigationEntryMode('demo-scenario')
                   setDemoScenarioState(createInitialDemoScenarioState(scenarioId))
@@ -6065,7 +6060,7 @@ function DemoEntryModeSelection({
             <RoadHorizon className="size-6" weight="bold" />
           </span>
           <span className="mt-5 text-xl font-black leading-7">대표 시나리오 보기</span>
-          <span className="mt-3 max-w-[18rem] text-sm font-semibold leading-6 text-[var(--nav-muted)]">
+          <span className="mt-3 text-sm font-semibold leading-6 text-[var(--nav-muted)]">
             준비된 위험행동 흐름을 순서대로 확인합니다.
           </span>
           <span className="mt-6 inline-flex items-center gap-1.5 text-sm font-bold text-[var(--nav-primary)]">
@@ -6084,7 +6079,7 @@ function DemoEntryModeSelection({
             <Warning className="size-6" weight="bold" />
           </span>
           <span className="mt-5 text-xl font-black leading-7">실시간 위험 상황 조작</span>
-          <span className="mt-3 max-w-[18rem] text-sm font-semibold leading-6 text-[var(--nav-muted)]">
+          <span className="mt-3 text-sm font-semibold leading-6 text-[var(--nav-muted)]">
             데모 사용자가 직접 위험 상황을 선택하고 조작합니다.
           </span>
           <span className="mt-6 inline-flex items-center gap-1.5 text-sm font-bold text-[var(--nav-warning)]">
@@ -6101,13 +6096,11 @@ function DemoScenarioSelection({
   motionTiming,
   profileName,
   onBackToEntryMode,
-  onStartFreeNavigation,
   onStartScenario,
 }: {
   motionTiming: MotionTiming
   profileName: string
   onBackToEntryMode: () => void
-  onStartFreeNavigation: () => void
   onStartScenario: (scenarioId: DemoScenarioId) => void
 }) {
   const primaryScenarios = DEMO_SCENARIO_DEFINITIONS.filter((scenario) => !scenario.skipDrivingSetup)
@@ -6136,20 +6129,13 @@ function DemoScenarioSelection({
         >
           데모 모드 선택
         </button>
-        <button
-          className="absolute right-0 top-0 h-9 rounded-lg bg-white px-3 text-xs font-semibold text-[var(--nav-ink)] shadow-[0_8px_18px_rgb(15_23_42/0.08)] transition hover:bg-[var(--nav-selection)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
-          onClick={onStartFreeNavigation}
-          type="button"
-        >
-          네비게이션 이용하기
-        </button>
       </div>
 
       <div className="mx-auto mt-7 grid w-full max-w-[76rem] grid-cols-3 gap-3">
         {primaryScenarios.map((scenario, index) => (
           <button
             key={scenario.scenarioId}
-            className="group relative flex min-h-[14rem] overflow-hidden rounded-2xl border border-white/80 bg-white px-5 py-5 text-center shadow-[0_14px_32px_rgb(15_23_42/0.10)] transition hover:-translate-y-0.5 hover:border-[var(--nav-primary)] hover:shadow-[0_20px_44px_rgb(15_23_42/0.14)]"
+            className="group relative flex min-h-[12rem] overflow-hidden rounded-2xl border border-white/80 bg-white px-5 py-4 text-center shadow-[0_14px_32px_rgb(15_23_42/0.10)] transition hover:-translate-y-0.5 hover:border-[var(--nav-primary)] hover:shadow-[0_20px_44px_rgb(15_23_42/0.14)]"
             data-testid={`demo-scenario-card-${scenario.scenarioId}`}
             onClick={() => onStartScenario(scenario.scenarioId)}
             type="button"
@@ -6160,11 +6146,11 @@ function DemoScenarioSelection({
             />
             <span
               aria-hidden="true"
-              className="absolute inset-x-0 top-4 text-5xl font-black leading-none text-[var(--nav-selection)] transition group-hover:text-[rgb(23_70_162/0.16)]"
+              className="relative self-start text-2xl font-black leading-none text-[var(--nav-primary)]"
             >
               {String(index + 1).padStart(2, '0')}
             </span>
-            <span className="relative flex min-h-0 flex-1 flex-col items-center pt-12">
+            <span className="relative flex min-h-0 flex-1 flex-col items-center pt-4">
               <span className="text-lg font-black leading-6">{scenario.title}</span>
               <span className="mt-3 block max-w-[20rem] text-sm font-semibold leading-6 text-[var(--nav-muted)]">
                 {scenario.description}
@@ -6190,7 +6176,7 @@ function DemoScenarioSelection({
               onClick={() => onStartScenario(scenario.scenarioId)}
               type="button"
             >
-              <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1 bg-[var(--nav-primary)] opacity-80" />
+              <span aria-hidden="true" className="absolute inset-x-0 top-0 h-1 bg-[var(--nav-primary)] opacity-80" />
               <span aria-hidden="true" className="mr-4 text-2xl font-black leading-none text-[var(--nav-primary)]">
                 {String(scenarioIndex + 1).padStart(2, '0')}
               </span>

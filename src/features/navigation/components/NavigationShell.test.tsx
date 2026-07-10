@@ -1050,11 +1050,20 @@ describe('NavigationShell', () => {
     expect(screen.getByTestId('demo-entry-mode-selection')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /대표 시나리오 보기/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /실시간 위험 상황 조작/ })).toBeInTheDocument()
+    expect(screen.getByText('준비된 위험행동 흐름을 순서대로 확인합니다.')).not.toHaveClass('max-w-[18rem]')
+    expect(screen.getByText('데모 사용자가 직접 위험 상황을 선택하고 조작합니다.')).not.toHaveClass('max-w-[18rem]')
     fireEvent.click(screen.getByRole('button', { name: /대표 시나리오 보기/ }))
     expect(screen.getByTestId('demo-scenario-selection')).toBeInTheDocument()
     expect(screen.getByTestId('demo-scenario-card-agent_personality_voice_change')).not.toHaveClass('col-span-full')
+    expect(screen.getByTestId('demo-scenario-card-agent_personality_voice_change').querySelector(':scope > span')).toHaveClass(
+      'inset-x-0',
+      'top-0',
+      'h-1',
+    )
+    expect(screen.getByTestId('demo-scenario-card-drowsy_driver')).toHaveClass('min-h-[12rem]')
     expect(screen.getByTestId('demo-scenario-card-gaze_away_attention')).toHaveTextContent('시선 이탈 감지')
     expect(screen.getByTestId('demo-scenario-card-reaching_behind_check')).toHaveTextContent('뒷좌석 확인 감지')
+    expect(within(screen.getByTestId('demo-scenario-card-drowsy_driver')).getByText('01')).toHaveClass('text-2xl')
     expect(screen.queryByTestId('demo-scenario-placeholder-card')).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '데모 모드 선택' }))
     expect(screen.getByTestId('demo-entry-mode-selection')).toBeInTheDocument()
@@ -1068,7 +1077,7 @@ describe('NavigationShell', () => {
     expect(screen.getByRole('button', { name: /어디로 갈까요/ })).toBeInTheDocument()
   })
 
-  it('opens free navigation from the demo scenario selection screen', async () => {
+  it('does not render a free navigation entry button in demo scenario selection', async () => {
     const queryClient = new QueryClient()
 
     render(
@@ -1080,8 +1089,8 @@ describe('NavigationShell', () => {
     fireEvent.click(await screen.findByRole('button', { name: /민준 프로필 선택/ }))
     fireEvent.click(screen.getByRole('button', { name: '민준(으)로 시작' }))
     fireEvent.click(await screen.findByRole('button', { name: /대표 시나리오 보기/ }))
-    fireEvent.click(screen.getByRole('button', { name: '네비게이션 이용하기' }))
-    expect(screen.getByRole('button', { name: /어디로 갈까요/ })).toBeInTheDocument()
+    expect(screen.getByTestId('demo-scenario-selection')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '네비게이션 이용하기' })).not.toBeInTheDocument()
   })
 
   it('stacks manual risk depth only for the same driver behavior', async () => {
