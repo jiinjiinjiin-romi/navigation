@@ -903,11 +903,11 @@ const MANUAL_RISK_EMERGENCY_WARNING_DELAY_MS = 3_000
 const MANUAL_RISK_EMERGENCY_PRE_SPEECH_AUDIO_SRC = '/sounds/manual-risk-emergency-warning.wav'
 const MANUAL_RISK_EMERGENCY_PRE_SPEECH_AUDIO_MAX_DURATION_MS = 2_200
 const MANUAL_RISK_EMERGENCY_TTS_OPTIONS: Required<VoiceTtsOptions> = {
-  speed: -2,
+  speed: 0,
   pitch: 4,
   volume: 5,
 }
-const MANUAL_RISK_EMERGENCY_TTS_PLAYBACK_GAIN = 1.8
+const MANUAL_RISK_EMERGENCY_TTS_PLAYBACK_GAIN = 2
 const MANUAL_RISK_MAX_DEPTH: Record<ManualRiskId, number> = {
   phone: 3,
   drowsiness: 3,
@@ -1330,7 +1330,11 @@ export function NavigationShell({
           ? '잠 깨는 밝은 노래'
           : undefined
     : undefined
-  const activeMusicSearchKeyword = manualMusicSearchKeyword ?? debouncedMusicSearchKeyword
+  const demoMusicSearchKeyword = demoScenarioState?.scenario.scenarioId === 'device_operation'
+    && demoScenarioState.scenarioEvent?.id.startsWith('device_music')
+    ? '빅뱅 붉은 노을'
+    : undefined
+  const activeMusicSearchKeyword = manualMusicSearchKeyword ?? demoMusicSearchKeyword ?? debouncedMusicSearchKeyword
   const assistantMusicRecommendationVisible = useMemo(() => {
     const scenario = ROADIE_ASSISTANT_SCENARIOS.find((item) => item.id === assistantScenarioId) ?? ROADIE_ASSISTANT_SCENARIOS[0]
     const step = scenario.steps[Math.min(assistantStepIndex, scenario.steps.length - 1)]
@@ -1354,8 +1358,8 @@ export function NavigationShell({
       return 'bright'
     }
 
-    if (eventId?.startsWith('device_music') || eventId === 'device_first_detection' || eventId === 'device_repeated_detection') {
-      return 'calm'
+    if (eventId?.startsWith('device_music')) {
+      return 'drive'
     }
 
     return 'drive'
@@ -2832,7 +2836,7 @@ export function NavigationShell({
     }
 
     demoMusicEventAppliedRef.current = event.id
-    setMusicTrackId('soft-focus')
+    setMusicTrackId(event.id === 'device_music_started' ? 'red-sunset' : 'soft-focus')
     setMusicProgressSeconds(0)
     setMusicPlaying(true)
     setMusicModalOpen(false)
@@ -2841,65 +2845,15 @@ export function NavigationShell({
   useEffect(() => {
     const eventId = demoScenarioState?.scenarioEvent?.id
 
-    if (eventId === 'device_music_panel_opened') {
-      setMusicSearchKeyword('')
-      setMusicTrackId('drive-neon')
-      setMusicProgressSeconds(0)
-      setMusicPlaying(false)
-      setMusicModalOpen(true)
+    if (!eventId?.startsWith('device_music')) {
       return
     }
 
-    if (eventId === 'device_first_detection') {
-      setMusicSearchKeyword('Soft')
-      setMusicTrackId('drive-neon')
-      setMusicProgressSeconds(0)
-      setMusicPlaying(false)
-      setMusicModalOpen(true)
-      return
-    }
-
-    if (eventId === 'device_repeated_detection') {
-      setMusicSearchKeyword('Soft')
-      setMusicTrackId('soft-focus')
-      setMusicProgressSeconds(0)
-      setMusicPlaying(false)
-      setMusicModalOpen(true)
-      return
-    }
-
-    if (eventId === 'device_music_approved') {
-      setMusicSearchKeyword('Soft')
-      setMusicTrackId('soft-focus')
-      setMusicProgressSeconds(0)
-      setMusicPlaying(false)
-      setMusicModalOpen(true)
-      return
-    }
-
-    if (eventId === 'device_music_preview') {
-      setMusicSearchKeyword('Soft')
-      setMusicTrackId('soft-focus')
-      setMusicProgressSeconds(0)
-      setMusicPlaying(false)
-      setMusicModalOpen(true)
-      return
-    }
-
-    if (eventId === 'device_music_selected') {
-      setMusicSearchKeyword('Soft')
-      setMusicTrackId('soft-focus')
-      setMusicProgressSeconds(0)
-      setMusicPlaying(true)
-      setMusicModalOpen(true)
-      return
-    }
-
-    if (eventId !== 'device_music_started') {
-      return
-    }
-
-    setMusicSearchKeyword('')
+    setMusicSearchKeyword('빅뱅 붉은 노을')
+    setMusicTrackId('red-sunset')
+    setMusicProgressSeconds(0)
+    setMusicPlaying(eventId === 'device_music_started')
+    setMusicModalOpen(false)
   }, [demoScenarioState?.scenarioEvent?.id])
 
   useEffect(() => {
@@ -3350,6 +3304,12 @@ export function NavigationShell({
               <DemoEntryModeSelection
                 motionTiming={motionTiming}
                 profileName={selectedProfile?.displayName ?? '운전자'}
+                onReturnToProfileSelection={() => {
+                  setDemoScenarioSelectionOpen(false)
+                  setNavigationEntryMode(null)
+                  setProfileSetupView('list')
+                  setProfileSetupComplete(false)
+                }}
                 onOpenScenarioSelection={() => setDemoScenarioSelectionOpen(true)}
                 onStartManualControl={() => {
                   setNavigationEntryMode('free-navigation')
@@ -5978,7 +5938,7 @@ function getDemoScenarioRecommendations(
     ]
   }
 
-  if (event.id === 'drowsy_music_started' || event.id === 'device_music_preview' || event.id === 'device_music_started') {
+  if (event.id === 'drowsy_music_started') {
     return [
       {
         type: 'music',
@@ -5990,13 +5950,25 @@ function getDemoScenarioRecommendations(
     ]
   }
 
+  if (event.id === 'device_music_preview' || event.id === 'device_music_started') {
+    return [
+      {
+        type: 'music',
+        title: '붉은 노을',
+        meta: '빅뱅',
+        detail: '요청한 곡을 찾아 재생할 준비를 마쳤어요.',
+        action: '재생',
+      },
+    ]
+  }
+
   if (event.id === 'phone_message_preview') {
     return [
       {
         type: 'action',
-        title: '지우에게 보낼 메시지',
+        title: '석현님에게 보낼 메시지',
         meta: '문자 초안',
-        detail: '운전 중이라 조금 뒤에 연락할게.',
+        detail: '20분정도 늦을 것 같아.',
         action: '보내기',
       },
     ]
@@ -6008,7 +5980,7 @@ function getDemoScenarioRecommendations(
         type: 'action',
         title: '메시지 전송 완료',
         meta: '문자 전송',
-        detail: '지우에게 메시지를 보냈습니다.',
+        detail: '석현님에게 메시지를 보냈습니다.',
         action: '확인',
       },
     ]
@@ -6026,11 +5998,13 @@ export function personalizeDemoRoadieMessage(message: string, profileName: strin
 function DemoEntryModeSelection({
   motionTiming,
   profileName,
+  onReturnToProfileSelection,
   onOpenScenarioSelection,
   onStartManualControl,
 }: {
   motionTiming: MotionTiming
   profileName: string
+  onReturnToProfileSelection: () => void
   onOpenScenarioSelection: () => void
   onStartManualControl: () => void
 }) {
@@ -6042,11 +6016,19 @@ function DemoEntryModeSelection({
       animate={{ opacity: 1, y: 0 }}
       transition={motionTiming}
     >
-      <div className="mx-auto w-full max-w-[42rem] text-center">
+      <div className="relative mx-auto w-full max-w-[42rem] text-center">
         <h2 className="text-2xl font-black leading-tight">데모 모드 선택</h2>
         <p className="mt-2 text-sm font-semibold text-[var(--nav-muted)]">
           {profileName} 프로필 · 원하는 방식으로 로디 데모를 시작하세요
         </p>
+        <button
+          className="absolute left-0 top-0 inline-flex h-8 items-center gap-1 rounded-md px-1.5 text-xs font-semibold text-[var(--nav-muted)] transition hover:bg-white hover:text-[var(--nav-ink)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
+          onClick={onReturnToProfileSelection}
+          type="button"
+        >
+          <CaretLeft className="size-3.5" weight="bold" />
+          프로필 선택
+        </button>
       </div>
 
       <div className="mx-auto mt-7 grid w-full max-w-[56rem] grid-cols-2 gap-3 max-sm:grid-cols-1">

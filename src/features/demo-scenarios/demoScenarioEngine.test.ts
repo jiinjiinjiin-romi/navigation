@@ -182,13 +182,28 @@ describe('demo scenario engine', () => {
     expect(state.scenarioEvent).toMatchObject({
       id: 'drowsy_window_response',
       eventType: 'USER_RESPONSE',
-      userSpeech: '보조석 창문 살짝 열어줘',
+      userSpeech: '조금 졸리네... 창문 좀 열어줘.',
     })
 
     state = advanceDemoScenario(state)
 
     expect(state.scenarioEvent?.id).toBe('drowsy_window_started')
-    expect(state.scenarioEvent?.roadieMessage).toBe('창문을 살짝 열게요. 그래도 피곤한 모습이 반복되면 바로 알려드릴게요.')
+    expect(state.scenarioEvent?.roadieMessage).toBe('창문을 살짝 열게요. 너무 피곤하면 쉬어가시는걸 추천드려요.')
+
+    let musicState = createInitialDemoScenarioState('drowsy_driver')
+    while (musicState.scenarioEvent?.id !== 'drowsy_first_warning') {
+      musicState = advanceDemoScenario(musicState)
+    }
+
+    musicState = respondToDemoScenario(musicState, 'PLAY_BRIGHT_MUSIC')
+    expect(musicState.scenarioEvent).toMatchObject({
+      id: 'drowsy_music_response',
+      eventType: 'USER_RESPONSE',
+      userSpeech: '조금 졸리네... 잠깨는 신나는 음악 틀어줄래?',
+    })
+
+    musicState = advanceDemoScenario(musicState)
+    expect(musicState.scenarioEvent?.roadieMessage).toBe('밝은 음악으로 바꿔드릴게요. 너무 피곤하면 쉬어가시는걸 추천드려요.')
   })
 
   it('keeps every response branch split into user speech and the next Roadie step', () => {
@@ -223,10 +238,52 @@ describe('demo scenario engine', () => {
     const scenarioText = JSON.stringify(getDemoScenario('device_operation'))
 
     expect(scenarioText).not.toMatch(/세종대학교|목적지 설정|목적지 음성|목적지 후보|내비 목적지/)
-      expect(scenarioText).toContain('음악')
+    expect(scenarioText).toContain('음악')
   })
 
-  it('asks for a message recipient before showing the phone scenario message preview', () => {
+  it('starts device operation with a safety warning before handling a music request', () => {
+    let state = createInitialDemoScenarioState('device_operation')
+
+    while (state.scenarioEvent?.id !== 'device_first_warning') {
+      state = advanceDemoScenario(state)
+    }
+
+    expect(state.scenarioEvent?.roadieMessage).toBe('{{profileName}}, 전방 확인이 계속 안 되고 있어요. 시선을 앞으로 돌려주세요.')
+
+    state = advanceDemoScenario(state)
+    expect(state.scenarioEvent?.id).toBe('device_repeated_detection')
+
+    state = advanceDemoScenario(state)
+    expect(state.scenarioEvent).toMatchObject({
+      id: 'device_music_offer',
+      roadieMessage: '계속 화면을 조작하면 위험해요. 필요한 건 제가 대신 도와드릴까요?',
+    })
+
+    state = respondToDemoScenario(state, 'START_VOICE_MUSIC')
+    expect(state.scenarioEvent?.userSpeech).toBe('지금 듣는 노래 말고 다른 음악으로 바꿔줘.')
+
+    state = advanceDemoScenario(state)
+    expect(state.scenarioEvent).toMatchObject({
+      id: 'device_music_type_prompt',
+      roadieMessage: '어떤 음악으로 바꿔드릴까요?',
+      requiresResponse: true,
+    })
+
+    state = respondToDemoScenario(state, 'PLAY_RED_SUNSET')
+    expect(state.scenarioEvent?.userSpeech).toBe('빅뱅의 붉은 노을 틀어줘.')
+
+    state = advanceDemoScenario(state)
+    expect(state.scenarioEvent).toMatchObject({
+      id: 'device_music_preview',
+      roadieMessage: '빅뱅의 붉은 노을을 찾았어요. 이 곡으로 재생할까요?',
+    })
+
+    state = respondToDemoScenario(state, 'PLAY_RED_SUNSET_CONFIRMED')
+    state = advanceDemoScenario(state)
+    expect(state.scenarioEvent?.roadieMessage).toBe('빅뱅의 붉은 노을을 재생할게요.')
+  })
+
+  it('moves directly from a complete phone request to message preview', () => {
     const scenario = getDemoScenario('phone_usage')
     let state = createInitialDemoScenarioState('phone_usage')
 
@@ -238,30 +295,19 @@ describe('demo scenario engine', () => {
     expect(state.scenarioEvent).toMatchObject({
       id: 'phone_assist_approved',
       eventType: 'USER_RESPONSE',
-      userSpeech: '응, 해줘',
-    })
-
-    state = advanceDemoScenario(state)
-    expect(state.scenarioEvent).toMatchObject({
-      id: 'phone_recipient_prompt',
-      eventType: 'AGENT_MESSAGE',
-      roadieMessage: '문자를 누구에게 보낼까요?',
-      requiresResponse: true,
-    })
-
-    state = respondToDemoScenario(state, 'SEND_TO_JIWOO')
-    expect(state.scenarioEvent).toMatchObject({
-      id: 'phone_recipient_selected',
-      eventType: 'USER_RESPONSE',
-      userSpeech: '지우에게 보내줘',
+      userSpeech: '석현이에게 20분정도 늦을 것 같다고 문자 보내줘.',
     })
 
     state = advanceDemoScenario(state)
     expect(state.scenarioEvent).toMatchObject({
       id: 'phone_message_preview',
-      roadieMessage: '지우에게 “운전 중이라 조금 뒤에 연락할게.” 이렇게 보낼까요?',
+      eventType: 'ACTION_PREVIEW',
+      roadieMessage: '석현님에게 20분정도 늦을 것 같아 라고 보낼까요?',
+      requiresResponse: true,
     })
     expect(scenario.events.find((event) => event.id === 'phone_message_preview')).toBeDefined()
+    expect(scenario.events.find((event) => event.id === 'phone_recipient_prompt')).toBeUndefined()
+    expect(scenario.events.find((event) => event.id === 'phone_recipient_selected')).toBeUndefined()
   })
 
   it('does not expose focus driving mode as a demo scenario step', () => {

@@ -72,13 +72,13 @@
               "label": "창문 살짝 열기",
               "value": "OPEN_WINDOW",
               "nextEventId": "drowsy_window_response",
-              "asUserSpeech": "보조석 창문 살짝 열어줘"
+              "asUserSpeech": "조금 졸리네... 창문 좀 열어줘."
             },
             {
               "label": "밝은 음악 틀기",
               "value": "PLAY_BRIGHT_MUSIC",
               "nextEventId": "drowsy_music_response",
-              "asUserSpeech": "밝은 음악 틀어줘"
+              "asUserSpeech": "조금 졸리네... 잠깨는 신나는 음악 틀어줄래?"
             }
           ],
           "report": {
@@ -137,7 +137,7 @@
             "visibleStatus": "환기 보조"
           },
           "roadieMessage": null,
-          "userSpeech": "보조석 창문 살짝 열어줘",
+          "userSpeech": "조금 졸리네... 창문 좀 열어줘.",
           "requiresResponse": false,
           "responseOptions": [],
           "report": {
@@ -156,7 +156,7 @@
             "riskLevel": "MEDIUM",
             "visibleStatus": "환기 보조"
           },
-          "roadieMessage": "창문을 살짝 열게요. 그래도 피곤한 모습이 반복되면 바로 알려드릴게요.",
+          "roadieMessage": "창문을 살짝 열게요. 너무 피곤하면 쉬어가시는걸 추천드려요.",
           "requiresResponse": false,
           "responseOptions": [],
           "report": {
@@ -176,7 +176,7 @@
             "visibleStatus": "음악 보조"
           },
           "roadieMessage": null,
-          "userSpeech": "밝은 음악 틀어줘",
+          "userSpeech": "조금 졸리네... 잠깨는 신나는 음악 틀어줄래?",
           "requiresResponse": false,
           "responseOptions": [],
           "report": {
@@ -195,7 +195,7 @@
             "riskLevel": "MEDIUM",
             "visibleStatus": "음악 보조"
           },
-          "roadieMessage": "밝은 음악으로 바꿔드릴게요. 전방 주시는 계속 도와드릴게요.",
+          "roadieMessage": "밝은 음악으로 바꿔드릴게요. 너무 피곤하면 쉬어가시는걸 추천드려요.",
           "requiresResponse": false,
           "responseOptions": [],
           "report": {
@@ -457,7 +457,7 @@
               "label": "대신 처리",
               "value": "ASSIST_MESSAGE",
               "nextEventId": "phone_assist_approved",
-              "asUserSpeech": "응, 해줘"
+              "asUserSpeech": "석현이에게 20분정도 늦을 것 같다고 문자 보내줘."
             }
           ],
           "report": {
@@ -477,7 +477,7 @@
             "visibleStatus": "대행 처리 승인"
           },
           "roadieMessage": null,
-          "userSpeech": "응, 해줘",
+          "userSpeech": "석현이에게 20분정도 늦을 것 같다고 문자 보내줘.",
           "requiresResponse": false,
           "responseOptions": [],
           "report": {
@@ -485,52 +485,6 @@
             "eventName": "대행 처리 승인"
           },
           "debugNote": null,
-          "nextEventId": "phone_recipient_prompt"
-        },
-        {
-          "id": "phone_recipient_prompt",
-          "at": 33,
-          "eventType": "AGENT_MESSAGE",
-          "uiState": {
-            "drivingMode": "MOVING",
-            "riskLevel": "MEDIUM",
-            "visibleStatus": "메시지 수신자 확인"
-          },
-          "roadieMessage": "문자를 누구에게 보낼까요?",
-          "requiresResponse": true,
-          "responseOptions": [
-            {
-              "label": "지우에게",
-              "value": "SEND_TO_JIWOO",
-              "nextEventId": "phone_recipient_selected",
-              "asUserSpeech": "지우에게 보내줘"
-            }
-          ],
-          "report": {
-            "include": true,
-            "eventName": "메시지 수신자 확인"
-          },
-          "debugNote": "Demo only: no real message is sent.",
-          "nextEventId": null
-        },
-        {
-          "id": "phone_recipient_selected",
-          "at": 34,
-          "eventType": "USER_RESPONSE",
-          "uiState": {
-            "drivingMode": "MOVING",
-            "riskLevel": "MEDIUM",
-            "visibleStatus": "메시지 수신자 선택"
-          },
-          "roadieMessage": null,
-          "userSpeech": "지우에게 보내줘",
-          "requiresResponse": false,
-          "responseOptions": [],
-          "report": {
-            "include": true,
-            "eventName": "메시지 수신자 선택"
-          },
-          "debugNote": "Demo only: no real message is sent.",
           "nextEventId": "phone_message_preview"
         },
         {
@@ -542,7 +496,7 @@
             "riskLevel": "MEDIUM",
             "visibleStatus": "메시지 초안 확인"
           },
-          "roadieMessage": "지우에게 “운전 중이라 조금 뒤에 연락할게.” 이렇게 보낼까요?",
+          "roadieMessage": "석현님에게 20분정도 늦을 것 같아 라고 보낼까요?",
           "requiresResponse": true,
           "responseOptions": [
             {
@@ -588,7 +542,7 @@
             "riskLevel": "LOW",
             "visibleStatus": "메시지 전송 완료"
           },
-          "roadieMessage": "메시지를 보냈어요. 이제 전방 주시에 집중할 수 있도록 필요한 안내만 전달할게요.",
+          "roadieMessage": "메시지를 보냈어요.",
           "requiresResponse": false,
           "responseOptions": [],
           "report": {
@@ -647,7 +601,7 @@
       "id": "device_operation",
       "scenarioId": "device_operation",
       "title": "기기조작 감지",
-      "description": "주행 중 운전자가 음악 패널을 직접 조작하자 로디가 음악 변경을 대신 도와드립니다.",
+  "description": "주행 중 기기를 직접 조작하면 로디가 필요한 조작을 대신 도와드립니다.",
       "durationSeconds": 70,
       "tags": [
         "device_operation",
@@ -672,35 +626,16 @@
             "eventName": null
           },
           "debugNote": null,
-          "nextEventId": "device_music_panel_opened"
-        },
-        {
-          "id": "device_music_panel_opened",
-          "at": 9,
-          "eventType": "ACTION_PREVIEW",
-          "uiState": {
-            "drivingMode": "MOVING",
-            "riskLevel": "LOW",
-            "visibleStatus": "음악 패널 조작"
-          },
-          "roadieMessage": null,
-          "requiresResponse": false,
-          "responseOptions": [],
-          "report": {
-            "include": false,
-            "eventName": null
-          },
-          "debugNote": null,
           "nextEventId": "device_first_detection"
         },
         {
           "id": "device_first_detection",
-          "at": 12,
+          "at": 9,
           "eventType": "DETECTION_UPDATE",
           "uiState": {
             "drivingMode": "MOVING",
             "riskLevel": "MEDIUM",
-            "visibleStatus": "음악 검색 조작"
+            "visibleStatus": "기기 조작 주의"
           },
           "roadieMessage": null,
           "requiresResponse": false,
@@ -719,9 +654,9 @@
           "uiState": {
             "drivingMode": "MOVING",
             "riskLevel": "MEDIUM",
-            "visibleStatus": "오디오 조작 주의"
+            "visibleStatus": "기기 조작 주의"
           },
-          "roadieMessage": "{{profileName}}, 음악 화면을 보는 시간이 길어지고 있어요. 전방을 봐주세요.",
+          "roadieMessage": "{{profileName}}, 전방 확인이 계속 안 되고 있어요. 시선을 앞으로 돌려주세요.",
           "requiresResponse": false,
           "responseOptions": [],
           "report": {
@@ -738,7 +673,7 @@
           "uiState": {
             "drivingMode": "MOVING",
             "riskLevel": "HIGH",
-            "visibleStatus": "음악 후보 조작 지속"
+            "visibleStatus": "기기 조작 반복"
           },
           "roadieMessage": null,
           "requiresResponse": false,
@@ -757,21 +692,21 @@
           "uiState": {
             "drivingMode": "MOVING",
             "riskLevel": "HIGH",
-            "visibleStatus": "음악 설정 제안"
+            "visibleStatus": "조작 대행 제안"
           },
-          "roadieMessage": "음악은 제가 대신 바꿔드릴까요?",
+          "roadieMessage": "계속 화면을 조작하면 위험해요. 필요한 건 제가 대신 도와드릴까요?",
           "requiresResponse": true,
           "responseOptions": [
             {
-              "label": "음악 말하기",
+              "label": "음악 바꿔줘.",
               "value": "START_VOICE_MUSIC",
               "nextEventId": "device_music_approved",
-              "asUserSpeech": "응, 조용한 음악 틀어줘"
+              "asUserSpeech": "지금 듣는 노래 말고 다른 음악으로 바꿔줘."
             }
           ],
           "report": {
             "include": true,
-            "eventName": "음악 설정 제안"
+            "eventName": "조작 대행 제안"
           },
           "debugNote": null,
           "nextEventId": null
@@ -783,15 +718,61 @@
           "uiState": {
             "drivingMode": "MOVING",
             "riskLevel": "HIGH",
-            "visibleStatus": "음악 설정 승인"
+            "visibleStatus": "음악 변경 요청"
           },
           "roadieMessage": null,
-          "userSpeech": "응, 조용한 음악 틀어줘",
+          "userSpeech": "지금 듣는 노래 말고 다른 음악으로 바꿔줘.",
           "requiresResponse": false,
           "responseOptions": [],
           "report": {
             "include": true,
-            "eventName": "음악 설정 승인"
+            "eventName": "음악 변경 요청"
+          },
+          "debugNote": null,
+          "nextEventId": "device_music_type_prompt"
+        },
+        {
+          "id": "device_music_type_prompt",
+          "at": 32,
+          "eventType": "AGENT_MESSAGE",
+          "uiState": {
+            "drivingMode": "MOVING",
+            "riskLevel": "MEDIUM",
+            "visibleStatus": "음악 선택"
+          },
+          "roadieMessage": "어떤 음악으로 바꿔드릴까요?",
+          "requiresResponse": true,
+          "responseOptions": [
+            {
+              "label": "빅뱅의 붉은 노을 틀어줘.",
+              "value": "PLAY_RED_SUNSET",
+              "nextEventId": "device_music_request",
+              "asUserSpeech": "빅뱅의 붉은 노을 틀어줘."
+            }
+          ],
+          "report": {
+            "include": true,
+            "eventName": "음악 선택"
+          },
+          "debugNote": null,
+          "nextEventId": null
+        },
+        {
+          "id": "device_music_request",
+          "at": 33,
+          "eventType": "USER_RESPONSE",
+          "uiState": {
+            "drivingMode": "MOVING",
+            "riskLevel": "MEDIUM",
+            "visibleStatus": "곡 요청"
+          },
+          "roadieMessage": null,
+          "userSpeech": "빅뱅의 붉은 노을 틀어줘.",
+          "requiresResponse": false,
+          "responseOptions": [],
+          "report": {
+            "include": true,
+            "eventName": "음악 곡 요청"
           },
           "debugNote": null,
           "nextEventId": "device_music_preview"
@@ -803,16 +784,16 @@
           "uiState": {
             "drivingMode": "MOVING",
             "riskLevel": "MEDIUM",
-            "visibleStatus": "조용한 음악 확인"
+            "visibleStatus": "음악 재생 확인"
           },
-          "roadieMessage": "조용한 플레이리스트를 찾았어요. 이 음악으로 바꿀까요?",
+          "roadieMessage": "빅뱅의 붉은 노을을 찾았어요. 이 곡으로 재생할까요?",
           "requiresResponse": true,
           "responseOptions": [
             {
-              "label": "음악 재생",
-              "value": "PLAY_CALM_MUSIC",
+              "label": "응, 재생해줘.",
+              "value": "PLAY_RED_SUNSET_CONFIRMED",
               "nextEventId": "device_music_selected",
-              "asUserSpeech": "응, 재생해줘"
+              "asUserSpeech": "응, 재생해줘."
             }
           ],
           "report": {
@@ -832,7 +813,7 @@
             "visibleStatus": "음악 재생 승인"
           },
           "roadieMessage": null,
-          "userSpeech": "응, 재생해줘",
+          "userSpeech": "응, 재생해줘.",
           "requiresResponse": false,
           "responseOptions": [],
           "report": {
@@ -849,9 +830,9 @@
           "uiState": {
             "drivingMode": "MOVING",
             "riskLevel": "LOW",
-            "visibleStatus": "조용한 음악 재생 중"
+            "visibleStatus": "붉은 노을 재생 중"
           },
-          "roadieMessage": "조용한 음악으로 바꿨어요. 이제 화면 조작 없이 운전에 집중하셔도 돼요.",
+          "roadieMessage": "빅뱅의 붉은 노을을 재생할게요.",
           "requiresResponse": false,
           "responseOptions": [],
           "report": {

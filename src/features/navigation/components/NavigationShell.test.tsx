@@ -511,7 +511,7 @@ describe('NavigationShell', () => {
 
     const userStep = createDemoAssistantStep(state, '민준')
 
-    expect(userStep.userText).toBe('보조석 창문 살짝 열어줘')
+    expect(userStep.userText).toBe('조금 졸리네... 창문 좀 열어줘.')
     expect(userStep.text).toBeUndefined()
     expect(userStep.mode).toBe('user-listening')
 
@@ -520,7 +520,7 @@ describe('NavigationShell', () => {
     const roadieStep = createDemoAssistantStep(state, '민준')
 
     expect(roadieStep.userText).toBeUndefined()
-    expect(roadieStep.text).toBe('창문을 살짝 열게요. 그래도 피곤한 모습이 반복되면 바로 알려드릴게요.')
+    expect(roadieStep.text).toBe('창문을 살짝 열게요. 너무 피곤하면 쉬어가시는걸 추천드려요.')
     expect(roadieStep.mode).toBe('assistant-speaking')
   })
 
@@ -606,11 +606,11 @@ describe('NavigationShell', () => {
       expect.objectContaining({ type: 'place', title: '경로 변경 완료' }),
     ])
     expect(phonePreviewStep.recommendations).toEqual([
-      expect.objectContaining({ type: 'action', title: '지우에게 보낼 메시지', action: '보내기' }),
+      expect.objectContaining({ type: 'action', title: '석현님에게 보낼 메시지', action: '보내기' }),
     ])
     expect(deviceAssistStep.recommendations).toBeUndefined()
     expect(musicStep.recommendations).toEqual([
-      expect.objectContaining({ type: 'music', title: '조용한 플레이리스트' }),
+      expect.objectContaining({ type: 'music', title: '붉은 노을', meta: '빅뱅' }),
     ])
   })
 
@@ -630,9 +630,9 @@ describe('NavigationShell', () => {
     expect(previewStep.recommendations).toEqual([
       expect.objectContaining({
         type: 'action',
-        title: '지우에게 보낼 메시지',
+        title: '석현님에게 보낼 메시지',
         meta: '문자 초안',
-        detail: '운전 중이라 조금 뒤에 연락할게.',
+        detail: '20분정도 늦을 것 같아.',
         action: '보내기',
       }),
     ])
@@ -1091,6 +1091,23 @@ describe('NavigationShell', () => {
     fireEvent.click(await screen.findByRole('button', { name: /대표 시나리오 보기/ }))
     expect(screen.getByTestId('demo-scenario-selection')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '네비게이션 이용하기' })).not.toBeInTheDocument()
+  })
+
+  it('returns to profile selection from the demo entry mode screen', async () => {
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: /민준 프로필 선택/ }))
+    fireEvent.click(screen.getByRole('button', { name: '민준(으)로 시작' }))
+
+    fireEvent.click(await screen.findByRole('button', { name: '프로필 선택' }))
+
+    expect(await screen.findByRole('heading', { name: '오늘은 누가 운전할까요?' })).toBeInTheDocument()
   })
 
   it('stacks manual risk depth only for the same driver behavior', async () => {
@@ -1652,7 +1669,6 @@ describe('NavigationShell', () => {
       },
       maneuvers: [],
     })
-
     render(
       <QueryClientProvider client={queryClient}>
         <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
@@ -1829,7 +1845,7 @@ describe('NavigationShell', () => {
         text: '졸음 경고! 졸음 경고!',
         speakerRole: 'assistant',
         speakerId: 'dara_ang',
-        speed: -2,
+        speed: 0,
         pitch: 4,
         volume: 5,
       }),
@@ -2061,7 +2077,7 @@ describe('NavigationShell', () => {
       expect(audioPlayOrder[audioPlayOrder.length - 1]).toBe('blob:manual-risk-emergency-tts')
     })
     expect(warningAudio?.pause).toHaveBeenCalledTimes(1)
-    expect(audioGainValues).toContain(1.8)
+    expect(audioGainValues).toContain(2)
 
     vi.unstubAllGlobals()
     Object.defineProperty(URL, 'createObjectURL', {
@@ -2169,6 +2185,19 @@ describe('NavigationShell', () => {
   })
 
   it('starts the mini player when a demo music scenario reaches the music started step', async () => {
+    mockedGetMusicRecommendations.mockResolvedValue([
+      {
+        id: 'red-sunset',
+        title: '붉은 노을',
+        artist: '빅뱅',
+        album: 'Remember',
+        duration: '4:03',
+        durationSeconds: 243,
+        coverUrl: null,
+        sourceUrl: '',
+        provider: 'itunes',
+      },
+    ])
     mockedSearchPlaces.mockResolvedValue([
       {
         id: 'ossi-kalguksu',
@@ -2215,58 +2244,49 @@ describe('NavigationShell', () => {
     await clickPresenterNext()
     await clickPresenterNext()
 
-    await screen.findByText('음악 패널 조작')
-    let musicPopover = await screen.findByTestId('music-popover')
-    expect(within(musicPopover).getByLabelText('음악 검색')).toHaveValue('')
-    expect(within(musicPopover).getByText('Drive Neon')).toBeInTheDocument()
-
-    await clickPresenterNext()
-    await screen.findByText('음악 검색 조작')
-    musicPopover = await screen.findByTestId('music-popover')
-    expect(within(musicPopover).getByLabelText('음악 검색')).toHaveValue('Soft')
-    expect(within(musicPopover).getByText('Soft Focus')).toBeInTheDocument()
+    await screen.findByText('기기 조작 주의')
+    expect(screen.queryByTestId('music-popover')).not.toBeInTheDocument()
 
     await clickPresenterNext()
     expect(await screen.findByTestId('roadie-assistant-speech-text')).toHaveAttribute(
       'aria-label',
-      '민준, 음악 화면을 보는 시간이 길어지고 있어요. 전방을 봐주세요.',
+      '민준, 전방 확인이 계속 안 되고 있어요. 시선을 앞으로 돌려주세요.',
     )
-    expect(screen.getByTestId('music-popover')).toBeInTheDocument()
 
     await clickPresenterNext()
-    await screen.findByText('음악 후보 조작 지속')
-    musicPopover = await screen.findByTestId('music-popover')
-    expect(within(musicPopover).getByRole('button', { name: /Soft Focus/ })).toHaveAttribute('aria-pressed', 'true')
+    await screen.findByText('기기 조작 반복')
 
     await clickPresenterNext()
     expect(await screen.findByTestId('roadie-assistant-speech-text')).toHaveAttribute(
       'aria-label',
-      '음악은 제가 대신 바꿔드릴까요?',
+      '계속 화면을 조작하면 위험해요. 필요한 건 제가 대신 도와드릴까요?',
     )
-    fireEvent.click(await screen.findByRole('button', { name: '음악 말하기' }))
-
-    musicPopover = await screen.findByTestId('music-popover')
-    expect(within(musicPopover).getByLabelText('음악 검색')).toHaveValue('Soft')
-    expect(within(musicPopover).getByText('Soft Focus')).toBeInTheDocument()
+    fireEvent.click(await screen.findByRole('button', { name: '음악 바꿔줘.' }))
 
     await clickPresenterNext()
+    expect(await screen.findByTestId('roadie-assistant-speech-text')).toHaveAttribute(
+      'aria-label',
+      '어떤 음악으로 바꿔드릴까요?',
+    )
+    fireEvent.click(await screen.findByRole('button', { name: '빅뱅의 붉은 노을 틀어줘.' }))
 
-    musicPopover = await screen.findByTestId('music-popover')
-    expect(within(musicPopover).getByRole('button', { name: /Soft Focus/ })).toHaveAttribute('aria-pressed', 'true')
+    await clickPresenterNext()
+    expect(await screen.findByTestId('roadie-assistant-speech-text')).toHaveAttribute(
+      'aria-label',
+      '빅뱅의 붉은 노을을 찾았어요. 이 곡으로 재생할까요?',
+    )
+    expect(await screen.findByText('붉은 노을')).toBeInTheDocument()
+    expect(screen.getByText('빅뱅')).toBeInTheDocument()
 
-    fireEvent.click(await screen.findByRole('button', { name: '음악 재생' }))
-
-    musicPopover = await screen.findByTestId('music-popover')
-    expect(within(musicPopover).getByText('재생 중')).toBeInTheDocument()
-    expect(screen.queryByTestId('music-mini-player')).not.toBeInTheDocument()
+    fireEvent.click(await screen.findByRole('button', { name: '응, 재생해줘.' }))
 
     await clickPresenterNext()
 
     const miniPlayer = await screen.findByTestId('music-mini-player')
 
     expect(miniPlayer).toBeInTheDocument()
-    expect(within(miniPlayer).getByText('Soft Focus')).toBeInTheDocument()
-    expect(within(miniPlayer).getByText('Evening Route')).toBeInTheDocument()
+    expect(within(miniPlayer).getByText('붉은 노을')).toBeInTheDocument()
+    expect(within(miniPlayer).getByText('빅뱅')).toBeInTheDocument()
 
     await clickPresenterNext()
 
