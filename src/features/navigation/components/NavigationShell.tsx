@@ -81,6 +81,7 @@ import { type CSSProperties, type KeyboardEvent, type ReactNode, useCallback, us
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Slider } from '@/components/ui/slider'
 import {
   Select,
   SelectContent,
@@ -1261,6 +1262,12 @@ export function NavigationShell({
   const demoMusicEventAppliedRef = useRef<string | null>(null)
   const [profileSetupView, setProfileSetupView] = useState<ProfileSetupView>('list')
   const [selectedProfileId, setSelectedProfileId] = useState<string | undefined>(initialSelectedProfileId)
+  const [behaviorWarningSensitivityOverrides, setBehaviorWarningSensitivityOverrides] = useState<Record<string, ProfileCreateRequest['behaviorWarningSensitivity']>>({})
+  const behaviorWarningSensitivitySaveQueuesRef = useRef(new Map<string, {
+    confirmed: ProfileCreateRequest['behaviorWarningSensitivity']
+    desired: ProfileCreateRequest['behaviorWarningSensitivity']
+    tail: Promise<void>
+  }>())
   const [editingProfileId, setEditingProfileId] = useState<string>()
   const [profileForm, setProfileForm] = useState<ProfileCreateRequest>(DEFAULT_PROFILE_CREATE_REQUEST)
   const [calibratingProfileId, setCalibratingProfileId] = useState<string>()
@@ -1496,6 +1503,15 @@ export function NavigationShell({
     mutationFn: ({ profileId, ttsVoiceId }: { profileId: string; ttsVoiceId: TtsVoiceId }) => (
       updateProfile(profileId, { ttsVoiceId })
     ),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
+    },
+  })
+  const updateBehaviorWarningSensitivityMutation = useMutation({
+    mutationFn: ({ profileId, behaviorWarningSensitivity }: {
+      profileId: string
+      behaviorWarningSensitivity: ProfileCreateRequest['behaviorWarningSensitivity']
+    }) => updateProfile(profileId, { behaviorWarningSensitivity }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
     },
@@ -1825,6 +1841,10 @@ export function NavigationShell({
   const activeLabel = activeField === 'origin' ? '출발지 검색 결과' : '도착지 검색 결과'
   const profiles = bootstrapQuery.data?.profiles ?? []
   const selectedProfile = profiles.find((profile) => profile.id === selectedProfileId)
+  const selectedProfileBehaviorWarningSensitivity = selectedProfile
+    ? behaviorWarningSensitivityOverrides[selectedProfile.id]
+      ?? normalizeBehaviorWarningSensitivity(selectedProfile.behaviorWarningSensitivity)
+    : undefined
   const savedPlaceQuickItems = useMemo(
     () => createSavedPlaceQuickItems(savedPlacesQuery.data),
     [savedPlacesQuery.data],
@@ -1879,6 +1899,55 @@ export function NavigationShell({
       { onError: () => setManualRiskVoiceIdOverride(undefined) },
     )
   }, [selectedProfile, updateManualRiskSpeakerMutation])
+
+  const updateBehaviorWarningSensitivity = useCallback((
+    profileId: string,
+    behaviorType: ProfileBehaviorType,
+    value: number,
+  ) => {
+    const profile = profiles.find((item) => item.id === profileId)
+    const existingEntry = behaviorWarningSensitivitySaveQueuesRef.current.get(profileId)
+    const baseline = existingEntry?.desired
+      ?? normalizeBehaviorWarningSensitivity(profile?.behaviorWarningSensitivity)
+    const next = {
+      ...baseline,
+      [behaviorType]: clampBehaviorWarningSensitivity(value),
+    }
+    const entry = existingEntry ?? {
+      confirmed: baseline,
+      desired: baseline,
+      tail: Promise.resolve(),
+    }
+
+    entry.desired = next
+    behaviorWarningSensitivitySaveQueuesRef.current.set(profileId, entry)
+    setBehaviorWarningSensitivityOverrides((current) => ({ ...current, [profileId]: next }))
+
+    const request = entry.tail
+      .catch(() => undefined)
+      .then(async () => {
+        try {
+          const savedProfile = await updateBehaviorWarningSensitivityMutation.mutateAsync({
+            profileId,
+            behaviorWarningSensitivity: next,
+          })
+          entry.confirmed = normalizeBehaviorWarningSensitivity(savedProfile.behaviorWarningSensitivity)
+
+          return savedProfile
+        } catch (error) {
+          if (entry.desired === next) {
+            entry.desired = entry.confirmed
+            setBehaviorWarningSensitivityOverrides((current) => ({ ...current, [profileId]: entry.confirmed }))
+          }
+
+          throw error
+        }
+      })
+
+    entry.tail = request.then(() => undefined, () => undefined)
+
+    return request
+  }, [profiles, updateBehaviorWarningSensitivityMutation])
 
   const demoActive = navigationEntryMode === 'demo-scenario' && Boolean(demoScenarioState)
   const demoNavigationLocked = demoActive
@@ -3359,6 +3428,8 @@ export function NavigationShell({
                   setReportFullscreenOpen(true)
                 }}
                 onRequestCurrentLocation={requestCurrentLocation}
+                behaviorWarningSensitivity={selectedProfileBehaviorWarningSensitivity}
+                onUpdateBehaviorWarningSensitivity={updateBehaviorWarningSensitivity}
                 onAddPlaceLabel={(field, place) => {
                   if (selectedProfileId) {
                     createFavoriteMutation.mutate({ field, profileId: selectedProfileId, place })
@@ -7009,6 +7080,7 @@ function SideDrawerPanel({
   motionTiming,
   panel,
   selectedProfile,
+  behaviorWarningSensitivity,
   savedPlaces,
   savedPlacesError,
   savedPlacesLoading,
@@ -7019,6 +7091,7 @@ function SideDrawerPanel({
   onClose,
   onOpenFullReport,
   onRequestCurrentLocation,
+  onUpdateBehaviorWarningSensitivity,
   onAddPlaceLabel,
   onDeletePlaceLabel,
   onUpdatePlaceLabel,
@@ -7029,6 +7102,7 @@ function SideDrawerPanel({
   motionTiming: MotionTiming
   panel: SidePanelId
   selectedProfile?: NavigationProfile
+  behaviorWarningSensitivity?: ProfileCreateRequest['behaviorWarningSensitivity']
   savedPlaces: SavedPlaceQuickItem[]
   savedPlacesError: boolean
   savedPlacesLoading: boolean
@@ -7039,6 +7113,11 @@ function SideDrawerPanel({
   onClose: () => void
   onOpenFullReport: () => void
   onRequestCurrentLocation: () => void
+  onUpdateBehaviorWarningSensitivity: (
+    profileId: string,
+    behaviorType: ProfileBehaviorType,
+    value: number,
+  ) => Promise<Profile>
   onAddPlaceLabel: (field: SearchFieldId, place: Place) => void
   onDeletePlaceLabel: (placeId: string) => void
   onUpdatePlaceLabel: (placeId: string, label: string) => void
@@ -7103,8 +7182,10 @@ function SideDrawerPanel({
       itemVariants={itemVariants}
       locationStatus={locationStatus}
       selectedProfile={selectedProfile}
+      behaviorWarningSensitivity={behaviorWarningSensitivity}
       onChangeCameraSettings={onChangeCameraSettings}
       onRequestCurrentLocation={onRequestCurrentLocation}
+      onUpdateBehaviorWarningSensitivity={onUpdateBehaviorWarningSensitivity}
     />
   ) : panel === 'report' ? (
     <ReportDrawerContent
@@ -7758,14 +7839,58 @@ function getSavedPlaceIcon(placeType: SavedPlaceType) {
   return MapPin
 }
 
+function BehaviorSensitivitySlider({
+  disabled,
+  label,
+  onValueChange,
+  onValueCommit,
+  value,
+}: {
+  disabled: boolean
+  label: string
+  onValueChange: (values: number[]) => void
+  onValueCommit: (values: number[]) => void
+  value: number[]
+}) {
+  const sliderRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const thumb = sliderRef.current?.querySelector<HTMLElement>('[role="slider"]')
+    if (!thumb) {
+      return
+    }
+
+    thumb.setAttribute('aria-label', label)
+    thumb.setAttribute('min', '3')
+    thumb.setAttribute('max', '10')
+    thumb.setAttribute('step', '1')
+  }, [label, value])
+
+  return (
+    <div ref={sliderRef}>
+      <Slider
+        disabled={disabled}
+        max={10}
+        min={3}
+        onValueChange={onValueChange}
+        onValueCommit={onValueCommit}
+        step={1}
+        value={value}
+      />
+    </div>
+  )
+}
+
 function SettingsDrawerContent({
   cameraSettings,
   currentLocationLabel,
   itemVariants,
   locationStatus,
   selectedProfile,
+  behaviorWarningSensitivity: initialBehaviorWarningSensitivity,
   onChangeCameraSettings,
   onRequestCurrentLocation,
+  onUpdateBehaviorWarningSensitivity,
 }: {
   cameraSettings: MapCameraSettings
   currentLocationLabel: string
@@ -7775,9 +7900,22 @@ function SettingsDrawerContent({
   }
   locationStatus: LocationStatus
   selectedProfile?: NavigationProfile
+  behaviorWarningSensitivity?: ProfileCreateRequest['behaviorWarningSensitivity']
   onChangeCameraSettings: (settings: Partial<MapCameraSettings>) => void
   onRequestCurrentLocation: () => void
+  onUpdateBehaviorWarningSensitivity: (
+    profileId: string,
+    behaviorType: ProfileBehaviorType,
+    value: number,
+  ) => Promise<Profile>
 }) {
+  const [settingsSubview, setSettingsSubview] = useState<'main' | 'sensitivity'>('main')
+  const [behaviorWarningSensitivity, setBehaviorWarningSensitivity] = useState(() => (
+    normalizeBehaviorWarningSensitivity(initialBehaviorWarningSensitivity ?? selectedProfile?.behaviorWarningSensitivity)
+  ))
+  const behaviorWarningSensitivityRef = useRef(behaviorWarningSensitivity)
+  const sensitivityPanelVersionRef = useRef(0)
+  const sensitivityRequestVersionRef = useRef(0)
   const mapModeControlTransition = {
     ease: itemVariants.visible.transition.duration === 0 ? undefined : [0.34, 0, 0.2, 1] as [number, number, number, number],
     duration: itemVariants.visible.transition.duration === 0 ? 0 : 0.72,
@@ -7810,6 +7948,105 @@ function SettingsDrawerContent({
     onChangeCameraSettings({ mode })
   }
   const profileDisplayName = selectedProfile?.displayName?.trim() || '운전자'
+  const setLocalBehaviorWarningSensitivity = (value: ProfileCreateRequest['behaviorWarningSensitivity']) => {
+    behaviorWarningSensitivityRef.current = value
+    setBehaviorWarningSensitivity(value)
+  }
+  useEffect(() => {
+    setLocalBehaviorWarningSensitivity(
+      normalizeBehaviorWarningSensitivity(initialBehaviorWarningSensitivity ?? selectedProfile?.behaviorWarningSensitivity),
+    )
+  }, [initialBehaviorWarningSensitivity, selectedProfile?.id])
+  const openSensitivitySettings = () => {
+    const initialSensitivity = normalizeBehaviorWarningSensitivity(initialBehaviorWarningSensitivity ?? selectedProfile?.behaviorWarningSensitivity)
+    sensitivityPanelVersionRef.current += 1
+    sensitivityRequestVersionRef.current += 1
+    setLocalBehaviorWarningSensitivity(initialSensitivity)
+    setSettingsSubview('sensitivity')
+  }
+  const updateLocalBehaviorSensitivity = (behaviorType: ProfileBehaviorType, value: number) => {
+    if (!selectedProfile) {
+      return
+    }
+
+    const nextBehaviorWarningSensitivity = {
+      ...behaviorWarningSensitivityRef.current,
+      [behaviorType]: clampBehaviorWarningSensitivity(value),
+    }
+    setLocalBehaviorWarningSensitivity(nextBehaviorWarningSensitivity)
+  }
+  const commitBehaviorSensitivity = (behaviorType: ProfileBehaviorType, value: number) => {
+    if (!selectedProfile) {
+      return
+    }
+
+    const panelVersion = sensitivityPanelVersionRef.current
+    const requestVersion = sensitivityRequestVersionRef.current + 1
+    sensitivityRequestVersionRef.current = requestVersion
+
+    void onUpdateBehaviorWarningSensitivity(selectedProfile.id, behaviorType, value)
+      .then((profile) => {
+        if (
+          sensitivityPanelVersionRef.current === panelVersion
+          && sensitivityRequestVersionRef.current === requestVersion
+        ) {
+          setLocalBehaviorWarningSensitivity(normalizeBehaviorWarningSensitivity(profile.behaviorWarningSensitivity))
+        }
+      })
+      .catch(() => {
+        if (
+          sensitivityPanelVersionRef.current === panelVersion
+          && sensitivityRequestVersionRef.current === requestVersion
+        ) {
+          setLocalBehaviorWarningSensitivity(behaviorWarningSensitivityRef.current)
+        }
+      })
+  }
+
+  if (settingsSubview === 'sensitivity') {
+    return (
+      <motion.section
+        animate={{ opacity: 1, y: 0 }}
+        className="grid gap-4"
+        initial={{ opacity: 0, y: 8 }}
+        transition={{ duration: 0.18 }}
+      >
+        <div className="flex items-center gap-2">
+          <Button
+            aria-label="설정으로 돌아가기"
+            className="size-9 rounded-full"
+            onClick={() => setSettingsSubview('main')}
+            size="icon"
+            type="button"
+            variant="ghost"
+          >
+            <CaretLeft data-icon="inline-start" weight="bold" />
+          </Button>
+          <h3 className="min-w-0 truncate text-sm font-bold text-[var(--nav-ink)]">행동별 경고 민감도</h3>
+        </div>
+        <div className="grid gap-4">
+          {REPORT_BEHAVIOR_TYPES.map((behaviorType) => {
+            const label = getBehaviorLabel(behaviorType)
+            const value = behaviorWarningSensitivity[behaviorType]
+
+            return (
+              <div className="grid grid-cols-[minmax(0,auto)_minmax(0,1fr)_2rem] items-center gap-3" key={behaviorType}>
+                <span className="text-sm font-bold text-[var(--nav-ink)]">{label}</span>
+                <BehaviorSensitivitySlider
+                  disabled={!selectedProfile}
+                  label={label}
+                  onValueChange={(values) => updateLocalBehaviorSensitivity(behaviorType, values[0] ?? value)}
+                  onValueCommit={(values) => commitBehaviorSensitivity(behaviorType, values[0] ?? value)}
+                  value={[value]}
+                />
+                <output aria-label={`${label} 민감도 값`} className="text-right text-sm font-bold tabular-nums text-[var(--nav-muted)]">{value}</output>
+              </div>
+            )
+          })}
+        </div>
+      </motion.section>
+    )
+  }
 
   return (
     <>
@@ -7882,6 +8119,15 @@ function SettingsDrawerContent({
             <div className="mt-0.5 truncate text-xs font-semibold text-[var(--nav-muted)]">로그인됨</div>
           </div>
         </div>
+        <Button
+          disabled={!selectedProfile}
+          onClick={openSensitivitySettings}
+          size="sm"
+          type="button"
+          variant="outline"
+        >
+          민감도 수정
+        </Button>
       </motion.div>
       <motion.div
         className="rounded-2xl bg-[var(--nav-panel)] p-3"

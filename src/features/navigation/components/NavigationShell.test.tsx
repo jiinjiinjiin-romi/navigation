@@ -2973,6 +2973,222 @@ describe('NavigationShell', () => {
     expect(screen.getByTestId('tmap-panel')).toHaveAttribute('data-camera-pitch', '0')
   })
 
+  it('edits the selected profile behavior sensitivities from the settings drawer', async () => {
+    mockedGetBootstrap.mockResolvedValueOnce({
+      account: {
+        id: 'account-1',
+        displayName: '백엔드 사용자',
+        email: 'driver@example.com',
+      },
+      profiles: mockProfiles,
+      selectedProfileId: 'profile-1',
+      profileLimit: 5,
+      capabilities: {
+        vitModelAvailable: true,
+        geminiAvailable: false,
+        emailAvailable: true,
+        demoMode: true,
+      },
+    })
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '설정' }))
+    await screen.findByText('민준')
+    fireEvent.click(await screen.findByRole('button', { name: '민감도 수정' }))
+
+    expect(screen.getByRole('button', { name: '설정으로 돌아가기' })).toBeInTheDocument()
+    const drowsinessSlider = screen.getAllByRole('slider')[0]
+    expect(drowsinessSlider).toHaveValue(9)
+    expect(screen.getAllByRole('status')[0]).toHaveTextContent('9')
+
+    const sliderRoot = drowsinessSlider.parentElement
+    expect(sliderRoot).toBeTruthy()
+    Object.defineProperty(sliderRoot, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ bottom: 16, height: 16, left: 0, right: 70, top: 0, width: 70 }),
+    })
+
+    fireEvent.pointerDown(sliderRoot!, { button: 0, clientX: 60, pointerId: 1 })
+    fireEvent.pointerMove(sliderRoot!, { clientX: 50, pointerId: 1 })
+    fireEvent.pointerMove(sliderRoot!, { clientX: 40, pointerId: 1 })
+    await act(async () => {})
+
+    expect(mockedUpdateProfile).not.toHaveBeenCalled()
+    expect(screen.getAllByRole('slider')[0]).toHaveValue(3)
+
+    fireEvent.keyDown(drowsinessSlider, { key: 'ArrowRight' })
+
+    await waitFor(() => {
+      expect(mockedUpdateProfile).toHaveBeenCalledTimes(1)
+      expect(mockedUpdateProfile).toHaveBeenCalledWith('profile-1', {
+        behaviorWarningSensitivity: {
+          ...DEFAULT_BEHAVIOR_WARNING_SENSITIVITY,
+          DROWSINESS: 4,
+        },
+      })
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: '설정으로 돌아가기' }))
+    expect(screen.getByRole('button', { name: '민감도 수정' })).toBeInTheDocument()
+  })
+
+  it('renders seven accessible behavior sensitivity sliders with labelled values', async () => {
+    mockedGetBootstrap.mockResolvedValueOnce({
+      account: { id: 'account-1', displayName: '백엔드 사용자', email: 'driver@example.com' },
+      profiles: mockProfiles,
+      selectedProfileId: 'profile-1',
+      profileLimit: 5,
+      capabilities: { vitModelAvailable: true, geminiAvailable: false, emailAvailable: true, demoMode: true },
+    })
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '설정' }))
+    await screen.findByText('민준')
+    fireEvent.click(screen.getByRole('button', { name: '민감도 수정' }))
+    await screen.findByRole('button', { name: '설정으로 돌아가기' })
+
+    const labels = ['졸음', '휴대폰 사용', '음식/음료 섭취', '시선 이탈', '부주의 행동', '뒤쪽 확인/손 뻗기', '흡연']
+    expect(screen.getAllByRole('slider')).toHaveLength(labels.length)
+
+    labels.forEach((label) => {
+      expect(screen.getByRole('slider', { name: label })).toHaveAttribute('min', '3')
+      expect(screen.getByRole('slider', { name: label })).toHaveAttribute('max', '10')
+      expect(screen.getByRole('slider', { name: label })).toHaveAttribute('step', '1')
+      expect(screen.getByRole('status', { name: `${label} 민감도 값` })).toBeInTheDocument()
+    })
+  })
+
+  it('serializes rapid sensitivity changes without stale responses or failures overwriting later edits', async () => {
+    let rejectFirstUpdate: ((reason?: unknown) => void) | undefined
+    let resolveSecondUpdate: ((profile: Profile) => void) | undefined
+    const firstUpdate = new Promise<Profile>((_resolve, reject) => {
+      rejectFirstUpdate = reject
+    })
+    const secondUpdate = new Promise<Profile>((resolve) => {
+      resolveSecondUpdate = resolve
+    })
+    mockedUpdateProfile
+      .mockImplementationOnce(() => firstUpdate)
+      .mockImplementationOnce(() => secondUpdate)
+    mockedGetBootstrap.mockResolvedValueOnce({
+      account: { id: 'account-1', displayName: '백엔드 사용자', email: 'driver@example.com' },
+      profiles: mockProfiles,
+      selectedProfileId: 'profile-1',
+      profileLimit: 5,
+      capabilities: { vitModelAvailable: true, geminiAvailable: false, emailAvailable: true, demoMode: true },
+    })
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '설정' }))
+    await screen.findByText('민준')
+    fireEvent.click(screen.getByRole('button', { name: '민감도 수정' }))
+    await screen.findByRole('button', { name: '설정으로 돌아가기' })
+
+    const drowsinessSlider = screen.getByRole('slider', { name: '졸음' })
+    fireEvent.keyDown(drowsinessSlider, { key: 'ArrowLeft' })
+    fireEvent.keyDown(drowsinessSlider, { key: 'ArrowLeft' })
+
+    await waitFor(() => expect(mockedUpdateProfile).toHaveBeenCalledTimes(1))
+    expect(drowsinessSlider).toHaveValue(7)
+    rejectFirstUpdate?.(new Error('first save failed'))
+
+    await waitFor(() => expect(mockedUpdateProfile).toHaveBeenCalledTimes(2))
+    expect(drowsinessSlider).toHaveValue(7)
+    expect(mockedUpdateProfile).toHaveBeenNthCalledWith(2, 'profile-1', {
+      behaviorWarningSensitivity: {
+        ...DEFAULT_BEHAVIOR_WARNING_SENSITIVITY,
+        DROWSINESS: 7,
+      },
+    })
+
+    resolveSecondUpdate?.({
+      ...mockProfiles[0],
+      behaviorWarningSensitivity: {
+        ...DEFAULT_BEHAVIOR_WARNING_SENSITIVITY,
+        DROWSINESS: 7,
+      },
+    })
+    await waitFor(() => expect(drowsinessSlider).toHaveValue(7))
+  })
+
+  it('keeps per-profile sensitivity saves ordered across settings drawer remounts', async () => {
+    let resolveFirstUpdate: ((profile: Profile) => void) | undefined
+    const firstUpdate = new Promise<Profile>((resolve) => {
+      resolveFirstUpdate = resolve
+    })
+    mockedUpdateProfile
+      .mockImplementationOnce(() => firstUpdate)
+      .mockImplementationOnce(async (profileId, payload) => ({
+        ...mockProfiles[0],
+        ...payload,
+        id: profileId,
+      }))
+    mockedGetBootstrap.mockResolvedValueOnce({
+      account: { id: 'account-1', displayName: '백엔드 사용자', email: 'driver@example.com' },
+      profiles: mockProfiles,
+      selectedProfileId: 'profile-1',
+      profileLimit: 5,
+      capabilities: { vitModelAvailable: true, geminiAvailable: false, emailAvailable: true, demoMode: true },
+    })
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '설정' }))
+    await screen.findByText('민준')
+    fireEvent.click(screen.getByRole('button', { name: '민감도 수정' }))
+    fireEvent.keyDown(screen.getByRole('slider', { name: '졸음' }), { key: 'ArrowLeft' })
+    await waitFor(() => expect(mockedUpdateProfile).toHaveBeenCalledTimes(1))
+
+    fireEvent.click(screen.getByRole('button', { name: '설정 닫기' }))
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '설정' })).not.toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: '설정' }))
+    await screen.findByText('민준')
+    fireEvent.click(screen.getByRole('button', { name: '민감도 수정' }))
+    fireEvent.keyDown(screen.getByRole('slider', { name: '휴대폰 사용' }), { key: 'ArrowLeft' })
+
+    expect(mockedUpdateProfile).toHaveBeenCalledTimes(1)
+
+    resolveFirstUpdate?.({
+      ...mockProfiles[0],
+      behaviorWarningSensitivity: {
+        ...DEFAULT_BEHAVIOR_WARNING_SENSITIVITY,
+        DROWSINESS: 8,
+      },
+    })
+
+    await waitFor(() => expect(mockedUpdateProfile).toHaveBeenCalledTimes(2))
+    expect(mockedUpdateProfile).toHaveBeenNthCalledWith(2, 'profile-1', {
+      behaviorWarningSensitivity: {
+        ...DEFAULT_BEHAVIOR_WARNING_SENSITIVITY,
+        DROWSINESS: 8,
+        PHONE_USE: 8,
+      },
+    })
+  })
+
   it('keeps the rail inside the navigation viewport and connects the drawer on its right side', async () => {
     const queryClient = new QueryClient()
 
