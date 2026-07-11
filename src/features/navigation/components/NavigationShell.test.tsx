@@ -37,6 +37,7 @@ import { createSearchHistory, listSearchHistories } from '../api/searchHistoryAp
 import { getCurrentAddress, getRoadMatch, getRouteOptions, searchPlaces } from '../api/tmapApi'
 import { getMusicRecommendations } from '../api/musicApi'
 import { synthesizeVoice } from '../api/voiceApi'
+import { submitDriveSummary } from '../api/behaviorWarningSensitivityApi'
 
 let routeOptionsOverlayReadyByDefault = true
 let latestRouteOptionsOverlayReady: ((ready: boolean) => void) | undefined
@@ -86,6 +87,10 @@ vi.mock('../api/musicApi', () => ({
 
 vi.mock('../api/voiceApi', () => ({
   synthesizeVoice: vi.fn(async () => new Blob(['audio'], { type: 'audio/mpeg' })),
+}))
+
+vi.mock('../api/behaviorWarningSensitivityApi', () => ({
+  submitDriveSummary: vi.fn(),
 }))
 
 vi.mock('@/features/orb', () => ({
@@ -272,6 +277,7 @@ const mockedCreateSearchHistory = vi.mocked(createSearchHistory)
 const mockedListSearchHistories = vi.mocked(listSearchHistories)
 const mockedGetMusicRecommendations = vi.mocked(getMusicRecommendations)
 const mockedSynthesizeVoice = vi.mocked(synthesizeVoice)
+const mockedSubmitDriveSummary = vi.mocked(submitDriveSummary)
 
 const mockProfiles: Profile[] = [
   {
@@ -763,6 +769,10 @@ describe('NavigationShell', () => {
     mockedListSearchHistories.mockReset()
     mockedGetMusicRecommendations.mockReset()
     mockedSynthesizeVoice.mockReset()
+    mockedSubmitDriveSummary.mockReset()
+    mockedSubmitDriveSummary.mockResolvedValue({
+      behaviorWarningSensitivity: DEFAULT_BEHAVIOR_WARNING_SENSITIVITY,
+    })
     mockedSynthesizeVoice.mockResolvedValue(new Blob(['audio'], { type: 'audio/mpeg' }))
     mockedGetMusicRecommendations.mockResolvedValue([
       {
@@ -1150,6 +1160,86 @@ describe('NavigationShell', () => {
     expect(screen.queryByRole('button', { name: '괜찮아. 조금 더 갈 수 있어.' })).not.toBeInTheDocument()
     expect(within(screen.getByTestId('manual-risk-stack-status')).getByText('졸음')).toBeInTheDocument()
     expect(within(screen.getByTestId('manual-risk-stack-status')).getByText('1/3')).toBeInTheDocument()
+  })
+
+  it('submits the final manual risk summary and opens sensitivity settings after completion', async () => {
+    let resolveDriveSummary: ((value: { behaviorWarningSensitivity: typeof DEFAULT_BEHAVIOR_WARNING_SENSITIVITY }) => void) | undefined
+    mockedSubmitDriveSummary.mockImplementation(() => new Promise((resolve) => {
+      resolveDriveSummary = resolve
+    }))
+    const queryClient = new QueryClient()
+
+    try {
+      render(
+        <QueryClientProvider client={queryClient}>
+          <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
+        </QueryClientProvider>,
+      )
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: '안내 음성 스타일 설정' })).toBeEnabled()
+      })
+
+      const status = screen.getByTestId('manual-risk-stack-status')
+      const controlPanel = screen.getByTestId('manual-risk-control-panel')
+      expect(within(status).queryByRole('button', { name: '운전 종료' })).not.toBeInTheDocument()
+      expect(within(controlPanel).getByRole('button', { name: '운전 종료' })).toBeDisabled()
+
+      fireEvent.click(screen.getByRole('button', { name: '안내 음성 스타일 설정' }))
+      expect(screen.getByRole('button', { name: '기본 안내' })).toBeEnabled()
+
+      fireEvent.click(screen.getByRole('button', { name: '핸드폰 위험 상황 선택' }))
+      fireEvent.click(screen.getByRole('button', { name: '졸음 위험 상황 선택' }))
+      fireEvent.click(within(controlPanel).getByRole('button', { name: '운전 종료' }))
+
+      expect(await screen.findByText('오늘 운전 결과를 기반으로 민감도 업데이트를 진행할까요?')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: '핸드폰 위험 상황 선택' })).toBeDisabled()
+      expect(screen.getByRole('button', { name: '경고 위험 상황 선택' })).toBeDisabled()
+      expect(within(controlPanel).getByRole('button', { name: '운전 종료' })).toBeDisabled()
+      expect(screen.getByRole('button', { name: '안내 음성 스타일 설정' })).toBeDisabled()
+      expect(screen.getByRole('button', { name: '기본 안내' })).toBeDisabled()
+      expect(screen.getByRole('button', { name: '응 반영해줘.' })).toBeEnabled()
+      expect(screen.getByRole('button', { name: '프로필 선택으로 돌아가기' })).toBeEnabled()
+      expect(screen.getByRole('button', { name: '설정' })).toBeEnabled()
+
+      fireEvent.click(screen.getByRole('button', { name: '응 반영해줘.' }))
+
+      expect(screen.getByTestId('drive-summary-navigation-lock')).toBeInTheDocument()
+
+      await new Promise((resolve) => window.setTimeout(resolve, 0))
+      await act(async () => {
+        await Promise.resolve()
+      })
+      expect(mockedSubmitDriveSummary).toHaveBeenCalledWith('profile-1', {
+        telemetryEvents: expect.arrayContaining([
+          { behaviorType: 'PHONE_USE', clickCount: 1, level: 1 },
+          { behaviorType: 'DROWSINESS', clickCount: 1, level: 1 },
+          { behaviorType: 'SECONDARY_TASK', clickCount: 0, level: 0 },
+          { behaviorType: 'FOOD_OR_DRINK', clickCount: 0, level: 0 },
+        ]),
+      })
+      expect(screen.getByText('반영 중…')).toBeInTheDocument()
+
+      vi.useFakeTimers()
+      await act(async () => {
+        resolveDriveSummary?.({ behaviorWarningSensitivity: DEFAULT_BEHAVIOR_WARNING_SENSITIVITY })
+        await Promise.resolve()
+      })
+      expect(screen.getByText('반영 완료되었습니다!')).toBeInTheDocument()
+
+      await act(async () => {
+        vi.advanceTimersByTime(2_999)
+      })
+      expect(screen.queryByRole('heading', { name: '행동별 경고 민감도' })).not.toBeInTheDocument()
+
+      await act(async () => {
+        vi.advanceTimersByTime(1)
+      })
+      vi.useRealTimers()
+      expect(await screen.findByRole('heading', { name: '행동별 경고 민감도' })).toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('returns to profile selection from the manual risk control panel', async () => {

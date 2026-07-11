@@ -126,6 +126,7 @@ import {
 import { getCurrentAddress, getRoadMatch, getRouteOptions, searchPlaces } from '../api/tmapApi'
 import { synthesizeVoice, type VoiceTtsOptions } from '../api/voiceApi'
 import { getMusicRecommendations, type MusicMood, type MusicRecommendationTrack } from '../api/musicApi'
+import { submitDriveSummary, type DriveSummaryEvent } from '../api/behaviorWarningSensitivityApi'
 import { createRoundedRoutePath } from '../map/routeGeometry'
 import { markRoutePerformance, measureRoutePerformance } from '../performance/routePerformance'
 import {
@@ -840,6 +841,10 @@ type ManualRiskConversationNodeId =
   | 'drowsiness-music'
   | 'device-music-result'
   | 'device-route-result'
+  | 'drive-summary-confirm'
+  | 'drive-summary-pending'
+  | 'drive-summary-complete'
+  | 'drive-summary-error'
 type ManualRiskEffectId =
   | 'phone-search-restaurants'
   | 'phone-search-attractions'
@@ -927,6 +932,13 @@ const MANUAL_RISK_MAX_DEPTH: Record<ManualRiskId, number> = {
   device: 3,
   intake: 2,
 }
+const MANUAL_RISK_BEHAVIOR_TYPES: Record<ManualRiskId, ProfileBehaviorType> = {
+  phone: 'PHONE_USE',
+  drowsiness: 'DROWSINESS',
+  device: 'SECONDARY_TASK',
+  intake: 'FOOD_OR_DRINK',
+}
+const MANUAL_RISK_DRIVE_SUMMARY_COMPLETE_DELAY_MS = 3_000
 const MANUAL_RISK_LABELS: Record<ManualRiskId, string> = {
   phone: '핸드폰',
   drowsiness: '졸음',
@@ -1299,6 +1311,14 @@ export function NavigationShell({
   const [assistantScenarioId, setAssistantScenarioId] = useState<RoadieAssistantScenarioId>('drowsiness-rest-area')
   const [assistantStepIndex, setAssistantStepIndex] = useState(0)
   const [manualRiskConversation, setManualRiskConversation] = useState<ManualRiskConversation | null>(null)
+  const [manualRiskEvents, setManualRiskEvents] = useState<Record<ManualRiskId, { clickCount: number; level: number }>>({
+    phone: { clickCount: 0, level: 0 },
+    drowsiness: { clickCount: 0, level: 0 },
+    device: { clickCount: 0, level: 0 },
+    intake: { clickCount: 0, level: 0 },
+  })
+  const [driveSummaryLocked, setDriveSummaryLocked] = useState(false)
+  const [openSensitivityPanelVersion, setOpenSensitivityPanelVersion] = useState(0)
   const [lastManualEmergencyRiskId, setLastManualEmergencyRiskId] = useState<EmergencyManualRiskId>('drowsiness')
   const [manualEmergencyWarningCountdown, setManualEmergencyWarningCountdown] = useState<number | null>(null)
   const [driverVideo, setDriverVideo] = useState<DriverVideoSource | null>(null)
@@ -1322,6 +1342,7 @@ export function NavigationShell({
   const [guidanceDistanceUpdateKey, setGuidanceDistanceUpdateKey] = useState(0)
   const animationFrameRef = useRef<number | undefined>(undefined)
   const manualRiskConversationRef = useRef<ManualRiskConversation | null>(null)
+  const driveSummaryDismissTimerRef = useRef<number | undefined>(undefined)
   const simulationStartedAtRef = useRef<number | undefined>(undefined)
   const simulationElapsedMsRef = useRef(0)
   const activeSimulationPlanRef = useRef<ReturnType<typeof createRouteSimulationPlan> | undefined>(undefined)
@@ -2001,6 +2022,11 @@ export function NavigationShell({
 
     manualEmergencyWarningAbortControllerRef.current?.abort()
     manualEmergencyWarningAbortControllerRef.current = undefined
+
+    if (driveSummaryDismissTimerRef.current !== undefined) {
+      window.clearTimeout(driveSummaryDismissTimerRef.current)
+      driveSummaryDismissTimerRef.current = undefined
+    }
   }, [])
 
   const selectDriverVideo = useCallback((file: File) => {
@@ -2349,6 +2375,9 @@ export function NavigationShell({
   }, [currentPosition, isManualRiskTargetActive, origin?.coordinate, scheduleManualRiskDismiss, updateManualRiskAssistantConversation])
 
   const selectManualRisk = useCallback((riskId: ManualRiskId) => {
+    if (driveSummaryLocked) {
+      return
+    }
     clearManualRiskDismissTimer()
     if (riskId !== 'intake') {
       setLastManualEmergencyRiskId(riskId)
@@ -2360,6 +2389,14 @@ export function NavigationShell({
         ? currentConversation.depth >= maxDepth ? 1 : currentConversation.depth + 1
         : 1
       const nextNodeId = getManualRiskNodeIdForDepth(riskId, nextDepth)
+
+      setManualRiskEvents((currentEvents) => ({
+        ...currentEvents,
+        [riskId]: {
+          clickCount: currentEvents[riskId].clickCount + 1,
+          level: nextDepth,
+        },
+      }))
 
       if (nextDepth === 1 || nextNodeId === 'strong') {
         scheduleManualRiskDismiss({
@@ -2378,10 +2415,88 @@ export function NavigationShell({
         nodeId: nextNodeId,
       }
     })
-  }, [clearManualRiskDismissTimer, scheduleManualRiskDismiss])
+  }, [clearManualRiskDismissTimer, driveSummaryLocked, scheduleManualRiskDismiss])
+
+  const manualRiskControlsLocked = driveSummaryLocked
+    || (manualRiskConversation?.kind === 'assistant' && manualRiskConversation.nodeId === 'drive-summary-confirm')
+
+  const openDriveSummaryConfirmation = useCallback(() => {
+    if (driveSummaryLocked || !selectedProfile || !Object.values(manualRiskEvents).some((event) => event.clickCount > 0)) {
+      return
+    }
+
+    clearManualRiskDismissTimer()
+    setManualRiskConversation({
+      kind: 'assistant',
+      riskId: 'drowsiness',
+      depth: 1,
+      nodeId: 'drive-summary-confirm',
+      text: '오늘 운전 결과를 기반으로 민감도 업데이트를 진행할까요?',
+    })
+  }, [clearManualRiskDismissTimer, driveSummaryLocked, manualRiskEvents, selectedProfile])
+
+  const submitManualRiskDriveSummary = useCallback(async () => {
+    if (!selectedProfile) {
+      return
+    }
+
+    const events: DriveSummaryEvent[] = (Object.keys(MANUAL_RISK_BEHAVIOR_TYPES) as ManualRiskId[]).map((riskId) => ({
+      behaviorType: MANUAL_RISK_BEHAVIOR_TYPES[riskId],
+      clickCount: manualRiskEvents[riskId].clickCount,
+      level: manualRiskEvents[riskId].level,
+    }))
+    const target = { riskId: 'drowsiness' as const, depth: 1, nodeId: 'drive-summary-pending' as const }
+
+    setManualRiskConversation({ kind: 'assistant', ...target, text: '반영 중…' })
+
+    try {
+      const result = await submitDriveSummary(selectedProfile.id, { telemetryEvents: events })
+      setBehaviorWarningSensitivityOverrides((current) => ({
+        ...current,
+        [selectedProfile.id]: normalizeBehaviorWarningSensitivity(result.behaviorWarningSensitivity),
+      }))
+      await queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
+      setManualRiskConversation({
+        kind: 'assistant',
+        riskId: 'drowsiness',
+        depth: 1,
+        nodeId: 'drive-summary-complete',
+        text: '반영 완료되었습니다!',
+      })
+      driveSummaryDismissTimerRef.current = window.setTimeout(() => {
+        driveSummaryDismissTimerRef.current = undefined
+        setManualRiskConversation(null)
+        setActiveSidePanel('settings')
+        setOpenSensitivityPanelVersion((version) => version + 1)
+      }, MANUAL_RISK_DRIVE_SUMMARY_COMPLETE_DELAY_MS)
+    } catch {
+      setManualRiskConversation({
+        kind: 'assistant',
+        riskId: 'drowsiness',
+        depth: 1,
+        nodeId: 'drive-summary-error',
+        text: '민감도 반영에 실패했습니다. 잠시 후 다시 시도해주세요.',
+      })
+    }
+  }, [manualRiskEvents, queryClient, selectedProfile])
 
   const selectManualRiskResponseOption = useCallback((option: ManualRiskResponseOption) => {
     if (!manualRiskConversation || manualRiskConversation.kind !== 'assistant') {
+      return
+    }
+
+    if (option.id === 'drive-summary-confirm-yes') {
+      setDriveSummaryLocked(true)
+      setManualRiskConversation({
+        kind: 'user',
+        riskId: manualRiskConversation.riskId,
+        depth: manualRiskConversation.depth,
+        text: option.label,
+        nextNodeId: 'drive-summary-pending',
+      })
+      window.setTimeout(() => {
+        void submitManualRiskDriveSummary()
+      }, 0)
       return
     }
 
@@ -2399,7 +2514,7 @@ export function NavigationShell({
       nextNodeId: transition.nextNodeId,
       effectId: transition.effectId,
     })
-  }, [manualRiskConversation])
+  }, [manualRiskConversation, submitManualRiskDriveSummary])
 
   const advanceManualRiskResponse = useCallback(() => {
     if (!manualRiskConversation || manualRiskConversation.kind !== 'user') {
@@ -3110,6 +3225,7 @@ export function NavigationShell({
     >
       {/* Top cockpit surface: this area is reserved for the driver's in-cabin video. */}
       <DriverVideoPanel
+        allowVideoSelection
         error={driverVideoError}
         fileName={driverVideo?.name}
         motionTiming={motionTiming}
@@ -3367,6 +3483,13 @@ export function NavigationShell({
                 ) : null}
               </AnimatePresence>
             </motion.div>
+            {driveSummaryLocked ? (
+              <div
+                aria-label="운전 종료 후 내비게이션 조작 잠금"
+                className="pointer-events-auto absolute inset-0 z-[60] cursor-not-allowed bg-transparent"
+                data-testid="drive-summary-navigation-lock"
+              />
+            ) : null}
             </>
           ) : null}
           {profileSetupComplete && !navigationEntryMode ? (
@@ -3429,6 +3552,7 @@ export function NavigationShell({
                 }}
                 onRequestCurrentLocation={requestCurrentLocation}
                 behaviorWarningSensitivity={selectedProfileBehaviorWarningSensitivity}
+                openSensitivityPanelVersion={openSensitivityPanelVersion}
                 onUpdateBehaviorWarningSensitivity={updateBehaviorWarningSensitivity}
                 onAddPlaceLabel={(field, place) => {
                   if (selectedProfileId) {
@@ -3549,6 +3673,9 @@ export function NavigationShell({
           <ManualRiskControlPanel
             agentPersonality={manualRiskAgentPersonality}
             canAdvanceResponse={manualRiskConversation?.kind === 'user'}
+            canEndDrive={Object.values(manualRiskEvents).some((event) => event.clickCount > 0)}
+            controlsLocked={manualRiskControlsLocked}
+            responseOptionsLocked={driveSummaryLocked}
             emergencyWarningCountdown={manualEmergencyWarningCountdown}
             emergencyWarningPending={manualEmergencyWarningPending}
             motionTiming={motionTiming}
@@ -3557,6 +3684,7 @@ export function NavigationShell({
             onAgentVoiceChange={updateManualRiskSpeaker}
             onCancelEmergencyWarning={cancelManualEmergencyWarning}
             onEmergencyWarning={startManualEmergencyWarning}
+            onEndDrive={openDriveSummaryConfirmation}
             onResponseOptionSelect={selectManualRiskResponseOption}
             onReturnToProfileSelection={() => {
               cancelManualEmergencyWarning()
@@ -4695,7 +4823,9 @@ function ManualRiskStackStatus({
       animate={{ opacity: 1, y: 0 }}
       transition={motionTiming}
     >
-      <p className="text-[11px] font-semibold text-[var(--nav-muted)]">위험 누적</p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[11px] font-semibold text-[var(--nav-muted)]">위험 누적</p>
+      </div>
       {manualRiskStack ? (
         <div className="mt-1">
           <p className="text-sm font-bold text-[var(--nav-ink)]">{manualRiskStack.label}</p>
@@ -5219,10 +5349,12 @@ function AssistantUserText({
 }
 
 function ManualRiskResponseOptionList({
+  disabled,
   motionTiming,
   onSelect,
   options,
 }: {
+  disabled: boolean
   motionTiming: MotionTiming
   onSelect: (option: ManualRiskResponseOption) => void
   options: ManualRiskResponseOption[]
@@ -5243,6 +5375,7 @@ function ManualRiskResponseOptionList({
         <motion.button
           aria-label={option.label}
           className="min-w-0 rounded-xl border border-[var(--nav-border)] bg-white px-3 py-2.5 text-left text-sm font-semibold text-[var(--nav-ink)] shadow-[0_8px_18px_rgb(15_23_42/0.05)] transition hover:border-[var(--nav-primary-soft)] hover:bg-[var(--nav-primary-soft)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
+          disabled={disabled}
           key={option.id}
           onClick={() => onSelect(option)}
           title={option.label}
@@ -5757,6 +5890,14 @@ function getManualRiskAssistantText(conversation: ManualRiskAssistantConversatio
       return '빅뱅의 붉은 노을을 재생해드릴게요.'
     case 'device-route-result':
       return '성심당 경로를 확인하고 있어요.'
+    case 'drive-summary-confirm':
+      return '오늘 운전 결과를 기반으로 민감도 업데이트를 진행할까요?'
+    case 'drive-summary-pending':
+      return '반영 중…'
+    case 'drive-summary-complete':
+      return '반영 완료되었습니다!'
+    case 'drive-summary-error':
+      return '민감도 반영에 실패했습니다. 잠시 후 다시 시도해주세요.'
   }
 }
 
@@ -5825,6 +5966,10 @@ function getManualRiskResponseOptions(conversation: ManualRiskConversation | nul
 
   if (conversation.nodeId === 'phone-message-confirm') {
     return [{ id: 'phone-message-confirm-yes', label: '응 그렇게 보내줘.' }]
+  }
+
+  if (conversation.nodeId === 'drive-summary-confirm') {
+    return [{ id: 'drive-summary-confirm-yes', label: '응 반영해줘.' }]
   }
 
   if (conversation.nodeId === 'phone-search-category') {
@@ -6331,7 +6476,7 @@ function DemoScenarioPresenterPanel({
   return (
     <motion.section
       aria-label="데모 시나리오 진행 패널"
-      className="col-start-2 row-start-2 self-start rounded-[1.1rem] border border-white/70 bg-white p-4 text-[var(--nav-ink)] shadow-[0_18px_46px_rgb(0_0_0/0.24)]"
+      className="col-start-2 row-start-2 self-start rounded-[1.1rem] border border-white/70 bg-white p-4 text-[var(--nav-ink)] shadow-[0_18px_46px_rgb(0_0_0/0.24)] [&_button:disabled]:cursor-not-allowed [&_button:disabled]:opacity-50"
       data-testid="demo-scenario-presenter-panel"
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
@@ -6507,6 +6652,8 @@ function ManualRiskControlPanel({
   agentPersonality,
   agentVoiceId,
   canAdvanceResponse,
+  canEndDrive,
+  controlsLocked,
   emergencyWarningCountdown,
   emergencyWarningPending,
   motionTiming,
@@ -6515,10 +6662,12 @@ function ManualRiskControlPanel({
   onAgentVoiceChange,
   onCancelEmergencyWarning,
   onEmergencyWarning,
+  onEndDrive,
   onResponseOptionSelect,
   onReturnToProfileSelection,
   onSelectRisk,
   responseOptions,
+  responseOptionsLocked,
   voiceStyleAvailable,
   voiceSaveError,
   voiceSaving,
@@ -6528,6 +6677,8 @@ function ManualRiskControlPanel({
   agentPersonality: AgentPersonality
   agentVoiceId: TtsVoiceId
   canAdvanceResponse: boolean
+  canEndDrive: boolean
+  controlsLocked: boolean
   emergencyWarningCountdown: number | null
   emergencyWarningPending: boolean
   motionTiming: MotionTiming
@@ -6536,10 +6687,12 @@ function ManualRiskControlPanel({
   onAgentVoiceChange: (ttsVoiceId: TtsVoiceId) => void
   onCancelEmergencyWarning: () => void
   onEmergencyWarning: () => void
+  onEndDrive: () => void
   onResponseOptionSelect: (option: ManualRiskResponseOption) => void
   onReturnToProfileSelection: () => void
   onSelectRisk: (riskId: ManualRiskId) => void
   responseOptions: ManualRiskResponseOption[]
+  responseOptionsLocked: boolean
   voiceStyleAvailable: boolean
   voiceSaveError: boolean
   voiceSaving: boolean
@@ -6606,7 +6759,7 @@ function ManualRiskControlPanel({
   return (
     <motion.section
       aria-label="실시간 위험 상황 조작"
-      className="col-start-2 row-start-2 self-start rounded-[1.1rem] border border-white/70 bg-white p-4 text-[var(--nav-ink)] shadow-[0_18px_46px_rgb(0_0_0/0.24)]"
+      className="col-start-2 row-start-2 self-start rounded-[1.1rem] border border-white/70 bg-white p-4 text-[var(--nav-ink)] shadow-[0_18px_46px_rgb(0_0_0/0.24)] [&_button:disabled]:cursor-not-allowed [&_button:disabled]:opacity-50"
       data-testid="manual-risk-control-panel"
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
@@ -6633,7 +6786,7 @@ function ManualRiskControlPanel({
             aria-expanded={voiceStyleSettingsOpen}
             aria-label="안내 음성 스타일 설정"
             className="grid size-8 place-items-center rounded-md text-[var(--nav-muted)] transition hover:bg-[var(--nav-panel)] hover:text-[var(--nav-primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
-            disabled={!voiceStyleAvailable}
+            disabled={!voiceStyleAvailable || controlsLocked}
             onClick={() => setVoiceStyleSettingsOpen((open) => !open)}
             type="button"
           >
@@ -6664,7 +6817,7 @@ function ManualRiskControlPanel({
                           ? 'bg-[var(--nav-primary-soft)] text-[var(--nav-primary)]'
                           : 'text-[var(--nav-ink)] hover:bg-[var(--nav-panel)]',
                       ].join(' ')}
-                      disabled={voiceStyleSaving}
+                      disabled={voiceStyleSaving || controlsLocked}
                       key={option.id}
                       onClick={() => {
                         onAgentPersonalityChange(option.id)
@@ -6695,7 +6848,7 @@ function ManualRiskControlPanel({
                             ? 'bg-[var(--nav-primary-soft)] text-[var(--nav-primary)]'
                             : 'text-[var(--nav-ink)] hover:bg-[var(--nav-panel)]',
                         ].join(' ')}
-                        disabled={voiceSaving}
+                        disabled={voiceSaving || controlsLocked}
                         key={voiceId}
                         onClick={() => {
                           onAgentVoiceChange(voiceId)
@@ -6727,6 +6880,7 @@ function ManualRiskControlPanel({
                 control.idleClassName,
               ].join(' ')}
               data-testid={`manual-risk-control-${control.id}`}
+              disabled={controlsLocked}
               key={control.id}
               onClick={() => onSelectRisk(control.id)}
               type="button"
@@ -6753,6 +6907,7 @@ function ManualRiskControlPanel({
             warningControl.idleClassName,
           ].join(' ')}
           data-testid="manual-risk-control-warning"
+          disabled={controlsLocked}
           onClick={onEmergencyWarning}
           type="button"
         >
@@ -6769,6 +6924,15 @@ function ManualRiskControlPanel({
           </span>
           <span className="mt-0.5 text-[11px] font-semibold leading-3 text-[var(--nav-ink)]">{warningControl.description}</span>
         </button>
+        <Button
+          className="col-span-2"
+          disabled={!canEndDrive || controlsLocked}
+          onClick={onEndDrive}
+          type="button"
+          variant="outline"
+        >
+          운전 종료
+        </Button>
       </div>
       <AnimatePresence initial={false}>
         {responseOptions.length ? (
@@ -6776,6 +6940,7 @@ function ManualRiskControlPanel({
             motionTiming={motionTiming}
             onSelect={onResponseOptionSelect}
             options={responseOptions}
+            disabled={responseOptionsLocked}
           />
         ) : null}
         {canAdvanceResponse ? (
@@ -6793,6 +6958,7 @@ function ManualRiskControlPanel({
             <button
               className="flex h-11 w-full items-center justify-center rounded-lg border border-[var(--nav-primary)] bg-[var(--nav-primary)] px-3 text-sm font-semibold text-white transition hover:bg-[var(--nav-primary-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
               onClick={onAdvanceResponse}
+              disabled={controlsLocked}
               type="button"
             >
               다음
@@ -6817,6 +6983,7 @@ function ManualRiskControlPanel({
             <button
               className="h-8 shrink-0 rounded-md border border-[rgb(254_205_211)] bg-white px-3 text-sm font-semibold text-[var(--nav-ink)] transition hover:border-[var(--nav-danger)] hover:text-[var(--nav-danger)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
               onClick={onCancelEmergencyWarning}
+              disabled={controlsLocked}
               type="button"
             >
               취소
@@ -7021,7 +7188,7 @@ function AppIconDock({
           aria-controls="settings-drawer"
           aria-expanded={activeSidePanel === 'settings'}
           aria-label="설정"
-          className={railButtonClassName(activeSidePanel === 'settings')}
+          className={railButtonClassName(activeSidePanel === 'settings', settingsDisabled)}
           disabled={settingsDisabled}
           onClick={onOpenSettings}
           type="button"
@@ -7081,6 +7248,7 @@ function SideDrawerPanel({
   panel,
   selectedProfile,
   behaviorWarningSensitivity,
+  openSensitivityPanelVersion,
   savedPlaces,
   savedPlacesError,
   savedPlacesLoading,
@@ -7103,6 +7271,7 @@ function SideDrawerPanel({
   panel: SidePanelId
   selectedProfile?: NavigationProfile
   behaviorWarningSensitivity?: ProfileCreateRequest['behaviorWarningSensitivity']
+  openSensitivityPanelVersion: number
   savedPlaces: SavedPlaceQuickItem[]
   savedPlacesError: boolean
   savedPlacesLoading: boolean
@@ -7183,6 +7352,7 @@ function SideDrawerPanel({
       locationStatus={locationStatus}
       selectedProfile={selectedProfile}
       behaviorWarningSensitivity={behaviorWarningSensitivity}
+      openSensitivityPanelVersion={openSensitivityPanelVersion}
       onChangeCameraSettings={onChangeCameraSettings}
       onRequestCurrentLocation={onRequestCurrentLocation}
       onUpdateBehaviorWarningSensitivity={onUpdateBehaviorWarningSensitivity}
@@ -7888,6 +8058,7 @@ function SettingsDrawerContent({
   locationStatus,
   selectedProfile,
   behaviorWarningSensitivity: initialBehaviorWarningSensitivity,
+  openSensitivityPanelVersion,
   onChangeCameraSettings,
   onRequestCurrentLocation,
   onUpdateBehaviorWarningSensitivity,
@@ -7901,6 +8072,7 @@ function SettingsDrawerContent({
   locationStatus: LocationStatus
   selectedProfile?: NavigationProfile
   behaviorWarningSensitivity?: ProfileCreateRequest['behaviorWarningSensitivity']
+  openSensitivityPanelVersion: number
   onChangeCameraSettings: (settings: Partial<MapCameraSettings>) => void
   onRequestCurrentLocation: () => void
   onUpdateBehaviorWarningSensitivity: (
@@ -7957,6 +8129,11 @@ function SettingsDrawerContent({
       normalizeBehaviorWarningSensitivity(initialBehaviorWarningSensitivity ?? selectedProfile?.behaviorWarningSensitivity),
     )
   }, [initialBehaviorWarningSensitivity, selectedProfile?.id])
+  useEffect(() => {
+    if (openSensitivityPanelVersion > 0) {
+      openSensitivitySettings()
+    }
+  }, [openSensitivityPanelVersion])
   const openSensitivitySettings = () => {
     const initialSensitivity = normalizeBehaviorWarningSensitivity(initialBehaviorWarningSensitivity ?? selectedProfile?.behaviorWarningSensitivity)
     sensitivityPanelVersionRef.current += 1
