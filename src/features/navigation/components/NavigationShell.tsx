@@ -78,6 +78,18 @@ import {
 } from '@/features/demo-scenarios'
 import { VoiceWave } from '@/features/voice-wave'
 import { type CSSProperties, type KeyboardEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   createProfile,
   DEFAULT_BEHAVIOR_WARNING_SENSITIVITY,
@@ -3908,7 +3920,6 @@ function ProfileSettingsForm({
 }) {
   const [activePageId, setActivePageId] = useState<ProfileSettingsPageId>('basic')
   const activePageIndex = PROFILE_SETTINGS_PAGES.findIndex((page) => page.id === activePageId)
-  const activePage = PROFILE_SETTINGS_PAGES[activePageIndex] ?? PROFILE_SETTINGS_PAGES[0]
   const previousPage = activePageIndex > 0 ? PROFILE_SETTINGS_PAGES[activePageIndex - 1] : undefined
   const nextPage = activePageIndex < PROFILE_SETTINGS_PAGES.length - 1 ? PROFILE_SETTINGS_PAGES[activePageIndex + 1] : undefined
   const updateForm = <Key extends keyof ProfileCreateRequest>(
@@ -3956,31 +3967,28 @@ function ProfileSettingsForm({
           </div>
         </div>
 
-        <div className="mt-2 grid shrink-0 grid-cols-3 gap-2 rounded-2xl bg-[var(--nav-panel)] p-1">
-          {PROFILE_SETTINGS_PAGES.map((page) => {
-            const selected = page.id === activePage.id
-
-            return (
-              <button
+        <Tabs
+          className="mt-2 min-h-0 flex-1"
+          value={activePageId}
+          onValueChange={(value) => setActivePageId(value as ProfileSettingsPageId)}
+        >
+          <TabsList className="grid h-auto w-full grid-cols-3 gap-2 rounded-2xl bg-[var(--nav-panel)] p-1">
+            {PROFILE_SETTINGS_PAGES.map((page) => (
+              <TabsTrigger
                 key={page.id}
-                aria-current={selected ? 'step' : undefined}
-                className={[
-                  'min-h-10 rounded-xl px-3 text-sm font-bold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]',
-                  selected
-                    ? 'bg-white text-[var(--nav-primary)] shadow-[var(--nav-shadow-control)]'
-                    : 'text-[var(--nav-muted)] hover:bg-white hover:text-[var(--nav-ink)]',
-                ].join(' ')}
-                type="button"
-                onClick={() => setActivePageId(page.id)}
+                className="min-h-10 rounded-xl px-3 text-sm font-bold text-[var(--nav-muted)] data-[state=active]:bg-white data-[state=active]:text-[var(--nav-primary)] data-[state=active]:shadow-[var(--nav-shadow-control)]"
+                value={page.id}
               >
                 {page.label}
-              </button>
-            )
-          })}
-        </div>
+              </TabsTrigger>
+            ))}
+          </TabsList>
 
-        <div className="mt-5 min-h-0 flex-1 overflow-hidden">
-          {activePage.id === 'basic' ? (
+          <div
+            className="mt-5 min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain"
+            data-testid="profile-settings-content"
+          >
+            <TabsContent className="mt-0" value="basic">
             <div className="grid h-full content-start grid-cols-2 gap-5 max-sm:grid-cols-1">
               <ProfileTextField
                 label="프로필 이름"
@@ -4000,8 +4008,8 @@ function ProfileSettingsForm({
                 onChange={(value) => updateForm('reportEmail', value)}
               />
             </div>
-          ) : null}
-          {activePage.id === 'guidance' ? (
+            </TabsContent>
+            <TabsContent className="mt-0" value="guidance">
             <div className="grid h-full content-start grid-cols-2 gap-5 max-sm:grid-cols-1">
               <ProfileSelectField<AgentPersonality>
                 label="안내 음성 스타일"
@@ -4037,14 +4045,15 @@ function ProfileSettingsForm({
                 onChange={(value) => updateForm('guidanceVolume', value)}
               />
             </div>
-          ) : null}
-          {activePage.id === 'behavior' ? (
+            </TabsContent>
+            <TabsContent className="mt-0" value="behavior">
             <ProfileBehaviorSensitivityField
               value={form.behaviorWarningSensitivity}
               onChange={(value) => updateForm('behaviorWarningSensitivity', value)}
             />
-          ) : null}
-        </div>
+            </TabsContent>
+          </div>
+        </Tabs>
 
         {saveError ? (
           <p className="mt-5 text-sm font-bold text-[var(--nav-danger)]">프로필 저장에 실패했습니다.</p>
@@ -4056,49 +4065,53 @@ function ProfileSettingsForm({
 
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-[var(--nav-border)] bg-[var(--nav-surface-raised)] px-8 py-3.5 max-sm:px-5">
         {mode === 'edit' && onDeleteProfile ? (
-          <button
-            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full bg-white px-5 text-sm font-bold text-[var(--nav-danger)] ring-1 ring-[rgb(225_29_72/0.14)] transition hover:bg-[rgb(255_241_242)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-danger)] disabled:cursor-not-allowed disabled:opacity-45"
+          <Button
+            className="min-h-10 rounded-full px-5"
             disabled={deleting}
-            onClick={onDeleteProfile}
             type="button"
+            variant="destructive"
+            onClick={onDeleteProfile}
           >
             <Trash className="size-4" weight="bold" />
             프로필 삭제
-          </button>
+          </Button>
         ) : (
           <span />
         )}
         <div className="flex flex-wrap justify-end gap-3">
-        <button
-          className="inline-flex min-h-10 items-center justify-center rounded-full bg-[var(--nav-panel)] px-5 text-sm font-bold text-[var(--nav-muted)] transition hover:bg-[var(--nav-selection)] hover:text-[var(--nav-ink)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
-          onClick={onBackToList}
+        <Button
+          className="min-h-10 rounded-full px-5"
           type="button"
+          variant="secondary"
+          onClick={onBackToList}
         >
           목록으로 돌아가기
-        </button>
-        <button
-          className="inline-flex min-h-10 items-center justify-center rounded-full bg-white px-5 text-sm font-bold text-[var(--nav-muted)] ring-1 ring-[var(--nav-border)] transition hover:bg-[var(--nav-panel)] hover:text-[var(--nav-ink)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)] disabled:cursor-not-allowed disabled:opacity-40"
+        </Button>
+        <Button
+          className="min-h-10 rounded-full px-5"
           disabled={!previousPage}
-          onClick={() => previousPage && setActivePageId(previousPage.id)}
           type="button"
+          variant="outline"
+          onClick={() => previousPage && setActivePageId(previousPage.id)}
         >
           이전
-        </button>
-        <button
-          className="inline-flex min-h-10 items-center justify-center rounded-full bg-white px-5 text-sm font-bold text-[var(--nav-primary)] ring-1 ring-[rgb(23_70_162/0.18)] transition hover:bg-[var(--nav-primary-soft)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)] disabled:cursor-not-allowed disabled:opacity-40"
+        </Button>
+        <Button
+          className="min-h-10 rounded-full px-5"
           disabled={!nextPage}
-          onClick={() => nextPage && setActivePageId(nextPage.id)}
           type="button"
+          variant="outline"
+          onClick={() => nextPage && setActivePageId(nextPage.id)}
         >
           다음
-        </button>
-        <button
-          className="inline-flex min-h-10 items-center justify-center rounded-full bg-[var(--nav-primary)] px-6 text-sm font-bold text-white shadow-[var(--nav-shadow-control)] transition hover:bg-[var(--nav-primary-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)] disabled:cursor-not-allowed disabled:opacity-50"
+        </Button>
+        <Button
+          className="min-h-10 rounded-full px-6"
           disabled={saving || !form.displayName.trim() || !form.agentCallName.trim()}
           type="submit"
         >
           프로필 저장
-        </button>
+        </Button>
         </div>
       </div>
     </motion.form>
@@ -4118,16 +4131,19 @@ function ProfileTextField({
   value: string
   onChange: (value: string) => void
 }) {
+  const inputId = `profile-${label}`
+
   return (
-    <label className={['flex min-w-0 flex-col gap-2', className].filter(Boolean).join(' ')}>
-      <span className="text-sm font-bold text-[var(--nav-muted)]">{label}</span>
-      <input
-        className="min-h-14 rounded-xl border border-[var(--nav-border)] bg-white px-4 text-base font-bold text-[var(--nav-ink)] outline-none transition placeholder:text-[var(--nav-subtle)] focus:border-[var(--nav-primary)] focus:shadow-[0_0_0_3px_var(--nav-focus-ring)]"
+    <div className={['flex min-w-0 flex-col gap-2', className].filter(Boolean).join(' ')}>
+      <Label className="text-sm font-bold text-[var(--nav-muted)]" htmlFor={inputId}>{label}</Label>
+      <Input
+        className="min-h-14 rounded-xl px-4 text-base font-bold text-[var(--nav-ink)]"
+        id={inputId}
         type={type}
         value={value}
         onChange={(event) => onChange(event.target.value)}
       />
-    </label>
+    </div>
   )
 }
 
@@ -4146,11 +4162,14 @@ function ProfileNumberField({
   value: number
   onChange: (value: number) => void
 }) {
+  const inputId = `profile-${label}`
+
   return (
-    <label className="flex min-w-0 flex-col gap-2">
-      <span className="text-sm font-bold text-[var(--nav-muted)]">{label}</span>
-      <input
-        className="min-h-14 rounded-xl border border-[var(--nav-border)] bg-white px-4 text-base font-bold text-[var(--nav-ink)] outline-none transition focus:border-[var(--nav-primary)] focus:shadow-[0_0_0_3px_var(--nav-focus-ring)]"
+    <div className="flex min-w-0 flex-col gap-2">
+      <Label className="text-sm font-bold text-[var(--nav-muted)]" htmlFor={inputId}>{label}</Label>
+      <Input
+        className="min-h-14 rounded-xl px-4 text-base font-bold text-[var(--nav-ink)]"
+        id={inputId}
         max={max}
         min={min}
         step={step}
@@ -4158,7 +4177,7 @@ function ProfileNumberField({
         value={value}
         onChange={(event) => onChange(Number(event.target.value))}
       />
-    </label>
+    </div>
   )
 }
 
@@ -4177,20 +4196,24 @@ function ProfileSelectField<Value extends string>({
   value: Value
   onChange: (value: Value) => void
 }) {
+  const selectId = `profile-${label}`
+
   return (
-    <label className={['flex min-w-0 flex-col gap-2', className].filter(Boolean).join(' ')}>
-      <span className="text-sm font-bold text-[var(--nav-muted)]">{label}</span>
-      <select
-        className="min-h-14 rounded-xl border border-[var(--nav-border)] bg-white px-4 text-base font-bold text-[var(--nav-ink)] outline-none transition focus:border-[var(--nav-primary)] focus:shadow-[0_0_0_3px_var(--nav-focus-ring)] disabled:cursor-not-allowed disabled:bg-[var(--nav-panel)] disabled:text-[var(--nav-muted)]"
-        disabled={disabled}
-        value={value}
-        onChange={(event) => onChange(event.target.value as Value)}
-      >
-        {options.map(([optionValue, optionLabel]) => (
-          <option key={optionValue} value={optionValue}>{optionLabel}</option>
-        ))}
-      </select>
-    </label>
+    <div className={['flex min-w-0 flex-col gap-2', className].filter(Boolean).join(' ')}>
+      <Label className="text-sm font-bold text-[var(--nav-muted)]" htmlFor={selectId}>{label}</Label>
+      <Select disabled={disabled} value={value} onValueChange={(nextValue) => onChange(nextValue as Value)}>
+        <SelectTrigger className="min-h-14 w-full rounded-xl px-4 text-base font-bold text-[var(--nav-ink)]" id={selectId}>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent className="z-[100]">
+          <SelectGroup>
+            {options.map(([optionValue, optionLabel]) => (
+              <SelectItem key={optionValue} value={optionValue}>{optionLabel}</SelectItem>
+            ))}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
+    </div>
   )
 }
 
@@ -4246,15 +4269,17 @@ function ProfileBehaviorSensitivityField({
             >
               <span className="min-w-0 truncate text-sm font-bold text-[var(--nav-ink)]" title={label}>{label}</span>
               <div className="grid grid-cols-[2rem_2.25rem_2rem] items-center overflow-hidden rounded-full bg-[var(--nav-surface-raised)] p-1 ring-1 ring-[var(--nav-border)]">
-                <button
+                <Button
                   aria-label={`${label} 민감도 낮추기`}
-                  className="grid min-h-8 place-items-center rounded-full text-[var(--nav-muted)] transition hover:bg-white hover:text-[var(--nav-ink)] disabled:opacity-35"
+                  className="size-8 rounded-full text-[var(--nav-muted)]"
                   disabled={selectedValue <= 3}
+                  size="icon-sm"
                   type="button"
+                  variant="ghost"
                   onClick={() => setSensitivity(behaviorType, selectedValue - 1)}
                 >
                   <Minus size={14} weight="bold" />
-                </button>
+                </Button>
                 <output
                   aria-label={`${label} 민감도 값`}
                   className={[
@@ -4264,15 +4289,17 @@ function ProfileBehaviorSensitivityField({
                 >
                   {selectedValue}
                 </output>
-                <button
+                <Button
                   aria-label={`${label} 민감도 높이기`}
-                  className="grid min-h-8 place-items-center rounded-full text-[var(--nav-muted)] transition hover:bg-white hover:text-[var(--nav-ink)] disabled:opacity-35"
+                  className="size-8 rounded-full text-[var(--nav-muted)]"
                   disabled={selectedValue >= 10}
+                  size="icon-sm"
                   type="button"
+                  variant="ghost"
                   onClick={() => setSensitivity(behaviorType, selectedValue + 1)}
                 >
                   <Plus size={14} weight="bold" />
-                </button>
+                </Button>
               </div>
             </div>
           )

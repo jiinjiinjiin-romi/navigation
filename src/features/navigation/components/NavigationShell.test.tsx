@@ -2361,7 +2361,10 @@ describe('NavigationShell', () => {
 
     expect(screen.getByRole('heading', { name: '프로필 설정' })).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: '오늘은 누가 운전할까요?' })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '기본 정보' })).toHaveAttribute('aria-current', 'step')
+    expect(screen.getByLabelText('프로필 이름')).toHaveAttribute('data-slot', 'input')
+    expect(screen.getByRole('tablist')).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: '기본 정보' })).toHaveAttribute('data-state', 'active')
+    expect(screen.getByRole('button', { name: '이전' })).toHaveAttribute('data-slot', 'button')
     expect(screen.queryByLabelText('안내 음성 스타일')).not.toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('프로필 이름'), {
       target: { value: '도현' },
@@ -2373,13 +2376,12 @@ describe('NavigationShell', () => {
       target: { value: 'dohyun@example.com' },
     })
     fireEvent.click(screen.getByRole('button', { name: '다음' }))
-    expect(screen.getByRole('button', { name: '안내 설정' })).toHaveAttribute('aria-current', 'step')
-    fireEvent.change(screen.getByLabelText('안내 음성 스타일'), {
-      target: { value: 'WITTY' },
-    })
-    fireEvent.change(screen.getByLabelText('안내 화자'), {
-      target: { value: 'nes_c_hyeri' },
-    })
+    expect(screen.getByRole('tab', { name: '안내 설정' })).toHaveAttribute('data-state', 'active')
+    fireEvent.click(screen.getByRole('combobox', { name: '안내 음성 스타일' }))
+    expect(await screen.findByRole('listbox')).toHaveClass('z-[100]')
+    fireEvent.click(await screen.findByRole('option', { name: '밝고 빠른 안내' }))
+    fireEvent.click(screen.getByRole('combobox', { name: '안내 화자' }))
+    fireEvent.click(await screen.findByRole('option', { name: '혜리' }))
     fireEvent.change(screen.getByLabelText('TTS 속도'), {
       target: { value: '1.4' },
     })
@@ -2387,15 +2389,18 @@ describe('NavigationShell', () => {
       target: { value: '82' },
     })
     fireEvent.click(screen.getByRole('button', { name: '다음' }))
-    expect(screen.getByRole('button', { name: '행동 민감도' })).toHaveAttribute('aria-current', 'step')
+    expect(screen.getByRole('tab', { name: '행동 민감도' })).toHaveAttribute('data-state', 'active')
     expect(screen.queryByLabelText('경고 민감도')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('테마')).not.toBeInTheDocument()
+    const profileSettingsContent = screen.queryByTestId('profile-settings-content')
+    expect(profileSettingsContent).not.toBeNull()
+    expect(profileSettingsContent).toHaveClass('overflow-y-auto', 'overscroll-contain')
     fireEvent.click(screen.getByRole('button', { name: '음식/음료 섭취 민감도 낮추기' }))
     fireEvent.click(screen.getByRole('button', { name: '음식/음료 섭취 민감도 낮추기' }))
     fireEvent.click(screen.getByRole('button', { name: '음식/음료 섭취 민감도 낮추기' }))
     expect(screen.getByText((content) => content.includes("'음식/음료 섭취' 감지 민감도를 4 이하로 설정하면"))).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '이전' }))
-    expect(screen.getByRole('button', { name: '안내 설정' })).toHaveAttribute('aria-current', 'step')
+    expect(screen.getByRole('tab', { name: '안내 설정' })).toHaveAttribute('data-state', 'active')
     fireEvent.click(screen.getByRole('button', { name: '다음' }))
     fireEvent.click(screen.getByRole('button', { name: '프로필 저장' }))
 
@@ -2535,9 +2540,8 @@ describe('NavigationShell', () => {
     fireEvent.click(await screen.findByRole('button', { name: /민준 프로필 선택/ }))
     fireEvent.click(screen.getByRole('button', { name: '프로필 수정' }))
     fireEvent.click(screen.getByRole('button', { name: '다음' }))
-    fireEvent.change(screen.getByLabelText('안내 음성 스타일'), {
-      target: { value: 'WARM' },
-    })
+    fireEvent.click(screen.getByRole('combobox', { name: '안내 음성 스타일' }))
+    fireEvent.click(await screen.findByRole('option', { name: '차분한 저음 안내' }))
     fireEvent.click(screen.getByRole('button', { name: '프로필 저장' }))
 
     await waitFor(() => {
