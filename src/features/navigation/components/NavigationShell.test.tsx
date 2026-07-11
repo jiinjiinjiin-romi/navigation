@@ -1226,6 +1226,10 @@ describe('NavigationShell', () => {
         await Promise.resolve()
       })
       expect(screen.getByText('반영 완료되었습니다!')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: '프로필 선택으로 돌아가기' })).toHaveAttribute(
+        'data-profile-return-attention',
+        'true',
+      )
 
       await act(async () => {
         vi.advanceTimersByTime(2_999)
@@ -1255,6 +1259,74 @@ describe('NavigationShell', () => {
     fireEvent.click(within(controlPanel).getByRole('button', { name: '프로필 선택으로 돌아가기' }))
 
     expect(await screen.findByRole('heading', { name: '오늘은 누가 운전할까요?' })).toBeInTheDocument()
+  })
+
+  it('resets the drive-summary session and reloads backend sensitivity after returning to the profile', async () => {
+    const refreshedBehaviorWarningSensitivity = {
+      ...DEFAULT_BEHAVIOR_WARNING_SENSITIVITY,
+      DROWSINESS: 6 as const,
+    }
+    let bootstrapRequestCount = 0
+    mockedGetBootstrap.mockImplementation(async () => ({
+      account: {
+        id: 'account-1',
+        displayName: '안정현',
+        email: 'admin@example.com',
+      },
+      profiles: mockProfiles.map((profile) => profile.id === 'profile-1'
+        ? {
+            ...profile,
+            behaviorWarningSensitivity: bootstrapRequestCount++ === 0
+              ? DEFAULT_BEHAVIOR_WARNING_SENSITIVITY
+              : refreshedBehaviorWarningSensitivity,
+          }
+        : profile),
+      selectedProfileId: 'profile-1',
+      profileLimit: 5,
+      capabilities: {
+        vitModelAvailable: true,
+        geminiAvailable: false,
+        emailAvailable: true,
+        demoMode: true,
+      },
+    }))
+    mockedSubmitDriveSummary.mockResolvedValue({
+      behaviorWarningSensitivity: {
+        ...DEFAULT_BEHAVIOR_WARNING_SENSITIVITY,
+        DROWSINESS: 10 as const,
+      },
+    })
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
+      </QueryClientProvider>,
+    )
+
+    const controlPanel = await screen.findByTestId('manual-risk-control-panel')
+    fireEvent.click(screen.getByRole('button', { name: '졸음 위험 상황 선택' }))
+    fireEvent.click(within(controlPanel).getByRole('button', { name: '운전 종료' }))
+    fireEvent.click(await screen.findByRole('button', { name: '응 반영해줘.' }))
+    expect(await screen.findByText('반영 완료되었습니다!')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '프로필 선택으로 돌아가기' }))
+    expect(await screen.findByRole('heading', { name: '오늘은 누가 운전할까요?' })).toBeInTheDocument()
+    expect(mockedUpdateProfile).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: '민준(으)로 시작' }))
+    await waitFor(() => {
+      expect(mockedSelectProfile).toHaveBeenCalledWith('profile-1')
+    })
+    fireEvent.click(await screen.findByTestId('demo-entry-manual-control-button'))
+
+    const resetControlPanel = await screen.findByTestId('manual-risk-control-panel')
+    expect(screen.getByRole('button', { name: '졸음 위험 상황 선택' })).toBeEnabled()
+    expect(within(resetControlPanel).getByRole('button', { name: '운전 종료' })).toBeDisabled()
+
+    fireEvent.click(screen.getByRole('button', { name: '설정' }))
+    fireEvent.click(await screen.findByRole('button', { name: '민감도 수정' }))
+    expect(await screen.findByLabelText('졸음 민감도 값')).toHaveTextContent('6')
   })
 
   it('renders manual risk response options at the bottom of the manual control panel', async () => {

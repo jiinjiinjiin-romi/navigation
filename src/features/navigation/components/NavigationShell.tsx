@@ -33,6 +33,7 @@ import {
   PlugsConnected,
   RoadHorizon,
   SpeakerHigh,
+  Sparkle,
   Stop,
   Timer,
   Trash,
@@ -938,6 +939,12 @@ const MANUAL_RISK_BEHAVIOR_TYPES: Record<ManualRiskId, ProfileBehaviorType> = {
   device: 'SECONDARY_TASK',
   intake: 'FOOD_OR_DRINK',
 }
+const createInitialManualRiskEvents = (): Record<ManualRiskId, { clickCount: number; level: number }> => ({
+  phone: { clickCount: 0, level: 0 },
+  drowsiness: { clickCount: 0, level: 0 },
+  device: { clickCount: 0, level: 0 },
+  intake: { clickCount: 0, level: 0 },
+})
 const MANUAL_RISK_DRIVE_SUMMARY_COMPLETE_DELAY_MS = 3_000
 const MANUAL_RISK_LABELS: Record<ManualRiskId, string> = {
   phone: '핸드폰',
@@ -1311,12 +1318,7 @@ export function NavigationShell({
   const [assistantScenarioId, setAssistantScenarioId] = useState<RoadieAssistantScenarioId>('drowsiness-rest-area')
   const [assistantStepIndex, setAssistantStepIndex] = useState(0)
   const [manualRiskConversation, setManualRiskConversation] = useState<ManualRiskConversation | null>(null)
-  const [manualRiskEvents, setManualRiskEvents] = useState<Record<ManualRiskId, { clickCount: number; level: number }>>({
-    phone: { clickCount: 0, level: 0 },
-    drowsiness: { clickCount: 0, level: 0 },
-    device: { clickCount: 0, level: 0 },
-    intake: { clickCount: 0, level: 0 },
-  })
+  const [manualRiskEvents, setManualRiskEvents] = useState(createInitialManualRiskEvents)
   const [driveSummaryLocked, setDriveSummaryLocked] = useState(false)
   const [openSensitivityPanelVersion, setOpenSensitivityPanelVersion] = useState(0)
   const [lastManualEmergencyRiskId, setLastManualEmergencyRiskId] = useState<EmergencyManualRiskId>('drowsiness')
@@ -1563,9 +1565,16 @@ export function NavigationShell({
   })
   const selectProfileMutation = useMutation({
     mutationFn: (profileId: string) => selectProfile(profileId),
-    onSuccess: () => {
+    onSuccess: async (_, profileId) => {
       setManualRiskAgentPersonalityOverride(undefined)
       setManualRiskVoiceIdOverride(undefined)
+      setBehaviorWarningSensitivityOverrides((current) => {
+        const remaining = { ...current }
+        delete remaining[profileId]
+
+        return remaining
+      })
+      await queryClient.refetchQueries({ queryKey: ['bootstrap'], type: 'active' })
       setProfileSetupComplete(true)
     },
   })
@@ -3675,6 +3684,10 @@ export function NavigationShell({
             canAdvanceResponse={manualRiskConversation?.kind === 'user'}
             canEndDrive={Object.values(manualRiskEvents).some((event) => event.clickCount > 0)}
             controlsLocked={manualRiskControlsLocked}
+            profileReturnAttention={
+              manualRiskConversation?.kind === 'assistant'
+              && manualRiskConversation.nodeId === 'drive-summary-complete'
+            }
             responseOptionsLocked={driveSummaryLocked}
             emergencyWarningCountdown={manualEmergencyWarningCountdown}
             emergencyWarningPending={manualEmergencyWarningPending}
@@ -3689,6 +3702,9 @@ export function NavigationShell({
             onReturnToProfileSelection={() => {
               cancelManualEmergencyWarning()
               resetManualRiskConversation()
+              setDriveSummaryLocked(false)
+              setManualRiskEvents(createInitialManualRiskEvents())
+              setBehaviorWarningSensitivityOverrides({})
               setActiveSidePanel(null)
               setNavigationEntryMode(null)
               setProfileSetupView('list')
@@ -6654,6 +6670,7 @@ function ManualRiskControlPanel({
   canAdvanceResponse,
   canEndDrive,
   controlsLocked,
+  profileReturnAttention,
   emergencyWarningCountdown,
   emergencyWarningPending,
   motionTiming,
@@ -6679,6 +6696,7 @@ function ManualRiskControlPanel({
   canAdvanceResponse: boolean
   canEndDrive: boolean
   controlsLocked: boolean
+  profileReturnAttention: boolean
   emergencyWarningCountdown: number | null
   emergencyWarningPending: boolean
   motionTiming: MotionTiming
@@ -6775,12 +6793,19 @@ function ManualRiskControlPanel({
         <div className="flex shrink-0 items-center gap-1">
           <button
             aria-label="프로필 선택으로 돌아가기"
-            className="inline-flex h-8 items-center gap-1 rounded-md px-1.5 text-xs font-semibold text-[var(--nav-muted)] transition hover:bg-[var(--nav-panel)] hover:text-[var(--nav-ink)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
+            className={[
+              'inline-flex h-8 items-center gap-1 rounded-md px-1.5 text-xs font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]',
+              profileReturnAttention
+                ? 'border border-[var(--nav-primary)] bg-[var(--nav-primary-soft)] text-[var(--nav-primary)] shadow-[0_0_0_3px_rgb(42_111_151/0.14),0_0_18px_rgb(42_111_151/0.38)] animate-pulse motion-reduce:animate-none'
+                : 'text-[var(--nav-muted)] hover:bg-[var(--nav-panel)] hover:text-[var(--nav-ink)]',
+            ].join(' ')}
+            data-profile-return-attention={profileReturnAttention || undefined}
             onClick={onReturnToProfileSelection}
             type="button"
           >
             <CaretLeft className="size-3.5" weight="bold" />
             <span>프로필</span>
+            {profileReturnAttention ? <Sparkle aria-hidden="true" className="size-3" weight="fill" /> : null}
           </button>
           <button
             aria-expanded={voiceStyleSettingsOpen}
