@@ -2043,7 +2043,7 @@ export function NavigationShell({
     ? `${manualRiskConversation.riskId}-${manualRiskConversation.nodeId}`
     : undefined
   const navigationViewportClassName = [
-    'relative col-start-1 min-h-0 overflow-hidden rounded-[1.1rem] border border-white/70 bg-[var(--nav-frame)] shadow-[0_18px_46px_rgb(15_23_42/0.24)] ring-1 ring-[rgb(148_163_184/0.18)]',
+    'relative z-10 col-start-1 min-h-0 overflow-hidden rounded-[1.1rem] border border-white/70 bg-[var(--nav-frame)] shadow-[0_18px_46px_rgb(15_23_42/0.24)] ring-1 ring-[rgb(148_163_184/0.18)]',
     manualNavigationActive
       ? 'aspect-[16/10] w-full max-h-full self-center'
       : 'row-start-2 h-full',
@@ -3492,7 +3492,8 @@ export function NavigationShell({
         <motion.div
           key={manualRiskAlertFlashKey}
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0"
+          className="pointer-events-none absolute inset-0 z-0"
+          data-testid="manual-risk-alert-flash"
           initial={shouldReduceMotion ? false : { backgroundColor: 'rgb(6 8 12)' }}
           animate={shouldReduceMotion
             ? { backgroundColor: 'rgb(65 12 20)' }
@@ -3934,7 +3935,7 @@ export function NavigationShell({
       </section>
       {manualNavigationActive ? (
         <div
-          className="col-start-2 flex w-full flex-col justify-center gap-3 self-center"
+          className="relative z-10 col-start-2 flex w-full flex-col justify-center gap-3 self-center"
           data-testid="manual-navigation-layout"
         >
           <ManualRiskStackStatus

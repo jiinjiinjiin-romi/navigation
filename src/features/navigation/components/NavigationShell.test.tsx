@@ -2319,6 +2319,26 @@ describe('NavigationShell', () => {
     expect(screen.getByTestId('navigation-stage')).toHaveAttribute('data-manual-risk-alert-flash', 'true')
   })
 
+  it('keeps the manual risk controls above the third-stage alert flash', async () => {
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '핸드폰 위험 상황 선택' }))
+    fireEvent.click(screen.getByRole('button', { name: '핸드폰 위험 상황 선택' }))
+    fireEvent.click(screen.getByRole('button', { name: '핸드폰 위험 상황 선택' }))
+
+    expect(await screen.findByText('휴대폰 사용을 즉시 중단하세요. 지금은 전방만 봐야 합니다.')).toBeInTheDocument()
+    expect(screen.getByTestId('manual-risk-alert-flash')).toHaveClass('z-0')
+    expect(screen.getByTestId('navigation-viewport')).toHaveClass('z-10')
+    expect(screen.getByTestId('manual-navigation-layout')).toHaveClass('z-10')
+    expect(screen.getByTestId('manual-risk-control-panel')).toBeInTheDocument()
+  })
+
   it('starts and cancels the emergency warning countdown from the warning button', async () => {
     const queryClient = new QueryClient()
 
