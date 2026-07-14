@@ -1,32 +1,34 @@
 import { Play, Stop, Video } from '@phosphor-icons/react'
 import { useRef, useState } from 'react'
 
+import { versionVideoAssetUrl } from '@/features/videoAssets'
+
 import { useModelLabInference } from '../useModelLabInference'
 
 const MODEL_LAB_CLASS_VIDEOS = [
   {
     label: '정상',
-    url: '/videos/model-lab-safe-driving.mp4',
+    url: versionVideoAssetUrl('/videos/model-lab-safe-driving.mp4'),
     variableName: 'class_0',
   },
   {
     label: '기기조작',
-    url: '/videos/model-lab-device-operation.mp4',
+    url: versionVideoAssetUrl('/videos/model-lab-device-operation.mp4'),
     variableName: 'class_1',
   },
   {
     label: '핸드폰',
-    url: '/videos/model-lab-phone-usage.mp4',
+    url: versionVideoAssetUrl('/videos/model-lab-phone-usage.mp4'),
     variableName: 'class_2',
   },
   {
     label: '졸음',
-    url: '/videos/model-lab-drowsy.mp4',
+    url: versionVideoAssetUrl('/videos/model-lab-drowsy.mp4'),
     variableName: 'class_3',
   },
   {
     label: '섭취',
-    url: '/videos/model-lab-eating.mp4',
+    url: versionVideoAssetUrl('/videos/model-lab-eating.mp4'),
     variableName: 'class_4',
   },
 ] as const

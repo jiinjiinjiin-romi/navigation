@@ -60,6 +60,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
+import { versionVideoAssetUrl } from '@/features/videoAssets'
 import { VoiceOrb } from '@/features/orb'
 import type { OrbAssistantState, OrbColorTheme } from '@/features/orb'
 import {
@@ -170,37 +171,37 @@ export type DriverVideoSource = {
 const DROWSY_YAWN_VIDEO_SOURCE: DriverVideoSource = {
   name: '하품',
   type: 'video/mp4',
-  url: '/videos/drowsy-yawn.mp4',
+  url: versionVideoAssetUrl('/videos/drowsy-yawn.mp4'),
 }
 const DROWSY_NORMAL_DRIVING_VIDEO_SOURCE: DriverVideoSource = {
   name: '정상 주행',
   type: 'video/mp4',
-  url: '/videos/drowsy-normal-driving.mp4',
+  url: versionVideoAssetUrl('/videos/drowsy-normal-driving.mp4'),
 }
 const PHONE_USAGE_VIDEO_SOURCE: DriverVideoSource = {
   name: '휴대폰 사용',
   type: 'video/mp4',
-  url: '/videos/phone-usage-1.mp4',
+  url: versionVideoAssetUrl('/videos/phone-usage-1.mp4'),
 }
 const GAZE_AWAY_VIDEO_SOURCE: DriverVideoSource = {
   name: '시선 이탈',
   type: 'video/mp4',
-  url: '/videos/gaze-away.mp4',
+  url: versionVideoAssetUrl('/videos/gaze-away.mp4'),
 }
 const REACHING_BEHIND_VIDEO_SOURCE: DriverVideoSource = {
   name: '뒷좌석 확인',
   type: 'video/mp4',
-  url: '/videos/reaching-behind.mp4',
+  url: versionVideoAssetUrl('/videos/reaching-behind.mp4'),
 }
 const DEVICE_OPERATION_VIDEO_SOURCE: DriverVideoSource = {
   name: '기기조작',
   type: 'video/mp4',
-  url: '/videos/device-operation.mp4',
+  url: versionVideoAssetUrl('/videos/device-operation.mp4'),
 }
 const DEVICE_NORMAL_DRIVING_VIDEO_SOURCE: DriverVideoSource = {
   name: '정상 주행',
   type: 'video/mp4',
-  url: '/videos/device-normal-driving.mp4',
+  url: versionVideoAssetUrl('/videos/device-normal-driving.mp4'),
 }
 const DROWSY_NORMAL_DRIVING_VIDEO_EVENT_IDS = new Set([
   'drowsy_ok_response',

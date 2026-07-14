@@ -35,7 +35,7 @@ describe('ModelLabPage', () => {
     expect(videoFrame).not.toHaveAttribute('role')
     const video = videoFrame.querySelector('video')
     expect(video).toHaveClass('h-full', 'w-full', 'object-contain')
-    expect(video).toHaveAttribute('src', '/videos/model-lab-phone-usage.mp4')
+    expect(video).toHaveAttribute('src', '/videos/model-lab-phone-usage.mp4?v=llast-20260715')
     expect(screen.getByText('선택한 클래스: 핸드폰')).toBeInTheDocument()
     expect(screen.queryByText(/S2AC/)).not.toBeInTheDocument()
   })
