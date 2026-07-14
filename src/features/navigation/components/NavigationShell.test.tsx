@@ -2765,7 +2765,7 @@ describe('NavigationShell', () => {
     })
   })
 
-  it('renders the desktop cockpit layout with video, navigation, and scenario debug regions', () => {
+  it('centers the manual risk workspace without rendering the driver-video panel', () => {
     const queryClient = new QueryClient()
 
     render(
@@ -2775,35 +2775,45 @@ describe('NavigationShell', () => {
     )
 
     const stage = screen.getByTestId('navigation-stage')
-    const videoPanel = screen.getByTestId('driver-video-panel')
+    const manualLayout = screen.getByTestId('manual-navigation-layout')
     const viewport = screen.getByTestId('navigation-viewport')
     const manualControlPanel = screen.getByTestId('manual-risk-control-panel')
     const manualRiskStackStatus = screen.getByTestId('manual-risk-stack-status')
 
     expect(stage).toHaveClass('grid')
     expect(stage).toHaveClass('grid-cols-[minmax(0,1fr)_24rem]')
-    expect(videoPanel).toBeInTheDocument()
-    expect(videoPanel).toHaveClass('h-full')
-    expect(videoPanel).toHaveClass('driver-video-player-surface')
-    expect(videoPanel).toHaveClass('col-start-1')
-    expect(videoPanel).toHaveClass('row-start-1')
-    expect(viewport).toHaveClass('h-full')
+    expect(stage).not.toHaveClass('grid-rows-[minmax(17rem,38vh)_minmax(0,1fr)]')
+    expect(screen.queryByTestId('driver-video-panel')).not.toBeInTheDocument()
+    expect(manualLayout).toHaveClass('flex')
+    expect(manualLayout).toHaveClass('flex-col')
+    expect(manualLayout).toHaveClass('self-center')
+    expect(viewport).toHaveClass('aspect-[16/10]')
     expect(viewport).toHaveClass('col-start-1')
-    expect(viewport).toHaveClass('row-start-2')
-    expect(viewport).not.toHaveClass('aspect-[16/10]')
-    expect(manualControlPanel).toHaveClass('col-start-2')
-    expect(manualControlPanel).toHaveClass('row-start-2')
-    expect(manualControlPanel).not.toHaveClass('row-span-2')
-    expect(manualControlPanel).not.toHaveClass('h-full')
-    expect(manualControlPanel).toHaveClass('self-start')
-    expect(manualRiskStackStatus).toHaveClass('col-start-2')
-    expect(manualRiskStackStatus).toHaveClass('row-start-1')
-    expect(manualRiskStackStatus).toHaveClass('self-end')
-    expect(manualRiskStackStatus).toHaveClass('justify-self-start')
-    expect(within(videoPanel).queryByTestId('manual-risk-stack-status')).not.toBeInTheDocument()
+    expect(viewport).toHaveClass('self-center')
+    expect(manualLayout).toContainElement(manualControlPanel)
+    expect(manualLayout).toContainElement(manualRiskStackStatus)
+    expect(manualControlPanel).toHaveClass('w-full')
+    expect(manualRiskStackStatus).toHaveClass('w-full')
   })
 
-  it('loads a selected local driver video into the top video panel', () => {
+  it('keeps the driver-video panel in the demo scenario cockpit', async () => {
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(await screen.findByTestId('demo-entry-scenario-button'))
+    fireEvent.click(await screen.findByTestId('demo-scenario-card-drowsy_driver'))
+
+    expect(await screen.findByTestId('demo-scenario-presenter-panel')).toBeInTheDocument()
+    expect(screen.getByTestId('driver-video-panel')).toBeInTheDocument()
+    expect(screen.queryByTestId('manual-navigation-layout')).not.toBeInTheDocument()
+  })
+
+  it('loads a selected local driver video into the demo scenario cockpit', async () => {
     const queryClient = new QueryClient()
     const createObjectURL = vi.fn(() => 'blob:test-driver-video')
     const revokeObjectURL = vi.fn()
@@ -2815,9 +2825,12 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
+        <NavigationShell />
       </QueryClientProvider>,
     )
+
+    fireEvent.click(await screen.findByTestId('demo-entry-scenario-button'))
+    fireEvent.click(await screen.findByTestId('demo-scenario-card-drowsy_driver'))
 
     const file = new File(['driver video'], 'driver.mp4', { type: 'video/mp4' })
     fireEvent.change(screen.getByLabelText('운전자 영상 파일 선택'), {
@@ -2842,7 +2855,7 @@ describe('NavigationShell', () => {
     expect(revokeObjectURL).not.toHaveBeenCalled()
   })
 
-  it('opens the driver video picker when the non-playing video panel is clicked', () => {
+  it('opens the driver video picker from the non-playing demo scenario panel', async () => {
     const queryClient = new QueryClient()
     const createObjectURL = vi.fn(() => 'blob:test-driver-video')
     const revokeObjectURL = vi.fn()
@@ -2855,9 +2868,12 @@ describe('NavigationShell', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
+        <NavigationShell />
       </QueryClientProvider>,
     )
+
+    fireEvent.click(await screen.findByTestId('demo-entry-scenario-button'))
+    fireEvent.click(await screen.findByTestId('demo-scenario-card-drowsy_driver'))
 
     fireEvent.click(screen.getByTestId('driver-video-panel'))
     expect(inputClick).toHaveBeenCalledTimes(1)

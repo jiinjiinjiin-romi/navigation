@@ -2010,8 +2010,12 @@ export function NavigationShell({
   const motionTiming = shouldReduceMotion
     ? { duration: 0 }
     : { duration: 0.22, ease: PRODUCT_EASE }
+  const manualNavigationActive = navigationEntryMode === 'free-navigation'
   const navigationViewportClassName = [
-    'relative col-start-1 row-start-2 h-full min-h-0 overflow-hidden rounded-[1.1rem] border border-white/70 bg-[var(--nav-frame)] shadow-[0_18px_46px_rgb(15_23_42/0.24)] ring-1 ring-[rgb(148_163_184/0.18)]',
+    'relative col-start-1 min-h-0 overflow-hidden rounded-[1.1rem] border border-white/70 bg-[var(--nav-frame)] shadow-[0_18px_46px_rgb(15_23_42/0.24)] ring-1 ring-[rgb(148_163_184/0.18)]',
+    manualNavigationActive
+      ? 'aspect-[16/10] w-full max-h-full self-center'
+      : 'row-start-2 h-full',
   ].join(' ')
 
   useEffect(() => () => {
@@ -3238,22 +3242,29 @@ export function NavigationShell({
   return (
     <main
       data-testid="navigation-stage"
-      className="relative grid h-screen min-h-0 grid-cols-[minmax(0,1fr)_24rem] grid-rows-[minmax(17rem,38vh)_minmax(0,1fr)] gap-3 bg-[#06080c] p-3"
+      className={[
+        'relative grid h-screen min-h-0 grid-cols-[minmax(0,1fr)_24rem] gap-3 bg-[#06080c] p-3',
+        manualNavigationActive ? 'items-center' : 'grid-rows-[minmax(17rem,38vh)_minmax(0,1fr)]',
+      ].join(' ')}
     >
-      {/* Top cockpit surface: this area is reserved for the driver's in-cabin video. */}
-      <DriverVideoPanel
-        allowVideoSelection
-        error={driverVideoError}
-        fileName={driverVideo?.name}
-        motionTiming={motionTiming}
-        source={driverVideo ?? undefined}
-        onError={() => setDriverVideoError(true)}
-        onSelectVideo={selectDriverVideo}
-      />
-      <ManualRiskStackStatus
-        manualRiskStack={manualRiskStackInfo}
-        motionTiming={motionTiming}
-      />
+      {!manualNavigationActive ? (
+        <>
+          {/* Top cockpit surface: this area is reserved for the driver's in-cabin video. */}
+          <DriverVideoPanel
+            allowVideoSelection
+            error={driverVideoError}
+            fileName={driverVideo?.name}
+            motionTiming={motionTiming}
+            source={driverVideo ?? undefined}
+            onError={() => setDriverVideoError(true)}
+            onSelectVideo={selectDriverVideo}
+          />
+          <ManualRiskStackStatus
+            manualRiskStack={manualRiskStackInfo}
+            motionTiming={motionTiming}
+          />
+        </>
+      ) : null}
       <section
         data-testid="navigation-viewport"
         className={navigationViewportClassName}
@@ -3663,7 +3674,73 @@ export function NavigationShell({
           ) : null}
         </AnimatePresence>
       </section>
-      {demoScenarioState ? (
+      {manualNavigationActive ? (
+        <div
+          className="col-start-2 flex w-full flex-col justify-center gap-3 self-center"
+          data-testid="manual-navigation-layout"
+        >
+          <ManualRiskStackStatus
+            className="w-full"
+            manualRiskStack={manualRiskStackInfo}
+            motionTiming={motionTiming}
+          />
+          {isRoadieAssistantDebugPanelEnabled() ? (
+            <RoadieAssistantDebugPanel
+              className="w-full"
+              motionTiming={motionTiming}
+              scenario={assistantScenario}
+              scenarioId={assistantScenarioId}
+              stepIndex={assistantStepIndex}
+              onNext={() => moveAssistantScenarioStep(1)}
+              onPrevious={() => moveAssistantScenarioStep(-1)}
+              onReset={resetAssistantScenario}
+              onSelectScenario={selectAssistantScenario}
+            />
+          ) : (
+            <ManualRiskControlPanel
+              agentPersonality={manualRiskAgentPersonality}
+              agentVoiceId={selectedProfileVoiceId as TtsVoiceId}
+              canAdvanceResponse={manualRiskConversation?.kind === 'user'}
+              canEndDrive={Object.values(manualRiskEvents).some((event) => event.clickCount > 0)}
+              className="w-full"
+              controlsLocked={manualRiskControlsLocked}
+              emergencyWarningCountdown={manualEmergencyWarningCountdown}
+              emergencyWarningPending={manualEmergencyWarningPending}
+              motionTiming={motionTiming}
+              profileReturnAttention={
+                manualRiskConversation?.kind === 'assistant'
+                && manualRiskConversation.nodeId === 'drive-summary-complete'
+              }
+              responseOptions={manualRiskResponseOptions}
+              responseOptionsLocked={driveSummaryLocked}
+              voiceSaveError={updateManualRiskSpeakerMutation.isError}
+              voiceSaving={updateManualRiskSpeakerMutation.isPending}
+              voiceStyleAvailable={Boolean(selectedProfile)}
+              voiceStyleSaveError={updateManualRiskVoiceStyleMutation.isError}
+              voiceStyleSaving={updateManualRiskVoiceStyleMutation.isPending}
+              onAdvanceResponse={advanceManualRiskResponse}
+              onAgentPersonalityChange={updateManualRiskAgentPersonality}
+              onAgentVoiceChange={updateManualRiskSpeaker}
+              onCancelEmergencyWarning={cancelManualEmergencyWarning}
+              onEmergencyWarning={startManualEmergencyWarning}
+              onEndDrive={openDriveSummaryConfirmation}
+              onResponseOptionSelect={selectManualRiskResponseOption}
+              onReturnToProfileSelection={() => {
+                cancelManualEmergencyWarning()
+                resetManualRiskConversation()
+                setDriveSummaryLocked(false)
+                setManualRiskEvents(createInitialManualRiskEvents())
+                setBehaviorWarningSensitivityOverrides({})
+                setActiveSidePanel(null)
+                setNavigationEntryMode(null)
+                setProfileSetupView('list')
+                setEntryScreen('profile-selection')
+              }}
+              onSelectRisk={selectManualRisk}
+            />
+          )}
+        </div>
+      ) : demoScenarioState ? (
         <DemoScenarioPresenterPanel
           motionTiming={motionTiming}
           routeReady={Boolean(activeRoute)}
@@ -3685,60 +3762,6 @@ export function NavigationShell({
             setDemoCompleted(false)
           }}
         />
-      ) : navigationEntryMode === 'free-navigation' ? (
-        isRoadieAssistantDebugPanelEnabled() ? (
-          <RoadieAssistantDebugPanel
-            motionTiming={motionTiming}
-            scenario={assistantScenario}
-            scenarioId={assistantScenarioId}
-            stepIndex={assistantStepIndex}
-            onNext={() => moveAssistantScenarioStep(1)}
-            onPrevious={() => moveAssistantScenarioStep(-1)}
-            onReset={resetAssistantScenario}
-            onSelectScenario={selectAssistantScenario}
-          />
-        ) : (
-          <ManualRiskControlPanel
-            agentPersonality={manualRiskAgentPersonality}
-            canAdvanceResponse={manualRiskConversation?.kind === 'user'}
-            canEndDrive={Object.values(manualRiskEvents).some((event) => event.clickCount > 0)}
-            controlsLocked={manualRiskControlsLocked}
-            profileReturnAttention={
-              manualRiskConversation?.kind === 'assistant'
-              && manualRiskConversation.nodeId === 'drive-summary-complete'
-            }
-            responseOptionsLocked={driveSummaryLocked}
-            emergencyWarningCountdown={manualEmergencyWarningCountdown}
-            emergencyWarningPending={manualEmergencyWarningPending}
-            motionTiming={motionTiming}
-            onAdvanceResponse={advanceManualRiskResponse}
-            onAgentPersonalityChange={updateManualRiskAgentPersonality}
-            onAgentVoiceChange={updateManualRiskSpeaker}
-            onCancelEmergencyWarning={cancelManualEmergencyWarning}
-            onEmergencyWarning={startManualEmergencyWarning}
-            onEndDrive={openDriveSummaryConfirmation}
-            onResponseOptionSelect={selectManualRiskResponseOption}
-            onReturnToProfileSelection={() => {
-              cancelManualEmergencyWarning()
-              resetManualRiskConversation()
-              setDriveSummaryLocked(false)
-              setManualRiskEvents(createInitialManualRiskEvents())
-              setBehaviorWarningSensitivityOverrides({})
-              setActiveSidePanel(null)
-              setNavigationEntryMode(null)
-              setProfileSetupView('list')
-              setEntryScreen('profile-selection')
-            }}
-            onSelectRisk={selectManualRisk}
-            responseOptions={demoAssistantStep ? [] : manualRiskResponseOptions}
-            agentVoiceId={selectedProfileVoiceId as TtsVoiceId}
-            voiceStyleAvailable={Boolean(selectedProfile)}
-            voiceSaveError={updateManualRiskSpeakerMutation.isError}
-            voiceSaving={updateManualRiskSpeakerMutation.isPending}
-            voiceStyleSaveError={updateManualRiskVoiceStyleMutation.isError}
-            voiceStyleSaving={updateManualRiskVoiceStyleMutation.isPending}
-          />
-        )
       ) : (
         <div className="col-start-2 row-start-2 self-start rounded-[1.1rem] border border-white/70 bg-white p-4 text-[var(--nav-ink)] shadow-[0_18px_46px_rgb(0_0_0/0.24)]">
           <p className="text-sm font-bold">데모 준비</p>
@@ -4852,16 +4875,21 @@ export function DriverVideoPanel({
 }
 
 function ManualRiskStackStatus({
+  className,
   manualRiskStack,
   motionTiming,
 }: {
+  className?: string
   manualRiskStack: ManualRiskStackInfo | null
   motionTiming: MotionTiming
 }) {
   return (
     <motion.aside
       aria-label="위험 누적 상태"
-      className="col-start-2 row-start-1 mb-0 w-[12.5rem] self-end justify-self-start rounded-xl border border-white/70 bg-white px-3 py-2 text-left text-[var(--nav-ink)] shadow-[0_12px_26px_rgb(15_23_42/0.18)]"
+      className={[
+        'rounded-xl border border-white/70 bg-white px-3 py-2 text-left text-[var(--nav-ink)] shadow-[0_12px_26px_rgb(15_23_42/0.18)]',
+        className ?? 'col-start-2 row-start-1 mb-0 w-[12.5rem] self-end justify-self-start',
+      ].join(' ')}
       data-testid="manual-risk-stack-status"
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
@@ -6686,6 +6714,7 @@ function ManualRiskControlPanel({
   agentVoiceId,
   canAdvanceResponse,
   canEndDrive,
+  className,
   controlsLocked,
   profileReturnAttention,
   emergencyWarningCountdown,
@@ -6712,6 +6741,7 @@ function ManualRiskControlPanel({
   agentVoiceId: TtsVoiceId
   canAdvanceResponse: boolean
   canEndDrive: boolean
+  className?: string
   controlsLocked: boolean
   profileReturnAttention: boolean
   emergencyWarningCountdown: number | null
@@ -6794,7 +6824,10 @@ function ManualRiskControlPanel({
   return (
     <motion.section
       aria-label="실시간 위험 상황 조작"
-      className="col-start-2 row-start-2 self-start rounded-[1.1rem] border border-white/70 bg-white p-4 text-[var(--nav-ink)] shadow-[0_18px_46px_rgb(0_0_0/0.24)] [&_button:disabled]:cursor-not-allowed [&_button:disabled]:opacity-50"
+      className={[
+        'rounded-[1.1rem] border border-white/70 bg-white p-4 text-[var(--nav-ink)] shadow-[0_18px_46px_rgb(0_0_0/0.24)] [&_button:disabled]:cursor-not-allowed [&_button:disabled]:opacity-50',
+        className ?? 'col-start-2 row-start-2 self-start',
+      ].join(' ')}
       data-testid="manual-risk-control-panel"
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
@@ -7038,6 +7071,7 @@ function ManualRiskControlPanel({
 }
 
 function RoadieAssistantDebugPanel({
+  className,
   motionTiming,
   scenario,
   scenarioId,
@@ -7047,6 +7081,7 @@ function RoadieAssistantDebugPanel({
   onReset,
   onSelectScenario,
 }: {
+  className?: string
   motionTiming: MotionTiming
   scenario: RoadieAssistantScenario
   scenarioId: RoadieAssistantScenarioId
@@ -7062,7 +7097,10 @@ function RoadieAssistantDebugPanel({
   return (
     <motion.section
       aria-label="로디 AI 시나리오 디버그"
-      className="col-start-2 row-start-2 self-start rounded-[1.1rem] border border-white/70 bg-white p-4 text-[var(--nav-ink)] shadow-[0_18px_46px_rgb(0_0_0/0.24)]"
+      className={[
+        'rounded-[1.1rem] border border-white/70 bg-white p-4 text-[var(--nav-ink)] shadow-[0_18px_46px_rgb(0_0_0/0.24)]',
+        className ?? 'col-start-2 row-start-2 self-start',
+      ].join(' ')}
       data-testid="roadie-assistant-debug-panel"
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
