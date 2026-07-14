@@ -1590,7 +1590,6 @@ function VideosPage({ dashboardData, dashboardState, embedded = false, filteredT
         <Panel title="주행 영상" icon={<VideoCamera className="size-5" weight="bold" />}>
           <div className="relative aspect-video overflow-hidden rounded-lg bg-black">
             <DriverVideoPanel
-              allowVideoSelection={false}
               emptyDescription="선택한 주행의 이벤트 타임라인을 확인합니다."
               emptyTitle="주행 영상"
               error={false}

@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   advanceDemoScenarioForPresenter,
   createDemoAssistantStep,
+  getDemoDriverVideoSource,
   getAssistantSpeechCharacterDelaySeconds,
   getAssistantVisibleOrbState,
   getRoadieAssistantPanelWidth,
@@ -24,6 +25,7 @@ import {
   createInitialDemoScenarioState,
   getDemoScenarios,
   respondToDemoScenario,
+  type DemoScenarioControllerState,
 } from '@/features/demo-scenarios'
 import {
   createProfile,
@@ -767,6 +769,8 @@ describe('NavigationShell', () => {
     latestRouteOptionsOverlayReady = undefined
     vi.useRealTimers()
     window.history.replaceState(null, '', '/')
+    mockPlyr.mockClear()
+    mockPlyrDestroy.mockClear()
     mockedSearchPlaces.mockReset()
     mockedGetRoute.mockReset()
     mockedGetRouteOptions.mockReset()
@@ -1032,6 +1036,12 @@ describe('NavigationShell', () => {
     expect(screen.queryByTestId('navigation-profile-setup')).not.toBeInTheDocument()
     expect(screen.getByTestId('demo-entry-scenario-button')).toBeInTheDocument()
     expect(screen.getByTestId('demo-entry-manual-control-button')).toBeInTheDocument()
+    const driverVideoPanel = screen.getByTestId('driver-video-panel')
+    expect(driverVideoPanel).toBeInTheDocument()
+    expect(within(driverVideoPanel).getAllByText('대표 시나리오 영상 대기')).toHaveLength(2)
+    expect(screen.getByTestId('driver-video-player')).not.toHaveAttribute('src')
+    expect(screen.queryByText('영상 선택')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('운전자 영상 파일 선택')).not.toBeInTheDocument()
   })
 
   it('uses 상우 in representative scenario selection without selecting a profile', async () => {
@@ -3182,7 +3192,7 @@ describe('NavigationShell', () => {
     expect(manualRiskStackStatus).toHaveClass('w-full')
   })
 
-  it('keeps the driver-video panel in the demo scenario cockpit', async () => {
+  it('keeps the driver-video panel waiting during common route setup', async () => {
     const queryClient = new QueryClient()
 
     render(
@@ -3195,19 +3205,17 @@ describe('NavigationShell', () => {
     fireEvent.click(await screen.findByTestId('demo-scenario-card-drowsy_driver'))
 
     expect(await screen.findByTestId('demo-scenario-presenter-panel')).toBeInTheDocument()
-    expect(screen.getByTestId('driver-video-panel')).toBeInTheDocument()
+    const driverVideoPanel = screen.getByTestId('driver-video-panel')
+    expect(driverVideoPanel).toBeInTheDocument()
+    expect(within(driverVideoPanel).getAllByText('대표 시나리오 영상 대기')).toHaveLength(2)
+    expect(screen.getByTestId('driver-video-player')).not.toHaveAttribute('src')
+    expect(screen.queryByText('영상 선택')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('운전자 영상 파일 선택')).not.toBeInTheDocument()
     expect(screen.queryByTestId('manual-navigation-layout')).not.toBeInTheDocument()
   })
 
-  it('loads a selected local driver video into the demo scenario cockpit', async () => {
+  it('keeps one Plyr instance while driver video sources change and clear', async () => {
     const queryClient = new QueryClient()
-    const createObjectURL = vi.fn(() => 'blob:test-driver-video')
-    const revokeObjectURL = vi.fn()
-    vi.stubGlobal('URL', {
-      ...URL,
-      createObjectURL,
-      revokeObjectURL,
-    })
 
     render(
       <QueryClientProvider client={queryClient}>
@@ -3216,40 +3224,140 @@ describe('NavigationShell', () => {
     )
 
     fireEvent.click(await screen.findByTestId('demo-entry-scenario-button'))
-    fireEvent.click(await screen.findByTestId('demo-scenario-card-drowsy_driver'))
+    fireEvent.click(await screen.findByTestId('demo-scenario-card-agent_personality_voice_change'))
 
-    const file = new File(['driver video'], 'driver.mp4', { type: 'video/mp4' })
-    fireEvent.change(screen.getByLabelText('운전자 영상 파일 선택'), {
-      target: { files: [file] },
-    })
+    expect(await screen.findByTestId('demo-scenario-presenter-panel')).toBeInTheDocument()
+    expect(screen.getByTestId('driver-video-player')).toHaveAttribute('src', '/videos/drowsy-yawn.mp4')
 
-    expect(createObjectURL).toHaveBeenCalledWith(file)
-    const player = screen.getByTestId('driver-video-player')
-    const source = player.querySelector('source')
-    expect(source).toHaveAttribute('src', 'blob:test-driver-video')
-    expect(source).toHaveAttribute('type', 'video/mp4')
-    expect(player).toHaveAttribute('controls')
-    expect(player).toHaveClass('h-full')
-    expect(player).toHaveClass('w-full')
-    expect(player).toHaveClass('object-contain')
-    expect(screen.getByText('driver.mp4')).toBeInTheDocument()
-    expect(screen.queryByText('영상 선택')).not.toBeInTheDocument()
-    expect(screen.queryByLabelText('운전자 영상 썸네일 VTT 파일 선택')).not.toBeInTheDocument()
-    expect(mockPlyr).toHaveBeenLastCalledWith(expect.any(HTMLVideoElement), expect.not.objectContaining({
-      previewThumbnails: expect.anything(),
-    }))
-    expect(revokeObjectURL).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: '다음' }))
+    fireEvent.click(screen.getByRole('button', { name: '다음' }))
+    fireEvent.click(screen.getByRole('button', { name: '다음' }))
+    fireEvent.click(screen.getByRole('button', { name: '다음' }))
+
+    expect(screen.getByTestId('driver-video-player')).not.toHaveAttribute('src')
+    expect(mockPlyr).toHaveBeenCalledTimes(1)
+    expect(mockPlyrDestroy).not.toHaveBeenCalled()
   })
 
-  it('opens the driver video picker from the non-playing demo scenario panel', async () => {
-    const queryClient = new QueryClient()
-    const createObjectURL = vi.fn(() => 'blob:test-driver-video')
-    const revokeObjectURL = vi.fn()
-    vi.stubGlobal('URL', {
-      ...URL,
-      createObjectURL,
-      revokeObjectURL,
+  it('maps the drowsy demo scenario steps to the configured driver videos', () => {
+    const state = createInitialDemoScenarioState('drowsy_driver')
+    const withEvent = (eventId: string): DemoScenarioControllerState => ({
+      ...state,
+      phase: 'scenario',
+      setupEvent: null,
+      scenarioEvent: state.scenario.events.find((event) => event.id === eventId) ?? null,
     })
+
+    expect(getDemoDriverVideoSource({ ...state, phase: 'setup' })).toBeUndefined()
+    expect(getDemoDriverVideoSource(withEvent('drowsy_session_started'))?.url).toBe('/videos/drowsy-yawn.mp4')
+    expect(getDemoDriverVideoSource(withEvent('drowsy_ok_response'))?.url).toBe('/videos/drowsy-normal-driving.mp4')
+    expect(getDemoDriverVideoSource(withEvent('drowsy_ok_acknowledged'))?.url).toBe('/videos/drowsy-normal-driving.mp4')
+    expect(getDemoDriverVideoSource(withEvent('drowsy_repeated_detection'))?.url).toBe('/videos/drowsy-yawn.mp4')
+    expect(getDemoDriverVideoSource(withEvent('drowsy_rest_area_guidance_started'))?.url).toBe('/videos/drowsy-normal-driving.mp4')
+    expect(getDemoDriverVideoSource(withEvent('drowsy_session_ended'))).toBeUndefined()
+    expect(getDemoDriverVideoSource(withEvent('drowsy_report_ready'))).toBeUndefined()
+  })
+
+  it('maps the phone usage demo scenario steps to the configured driver videos', () => {
+    const state = createInitialDemoScenarioState('phone_usage')
+    const withEvent = (eventId: string): DemoScenarioControllerState => ({
+      ...state,
+      phase: 'scenario',
+      setupEvent: null,
+      scenarioEvent: state.scenario.events.find((event) => event.id === eventId) ?? null,
+    })
+
+    expect(getDemoDriverVideoSource({ ...state, phase: 'setup' })).toBeUndefined()
+    expect(getDemoDriverVideoSource(withEvent('phone_session_started'))?.url).toBe('/videos/phone-usage-1.mp4')
+    expect(getDemoDriverVideoSource(withEvent('phone_first_warning'))?.url).toBe('/videos/phone-usage-1.mp4')
+    expect(getDemoDriverVideoSource(withEvent('phone_assist_offer'))?.url).toBe('/videos/phone-usage-1.mp4')
+    expect(getDemoDriverVideoSource(withEvent('phone_assist_approved'))?.url).toBe('/videos/drowsy-normal-driving.mp4')
+    expect(getDemoDriverVideoSource(withEvent('phone_message_preview'))?.url).toBe('/videos/drowsy-normal-driving.mp4')
+    expect(getDemoDriverVideoSource(withEvent('phone_session_ended'))).toBeUndefined()
+    expect(getDemoDriverVideoSource(withEvent('phone_report_ready'))).toBeUndefined()
+  })
+
+  it('does not play driver videos during common route setup scenarios', () => {
+    expect(getDemoDriverVideoSource(createInitialDemoScenarioState('drowsy_driver'))).toBeUndefined()
+    expect(getDemoDriverVideoSource(createInitialDemoScenarioState('phone_usage'))).toBeUndefined()
+    expect(getDemoDriverVideoSource(createInitialDemoScenarioState('device_operation'))).toBeUndefined()
+  })
+
+  it('maps the device operation demo scenario to device and normal-driving videos', () => {
+    const state = createInitialDemoScenarioState('device_operation')
+    const withEvent = (eventId: string): DemoScenarioControllerState => ({
+      ...state,
+      phase: 'scenario',
+      setupEvent: null,
+      scenarioEvent: state.scenario.events.find((event) => event.id === eventId) ?? null,
+    })
+
+    expect(getDemoDriverVideoSource({ ...state, phase: 'setup' })).toBeUndefined()
+    expect(getDemoDriverVideoSource(withEvent('device_session_started'))?.url).toBe('/videos/device-operation.mp4')
+    expect(getDemoDriverVideoSource(withEvent('device_first_detection'))?.url).toBe('/videos/device-operation.mp4')
+    expect(getDemoDriverVideoSource(withEvent('device_first_warning'))?.url).toBe('/videos/device-operation.mp4')
+    expect(getDemoDriverVideoSource(withEvent('device_repeated_detection'))?.url).toBe('/videos/device-operation.mp4')
+    expect(getDemoDriverVideoSource(withEvent('device_music_offer'))?.url).toBe('/videos/device-operation.mp4')
+    expect(getDemoDriverVideoSource(withEvent('device_music_approved'))?.url).toBe('/videos/device-normal-driving.mp4')
+    expect(getDemoDriverVideoSource(withEvent('device_music_type_prompt'))?.url).toBe('/videos/device-normal-driving.mp4')
+    expect(getDemoDriverVideoSource(withEvent('device_music_started'))?.url).toBe('/videos/device-normal-driving.mp4')
+    expect(getDemoDriverVideoSource(withEvent('device_session_ended'))).toBeUndefined()
+    expect(getDemoDriverVideoSource(withEvent('device_report_ready'))).toBeUndefined()
+  })
+
+  it('maps the voice personality mini scenario to the yawn driver video for every step', () => {
+    const state = createInitialDemoScenarioState('agent_personality_voice_change')
+    const withEvent = (eventId: string): DemoScenarioControllerState => ({
+      ...state,
+      phase: 'scenario',
+      setupEvent: null,
+      scenarioEvent: state.scenario.events.find((event) => event.id === eventId) ?? null,
+    })
+
+    expect(getDemoDriverVideoSource(state)?.url).toBe('/videos/drowsy-yawn.mp4')
+    expect(getDemoDriverVideoSource(withEvent('personality_user_request'))?.url).toBe('/videos/drowsy-yawn.mp4')
+    expect(getDemoDriverVideoSource(withEvent('personality_clear_mode_applied'))?.url).toBe('/videos/drowsy-yawn.mp4')
+    expect(getDemoDriverVideoSource(withEvent('personality_clear_followup'))?.url).toBe('/videos/drowsy-yawn.mp4')
+    expect(getDemoDriverVideoSource(withEvent('personality_session_ended'))).toBeUndefined()
+    expect(getDemoDriverVideoSource(withEvent('personality_report_ready'))).toBeUndefined()
+  })
+
+  it('maps the gaze-away mini scenario to attention and normal-driving videos', () => {
+    const state = createInitialDemoScenarioState('gaze_away_attention')
+    const withEvent = (eventId: string): DemoScenarioControllerState => ({
+      ...state,
+      phase: 'scenario',
+      setupEvent: null,
+      scenarioEvent: state.scenario.events.find((event) => event.id === eventId) ?? null,
+    })
+
+    expect(getDemoDriverVideoSource(state)?.url).toBe('/videos/gaze-away.mp4')
+    expect(getDemoDriverVideoSource(withEvent('gaze_away_first_guidance'))?.url).toBe('/videos/gaze-away.mp4')
+    expect(getDemoDriverVideoSource(withEvent('gaze_away_user_response'))?.url).toBe('/videos/drowsy-normal-driving.mp4')
+    expect(getDemoDriverVideoSource(withEvent('gaze_away_resolved'))?.url).toBe('/videos/drowsy-normal-driving.mp4')
+    expect(getDemoDriverVideoSource(withEvent('gaze_away_session_ended'))).toBeUndefined()
+    expect(getDemoDriverVideoSource(withEvent('gaze_away_report_ready'))).toBeUndefined()
+  })
+
+  it('maps the reaching-behind mini scenario to rear-seat and normal-driving videos', () => {
+    const state = createInitialDemoScenarioState('reaching_behind_check')
+    const withEvent = (eventId: string): DemoScenarioControllerState => ({
+      ...state,
+      phase: 'scenario',
+      setupEvent: null,
+      scenarioEvent: state.scenario.events.find((event) => event.id === eventId) ?? null,
+    })
+
+    expect(getDemoDriverVideoSource(state)?.url).toBe('/videos/reaching-behind.mp4')
+    expect(getDemoDriverVideoSource(withEvent('reaching_behind_first_guidance'))?.url).toBe('/videos/reaching-behind.mp4')
+    expect(getDemoDriverVideoSource(withEvent('reaching_behind_user_response'))?.url).toBe('/videos/drowsy-normal-driving.mp4')
+    expect(getDemoDriverVideoSource(withEvent('reaching_behind_resolved'))?.url).toBe('/videos/drowsy-normal-driving.mp4')
+    expect(getDemoDriverVideoSource(withEvent('reaching_behind_session_ended'))).toBeUndefined()
+    expect(getDemoDriverVideoSource(withEvent('reaching_behind_report_ready'))).toBeUndefined()
+  })
+
+  it('does not open a driver video picker from the representative scenario panel', async () => {
+    const queryClient = new QueryClient()
     const inputClick = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => undefined)
 
     render(
@@ -3261,18 +3369,10 @@ describe('NavigationShell', () => {
     fireEvent.click(await screen.findByTestId('demo-entry-scenario-button'))
     fireEvent.click(await screen.findByTestId('demo-scenario-card-drowsy_driver'))
 
-    fireEvent.click(screen.getByTestId('driver-video-panel'))
-    expect(inputClick).toHaveBeenCalledTimes(1)
+    fireEvent.click(await screen.findByTestId('driver-video-panel'))
 
-    const file = new File(['driver video'], 'driver.mp4', { type: 'video/mp4' })
-    fireEvent.change(screen.getByLabelText('운전자 영상 파일 선택'), {
-      target: { files: [file] },
-    })
-
-    fireEvent.click(screen.getByTestId('driver-video-player'))
-    expect(inputClick).toHaveBeenCalledTimes(1)
-    fireEvent.click(screen.getByTestId('driver-video-panel'))
-    expect(inputClick).toHaveBeenCalledTimes(1)
+    expect(inputClick).not.toHaveBeenCalled()
+    expect(screen.queryByLabelText('운전자 영상 파일 선택')).not.toBeInTheDocument()
 
     inputClick.mockRestore()
   })

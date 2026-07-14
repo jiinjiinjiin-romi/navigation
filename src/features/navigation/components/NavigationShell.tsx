@@ -167,6 +167,92 @@ export type DriverVideoSource = {
   type: string
   url: string
 }
+const DROWSY_YAWN_VIDEO_SOURCE: DriverVideoSource = {
+  name: '하품',
+  type: 'video/mp4',
+  url: '/videos/drowsy-yawn.mp4',
+}
+const DROWSY_NORMAL_DRIVING_VIDEO_SOURCE: DriverVideoSource = {
+  name: '정상 주행',
+  type: 'video/mp4',
+  url: '/videos/drowsy-normal-driving.mp4',
+}
+const PHONE_USAGE_VIDEO_SOURCE: DriverVideoSource = {
+  name: '휴대폰 사용',
+  type: 'video/mp4',
+  url: '/videos/phone-usage-1.mp4',
+}
+const GAZE_AWAY_VIDEO_SOURCE: DriverVideoSource = {
+  name: '시선 이탈',
+  type: 'video/mp4',
+  url: '/videos/gaze-away.mp4',
+}
+const REACHING_BEHIND_VIDEO_SOURCE: DriverVideoSource = {
+  name: '뒷좌석 확인',
+  type: 'video/mp4',
+  url: '/videos/reaching-behind.mp4',
+}
+const DEVICE_OPERATION_VIDEO_SOURCE: DriverVideoSource = {
+  name: '기기조작',
+  type: 'video/mp4',
+  url: '/videos/device-operation.mp4',
+}
+const DEVICE_NORMAL_DRIVING_VIDEO_SOURCE: DriverVideoSource = {
+  name: '정상 주행',
+  type: 'video/mp4',
+  url: '/videos/device-normal-driving.mp4',
+}
+const DROWSY_NORMAL_DRIVING_VIDEO_EVENT_IDS = new Set([
+  'drowsy_ok_response',
+  'drowsy_ok_acknowledged',
+  'drowsy_rest_area_guidance_started',
+])
+const DROWSY_ENDED_VIDEO_EVENT_IDS = new Set([
+  'drowsy_session_ended',
+  'drowsy_report_ready',
+])
+const PHONE_NORMAL_DRIVING_VIDEO_EVENT_IDS = new Set([
+  'phone_assist_approved',
+  'phone_message_preview',
+  'phone_send_approved',
+  'phone_message_sent',
+])
+const PHONE_ENDED_VIDEO_EVENT_IDS = new Set([
+  'phone_session_ended',
+  'phone_report_ready',
+])
+const DEVICE_NORMAL_DRIVING_VIDEO_EVENT_IDS = new Set([
+  'device_music_approved',
+  'device_music_type_prompt',
+  'device_music_request',
+  'device_music_preview',
+  'device_music_selected',
+  'device_music_started',
+])
+const DEVICE_ENDED_VIDEO_EVENT_IDS = new Set([
+  'device_session_ended',
+  'device_report_ready',
+])
+const GAZE_AWAY_NORMAL_DRIVING_VIDEO_EVENT_IDS = new Set([
+  'gaze_away_user_response',
+  'gaze_away_resolved',
+])
+const REACHING_BEHIND_NORMAL_DRIVING_VIDEO_EVENT_IDS = new Set([
+  'reaching_behind_user_response',
+  'reaching_behind_resolved',
+])
+const PERSONALITY_ENDED_VIDEO_EVENT_IDS = new Set([
+  'personality_session_ended',
+  'personality_report_ready',
+])
+const GAZE_AWAY_ENDED_VIDEO_EVENT_IDS = new Set([
+  'gaze_away_session_ended',
+  'gaze_away_report_ready',
+])
+const REACHING_BEHIND_ENDED_VIDEO_EVENT_IDS = new Set([
+  'reaching_behind_session_ended',
+  'reaching_behind_report_ready',
+])
 export type MotionTiming = {
   duration: number
   ease?: [number, number, number, number]
@@ -1050,42 +1136,6 @@ const SUNGSIMDANG_DAEJEON_STATION_PLACE: Place = {
   address: '대전 동구 중앙로 215 대전역사',
   coordinate: { lat: 36.3326, lng: 127.4347 },
 }
-const DRIVER_VIDEO_MIME_TYPES = new Set([
-  'video/mp4',
-  'video/webm',
-  'video/3gp',
-  'video/ogg',
-  'video/avi',
-  'video/mpeg',
-  'video/object',
-])
-
-function getDriverVideoMimeType(file: File) {
-  if (DRIVER_VIDEO_MIME_TYPES.has(file.type)) {
-    return file.type
-  }
-
-  const extension = file.name.split('.').pop()?.toLowerCase()
-
-  switch (extension) {
-    case 'webm':
-      return 'video/webm'
-    case '3gp':
-    case '3gpp':
-      return 'video/3gp'
-    case 'ogv':
-    case 'ogg':
-      return 'video/ogg'
-    case 'avi':
-      return 'video/avi'
-    case 'mpeg':
-    case 'mpg':
-      return 'video/mpeg'
-    default:
-      return 'video/mp4'
-  }
-}
-
 export function getAssistantSpeechCharacterDelaySeconds(index: number) {
   return index * ROADIE_ASSISTANT_TEXT_STAGGER_SECONDS
 }
@@ -1332,7 +1382,6 @@ export function NavigationShell({
   const [openSensitivityPanelVersion, setOpenSensitivityPanelVersion] = useState(0)
   const [lastManualEmergencyRiskId, setLastManualEmergencyRiskId] = useState<EmergencyManualRiskId>('drowsiness')
   const [manualEmergencyWarningCountdown, setManualEmergencyWarningCountdown] = useState<number | null>(null)
-  const [driverVideo, setDriverVideo] = useState<DriverVideoSource | null>(null)
   const [driverVideoError, setDriverVideoError] = useState(false)
   const [showLocationFallbackToast, setShowLocationFallbackToast] = useState(false)
   const runtimeNavigationActive = Boolean(
@@ -2061,18 +2110,14 @@ export function NavigationShell({
   const manualRiskAlertFlashTransition = shouldReduceMotion
     ? { duration: 0 }
     : { duration: 1.1, times: [0, 0.18, 0.4, 0.58, 1] }
+  const cockpitLayoutActive = !manualNavigationActive
+  const demoDriverVideoSource = getDemoDriverVideoSource(demoScenarioState)
   const navigationViewportClassName = [
     'relative z-10 col-start-1 min-h-0 overflow-hidden rounded-[1.1rem] border border-white/70 bg-[var(--nav-frame)] shadow-[0_18px_46px_rgb(15_23_42/0.24)] ring-1 ring-[rgb(148_163_184/0.18)]',
     manualNavigationActive
       ? 'aspect-[16/10] w-full max-h-full self-center'
       : 'row-start-2 h-full',
   ].join(' ')
-
-  useEffect(() => () => {
-    if (driverVideo?.url) {
-      URL.revokeObjectURL(driverVideo.url)
-    }
-  }, [driverVideo?.url])
 
   useEffect(() => () => {
     if (manualRiskDismissTimerRef.current !== undefined) {
@@ -2097,15 +2142,6 @@ export function NavigationShell({
       window.clearTimeout(driveSummaryDismissTimerRef.current)
       driveSummaryDismissTimerRef.current = undefined
     }
-  }, [])
-
-  const selectDriverVideo = useCallback((file: File) => {
-    setDriverVideo({
-      name: file.name,
-      type: getDriverVideoMimeType(file),
-      url: URL.createObjectURL(file),
-    })
-    setDriverVideoError(false)
   }, [])
 
   const requestCurrentLocation = useCallback(() => {
@@ -3504,7 +3540,7 @@ export function NavigationShell({
       data-manual-risk-alert-flash-key={manualRiskAlertFlashKey}
       className={[
         'relative grid h-screen min-h-0 grid-cols-[minmax(0,1fr)_24rem] gap-3 bg-[#06080c] p-3',
-        manualNavigationActive ? 'items-center' : 'grid-rows-[minmax(17rem,38vh)_minmax(0,1fr)]',
+        cockpitLayoutActive ? 'grid-rows-[minmax(17rem,38vh)_minmax(0,1fr)]' : 'items-center',
       ].join(' ')}
     >
       {manualRiskAlertFlashKey ? (
@@ -3518,17 +3554,17 @@ export function NavigationShell({
           transition={manualRiskAlertFlashTransition}
         />
       ) : null}
-      {!manualNavigationActive ? (
+      {cockpitLayoutActive ? (
         <>
           {/* Top cockpit surface: this area is reserved for the driver's in-cabin video. */}
           <DriverVideoPanel
-            allowVideoSelection
+            emptyDescription="대표 시나리오를 시작하면 자동으로 재생됩니다."
+            emptyTitle="대표 시나리오 영상 대기"
             error={driverVideoError}
-            fileName={driverVideo?.name}
+            fileName={demoDriverVideoSource?.name ?? '대표 시나리오 영상 대기'}
             motionTiming={motionTiming}
-            source={driverVideo ?? undefined}
+            source={demoDriverVideoSource}
             onError={() => setDriverVideoError(true)}
-            onSelectVideo={selectDriverVideo}
           />
           <ManualRiskStackStatus
             manualRiskStack={manualRiskStackInfo}
@@ -5021,7 +5057,6 @@ function normalizeOptionalProfileText(value: string | null) {
 }
 
 export function DriverVideoPanel({
-  allowVideoSelection = true,
   emptyDescription = '로컬 영상 파일은 브라우저에서만 재생됩니다.',
   emptyTitle = '운전자 영상을 선택하세요',
   error,
@@ -5029,9 +5064,7 @@ export function DriverVideoPanel({
   motionTiming,
   source,
   onError,
-  onSelectVideo,
 }: {
-  allowVideoSelection?: boolean
   emptyDescription?: string
   emptyTitle?: string
   error: boolean
@@ -5039,19 +5072,24 @@ export function DriverVideoPanel({
   motionTiming: MotionTiming
   source?: DriverVideoSource
   onError: () => void
-  onSelectVideo?: (file: File) => void
 }) {
   // Driver monitoring video playback surface for the top cockpit layout.
-  const videoInputId = 'driver-video-file-input'
   const videoRef = useRef<HTMLVideoElement | null>(null)
-  const videoInputRef = useRef<HTMLInputElement | null>(null)
+  const playerRef = useRef<Plyr | null>(null)
 
   useEffect(() => {
-    if (!source || !videoRef.current) {
-      return undefined
+    return () => {
+      playerRef.current?.destroy()
+      playerRef.current = null
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!source || !videoRef.current || playerRef.current) {
+      return
     }
 
-    const player = new Plyr(videoRef.current, {
+    playerRef.current = new Plyr(videoRef.current, {
       controls: [
         'play-large',
         'play',
@@ -5070,17 +5108,7 @@ export function DriverVideoPanel({
         options: [0.5, 0.75, 1, 1.25, 1.5, 2],
       },
     })
-
-    return () => {
-      player.destroy()
-    }
   }, [source])
-
-  const openVideoFilePicker = useCallback(() => {
-    if (allowVideoSelection && onSelectVideo) {
-      videoInputRef.current?.click()
-    }
-  }, [allowVideoSelection, onSelectVideo])
 
   return (
     <motion.section
@@ -5089,29 +5117,28 @@ export function DriverVideoPanel({
       data-testid="driver-video-panel"
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      onClick={() => {
-        if (!source) {
-          openVideoFilePicker()
-        }
-      }}
       transition={motionTiming}
     >
-      {source ? (
-        <video
-          key={source.url}
-          ref={videoRef}
-          className="h-full w-full bg-black object-contain [--plyr-color-main:#2563eb] [--plyr-control-radius:0.55rem] [--plyr-video-background:#000]"
-          controls
-          data-testid="driver-video-player"
-          onClick={(event) => event.stopPropagation()}
-          onError={onError}
-          playsInline
-          title={fileName ?? '운전자 영상'}
-        >
-          <source src={source.url} type={source.type} />
-        </video>
-      ) : (
-        <div className="flex h-full w-full flex-col items-center justify-center gap-4 px-6 text-center">
+      <video
+        ref={videoRef}
+        autoPlay
+        className={[
+          'h-full w-full bg-black object-contain [--plyr-color-main:#2563eb] [--plyr-control-radius:0.55rem] [--plyr-video-background:#000]',
+          source ? '' : 'opacity-0',
+        ].join(' ')}
+        controls
+        data-testid="driver-video-player"
+        loop
+        muted
+        onClick={(event) => event.stopPropagation()}
+        onError={onError}
+        playsInline
+        src={source?.url}
+        title={fileName ?? '운전자 영상'}
+      />
+
+      {!source ? (
+        <div className="pointer-events-none absolute inset-0 flex h-full w-full flex-col items-center justify-center gap-4 px-6 text-center">
           <div className="grid size-14 place-items-center rounded-full bg-white/10 text-white">
             <FileVideo className="size-7" weight="duotone" />
           </div>
@@ -5122,43 +5149,110 @@ export function DriverVideoPanel({
             </p>
           </div>
         </div>
-      )}
+      ) : null}
 
       <div className="absolute left-4 top-4 flex max-w-[calc(100%-2rem)] items-center gap-2 rounded-full bg-black/58 px-3 py-2 text-xs font-semibold text-white backdrop-blur">
         <span className="min-w-0 truncate">{fileName ?? '선택된 영상 없음'}</span>
         {error ? <span className="shrink-0 text-[#fda4af]">재생 오류</span> : null}
       </div>
-
-      {allowVideoSelection && onSelectVideo ? (
-        <input
-          accept="video/*"
-          aria-label="운전자 영상 파일 선택"
-          className="sr-only"
-          id={videoInputId}
-          ref={videoInputRef}
-          onChange={(event) => {
-            const file = event.currentTarget.files?.[0]
-            if (file) {
-              onSelectVideo(file)
-              event.currentTarget.value = ''
-            }
-          }}
-          type="file"
-        />
-      ) : null}
-      {!source && allowVideoSelection && onSelectVideo ? (
-        <label
-          className="absolute right-4 top-4 inline-flex h-10 cursor-pointer items-center gap-2 rounded-full bg-white px-4 text-sm font-bold text-[#101828] shadow-[0_8px_18px_rgb(0_0_0/0.18)] transition hover:bg-[#eef2ff] focus-within:ring-2 focus-within:ring-white/70"
-          htmlFor={videoInputId}
-          onClick={(event) => event.stopPropagation()}
-        >
-          <UploadSimple className="size-4" weight="bold" />
-          <span>영상 선택</span>
-          <span className="sr-only">운전자 영상 파일 선택</span>
-        </label>
-      ) : null}
     </motion.section>
   )
+}
+
+export function getDemoDriverVideoSource(
+  state: DemoScenarioControllerState | null,
+): DriverVideoSource | undefined {
+  if (!state) {
+    return undefined
+  }
+
+  if (state.phase !== 'scenario') {
+    return undefined
+  }
+
+  const eventId = state.scenarioEvent?.id
+
+  if (state.scenario.scenarioId === 'phone_usage') {
+    if (!eventId) {
+      return PHONE_USAGE_VIDEO_SOURCE
+    }
+
+    if (PHONE_ENDED_VIDEO_EVENT_IDS.has(eventId)) {
+      return undefined
+    }
+
+    if (PHONE_NORMAL_DRIVING_VIDEO_EVENT_IDS.has(eventId)) {
+      return DROWSY_NORMAL_DRIVING_VIDEO_SOURCE
+    }
+
+    return PHONE_USAGE_VIDEO_SOURCE
+  }
+
+  if (state.scenario.scenarioId === 'device_operation') {
+    if (!eventId) {
+      return DEVICE_OPERATION_VIDEO_SOURCE
+    }
+
+    if (DEVICE_ENDED_VIDEO_EVENT_IDS.has(eventId)) {
+      return undefined
+    }
+
+    if (DEVICE_NORMAL_DRIVING_VIDEO_EVENT_IDS.has(eventId)) {
+      return DEVICE_NORMAL_DRIVING_VIDEO_SOURCE
+    }
+
+    return DEVICE_OPERATION_VIDEO_SOURCE
+  }
+
+  if (state.scenario.scenarioId === 'agent_personality_voice_change') {
+    if (eventId && PERSONALITY_ENDED_VIDEO_EVENT_IDS.has(eventId)) {
+      return undefined
+    }
+
+    return DROWSY_YAWN_VIDEO_SOURCE
+  }
+
+  if (state.scenario.scenarioId === 'gaze_away_attention') {
+    if (eventId && GAZE_AWAY_ENDED_VIDEO_EVENT_IDS.has(eventId)) {
+      return undefined
+    }
+
+    if (eventId && GAZE_AWAY_NORMAL_DRIVING_VIDEO_EVENT_IDS.has(eventId)) {
+      return DROWSY_NORMAL_DRIVING_VIDEO_SOURCE
+    }
+
+    return GAZE_AWAY_VIDEO_SOURCE
+  }
+
+  if (state.scenario.scenarioId === 'reaching_behind_check') {
+    if (eventId && REACHING_BEHIND_ENDED_VIDEO_EVENT_IDS.has(eventId)) {
+      return undefined
+    }
+
+    if (eventId && REACHING_BEHIND_NORMAL_DRIVING_VIDEO_EVENT_IDS.has(eventId)) {
+      return DROWSY_NORMAL_DRIVING_VIDEO_SOURCE
+    }
+
+    return REACHING_BEHIND_VIDEO_SOURCE
+  }
+
+  if (state.scenario.scenarioId !== 'drowsy_driver') {
+    return undefined
+  }
+
+  if (!eventId) {
+    return DROWSY_YAWN_VIDEO_SOURCE
+  }
+
+  if (DROWSY_ENDED_VIDEO_EVENT_IDS.has(eventId)) {
+    return undefined
+  }
+
+  if (DROWSY_NORMAL_DRIVING_VIDEO_EVENT_IDS.has(eventId)) {
+    return DROWSY_NORMAL_DRIVING_VIDEO_SOURCE
+  }
+
+  return DROWSY_YAWN_VIDEO_SOURCE
 }
 
 function ManualRiskStackStatus({
