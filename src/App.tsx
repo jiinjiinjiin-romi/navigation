@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { DashboardApp } from './features/dashboard/DashboardApp'
+import { ModelLabPage } from './features/model-lab/components/ModelLabPage'
 import { NavigationShell } from './features/navigation/components/NavigationShell'
 
 function App() {
@@ -30,6 +31,10 @@ function App() {
 
   if (pathname.startsWith('/dashboard')) {
     return <DashboardApp />
+  }
+
+  if (pathname === '/model-lab') {
+    return <ModelLabPage />
   }
 
   return <NavigationShell />

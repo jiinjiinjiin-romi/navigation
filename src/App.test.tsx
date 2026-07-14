@@ -9,6 +9,12 @@ vi.mock('./features/navigation/components/NavigationShell', () => ({
   ),
 }))
 
+vi.mock('./features/model-lab/components/ModelLabPage', () => ({
+  ModelLabPage: () => (
+    <div data-testid="model-lab-page" />
+  ),
+}))
+
 describe('App', () => {
   it('renders the navigation shell', () => {
     window.history.replaceState(null, '', '/')
@@ -16,5 +22,13 @@ describe('App', () => {
     render(<App />)
 
     expect(screen.getByTestId('navigation-shell')).toBeInTheDocument()
+  })
+
+  it('renders the model lab page on /model-lab', () => {
+    window.history.replaceState(null, '', '/model-lab')
+
+    render(<App />)
+
+    expect(screen.getByTestId('model-lab-page')).toBeInTheDocument()
   })
 })
