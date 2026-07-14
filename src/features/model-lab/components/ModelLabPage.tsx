@@ -78,12 +78,15 @@ export function ModelLabPage() {
           })}
         </section>
 
-        <section className="flex flex-1 flex-col overflow-hidden rounded-lg border border-[var(--nav-border)] bg-white">
-          <div className="flex flex-1 items-center justify-center bg-slate-950">
+        <section className="flex flex-col overflow-hidden rounded-lg border border-[var(--nav-border)] bg-white">
+          <div
+            className="flex aspect-video w-full items-center justify-center bg-slate-950"
+            data-testid="model-lab-video-frame"
+          >
             {videoUrl ? (
-              <video ref={videoRef} src={videoUrl} className="max-h-[58vh] w-full object-contain" controls muted playsInline />
+              <video ref={videoRef} src={videoUrl} className="h-full w-full object-contain" controls muted playsInline />
             ) : (
-              <p className="px-6 py-20 text-center text-sm text-slate-300">분석할 동영상 파일을 선택하세요.</p>
+              <p className="px-6 text-center text-sm text-slate-300">분석할 동영상 파일을 선택하세요.</p>
             )}
           </div>
 

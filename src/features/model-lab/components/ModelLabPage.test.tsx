@@ -8,6 +8,7 @@ describe('ModelLabPage', () => {
     render(<ModelLabPage />)
 
     expect(screen.getAllByTestId('model-class-indicator')).toHaveLength(5)
+    expect(screen.getByTestId('model-lab-video-frame')).toHaveClass('aspect-video')
     expect(screen.getByRole('button', { name: /분석 시작/ })).toBeDisabled()
     expect(screen.getByText('class_0')).toBeInTheDocument()
     expect(screen.getByText('class_4')).toBeInTheDocument()
@@ -25,6 +26,7 @@ describe('ModelLabPage', () => {
     })
 
     expect(screen.getByRole('button', { name: /분석 시작/ })).toBeEnabled()
+    expect(screen.getByTestId('model-lab-video-frame').querySelector('video')).toHaveClass('h-full', 'w-full', 'object-contain')
     expect(screen.getByText('sample.mp4')).toBeInTheDocument()
 
     createObjectUrl.mockRestore()
