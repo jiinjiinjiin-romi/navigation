@@ -1525,6 +1525,37 @@ describe('NavigationShell', () => {
     })
   })
 
+  it('advances the device manual risk button scenario without Gemini matching', async () => {
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '기기조작 위험 상황 선택' }))
+    fireEvent.click(screen.getByRole('button', { name: '기기조작 위험 상황 선택' }))
+
+    expect(await screen.findByText('기기 조작이 필요하면 제가 도와드릴게요. 어떤 기능이 필요하세요?')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '빅뱅의 붉은 노을 틀어줘.' }))
+
+    expect(screen.getByTestId('roadie-assistant-user-text')).toHaveTextContent('빅뱅의 붉은 노을 틀어줘.')
+    expect(mockedMatchManualRiskVoice).not.toHaveBeenCalled()
+    expect(within(screen.getByTestId('manual-risk-control-panel')).getByRole('button', { name: '다음' })).toBeEnabled()
+
+    clickManualRiskNext()
+
+    expect(await screen.findByText('빅뱅의 붉은 노을을 재생해드릴게요.')).toBeInTheDocument()
+    expect(mockedGetMusicRecommendations).toHaveBeenCalledWith(
+      expect.objectContaining({ keyword: '빅뱅 붉은 노을' }),
+      undefined,
+      expect.any(AbortSignal),
+    )
+    expect(mockedMatchManualRiskVoice).not.toHaveBeenCalled()
+  })
+
   it('keeps the sent message panel for two seconds and handles closing it first', async () => {
     const queryClient = new QueryClient()
 

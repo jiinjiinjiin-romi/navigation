@@ -7341,7 +7341,7 @@ function ManualRiskControlPanel({
           >
             <button
               className="flex h-11 w-full items-center justify-center rounded-lg border border-[var(--nav-primary)] bg-[var(--nav-primary)] px-3 text-sm font-semibold text-white transition hover:bg-[var(--nav-primary-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
-              onClick={onAdvanceResponse}
+              onClick={() => onAdvanceResponse()}
               disabled={controlsLocked}
               type="button"
             >
