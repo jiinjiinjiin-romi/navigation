@@ -15,12 +15,107 @@ const clampEnergy = (value: number) => THREE.MathUtils.clamp(Number.isFinite(val
 export const getMouthScaleY = (mouthOpen: number) => 0.38 + THREE.MathUtils.clamp(mouthOpen, 0, 1) * 0.18
 
 export const getIdleFloatOffset = (elapsed: number, reducedMotion: boolean) => (
-  reducedMotion ? 0 : Math.sin(elapsed * 1.1) * 0.052
+  reducedMotion ? 0 : Math.sin(elapsed * 1.1) * 0.082
 )
 
 export const getListeningLeanZ = (energy: number, reducedMotion: boolean) => (
   reducedMotion ? 0 : 0.045 + clampEnergy(energy) * 0.055
 )
+
+export const SPEAKING_HEAD_CADENCE = 4.4
+
+export interface FaceMotion {
+  x: number
+  y: number
+  z: number
+  pitch: number
+  yaw: number
+  roll: number
+  scale: number
+}
+
+export const getFaceMotion = ({
+  state,
+  elapsed,
+  energy,
+  reducedMotion,
+}: {
+  state: OrbAssistantState
+  elapsed: number
+  energy: number
+  reducedMotion: boolean
+}): FaceMotion => {
+  if (reducedMotion) {
+    return { x: 0, y: 0, z: 0, pitch: 0, yaw: 0, roll: 0, scale: 1 }
+  }
+
+  const level = clampEnergy(energy)
+
+  switch (state) {
+    case 'idle':
+      return {
+        x: Math.sin(elapsed * 0.72) * 0.055,
+        y: getIdleFloatOffset(elapsed, false),
+        z: Math.sin(elapsed * 0.6) * 0.012,
+        pitch: Math.sin(elapsed * 1.1) * 0.022,
+        yaw: Math.sin(elapsed * 0.7) * 0.04,
+        roll: Math.sin(elapsed * 0.9) * 0.032,
+        scale: 1 + Math.sin(elapsed * 1.1) * 0.015,
+      }
+    case 'listening':
+      return {
+        x: Math.sin(elapsed * 2.2) * 0.035,
+        y: Math.sin(elapsed * 3.1) * 0.052,
+        z: getListeningLeanZ(level, false),
+        pitch: 0.045 + Math.sin(elapsed * 3.1) * (0.04 + level * 0.025),
+        yaw: Math.sin(elapsed * 1.6) * 0.025,
+        roll: Math.sin(elapsed * 2.2) * 0.035,
+        scale: 1 + level * 0.018 + Math.sin(elapsed * 3.1) * 0.012,
+      }
+    case 'thinking':
+      return {
+        x: Math.sin(elapsed * 0.75) * 0.07,
+        y: Math.sin(elapsed * 1.45) * 0.04,
+        z: Math.cos(elapsed * 0.75) * 0.02,
+        pitch: Math.sin(elapsed * 1.1) * 0.03,
+        yaw: -0.11 + Math.sin(elapsed * 0.75) * 0.04,
+        roll: -0.08 + Math.cos(elapsed * 0.75) * 0.03,
+        scale: 0.995 + Math.sin(elapsed * 1.45) * 0.012,
+    }
+    case 'speaking': {
+      const cadence = Math.sin(elapsed * SPEAKING_HEAD_CADENCE)
+      return {
+        x: Math.sin(elapsed * 2.4) * 0.025,
+        y: cadence * (0.045 + level * 0.025),
+        z: 0.018 + level * 0.045,
+        pitch: 0.045 + cadence * (0.045 + level * 0.015),
+        yaw: Math.sin(elapsed * 2.4) * 0.028,
+        roll: cadence * 0.025,
+        scale: 1 + level * 0.018 + Math.abs(cadence) * 0.016,
+      }
+    }
+    case 'success':
+      return {
+        x: Math.sin(elapsed * 3.5) * 0.025,
+        y: 0.07 + Math.max(0, Math.sin(elapsed * 5.1)) * 0.07,
+        z: 0.018,
+        pitch: -0.045 + Math.sin(elapsed * 5.1) * 0.028,
+        yaw: Math.sin(elapsed * 3.5) * 0.035,
+        roll: Math.sin(elapsed * 5.1) * 0.025,
+        scale: 1.025 + Math.max(0, Math.sin(elapsed * 5.1)) * 0.025,
+      }
+    case 'error':
+      return {
+        x: Math.sin(elapsed * 16) * 0.075,
+        y: -0.02 + Math.sin(elapsed * 8) * 0.018,
+        z: -0.024,
+        pitch: 0.04 + Math.sin(elapsed * 16) * 0.025,
+        yaw: Math.sin(elapsed * 16) * 0.055,
+        roll: Math.sin(elapsed * 16) * 0.085,
+        scale: 0.985 - Math.abs(Math.sin(elapsed * 16)) * 0.012,
+      }
+  }
+}
 
 const stateColors: Record<OrbColorTheme, { listening: string; speaking: string }> = {
   aurora: { listening: '#7ed7b4', speaking: '#4f91e5' },
@@ -92,15 +187,10 @@ export function GillMascotCharacter({
     const eyeGazeX = state === 'thinking' ? -0.045 : 0
 
     if (rootRef.current) {
-      const errorShake = state === 'error' ? Math.sin(elapsed * 18) * 0.035 * motion : 0
-      const bob = state === 'success'
-        ? Math.max(0, Math.sin(elapsed * 5.2)) * 0.045 * motion
-        : state === 'idle'
-          ? getIdleFloatOffset(elapsed, reducedMotion)
-        : Math.sin(elapsed * (state === 'speaking' ? 2.6 : state === 'thinking' ? 1.8 : 0.8)) * 0.018 * motion
-      rootRef.current.position.set(errorShake, bob, state === 'listening' ? getListeningLeanZ(level, reducedMotion) : 0)
-      rootRef.current.rotation.set(-0.015 + expressions.pitch + (state === 'speaking' ? Math.sin(elapsed * 8.4) * 0.012 * motion : 0), expressions.yaw, errorShake * 0.55)
-      rootRef.current.scale.setScalar(expressions.scale)
+      const faceMotion = getFaceMotion({ state, elapsed, energy: level, reducedMotion })
+      rootRef.current.position.set(faceMotion.x, faceMotion.y, faceMotion.z)
+      rootRef.current.rotation.set(-0.015 + expressions.pitch + faceMotion.pitch, expressions.yaw + faceMotion.yaw, faceMotion.roll)
+      rootRef.current.scale.setScalar(expressions.scale * faceMotion.scale)
     }
     ;[leftEyeRef.current, rightEyeRef.current].forEach((eye, index) => {
       if (!eye) return
