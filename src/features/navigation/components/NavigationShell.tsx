@@ -2036,8 +2036,12 @@ export function NavigationShell({
     : { duration: 0.22, ease: PRODUCT_EASE }
   const manualNavigationActive = navigationEntryMode === 'free-navigation'
   const manualRiskAlertFlash = manualNavigationActive
+    && !manualEmergencyWarningPending
     && manualRiskConversation?.kind === 'assistant'
     && (manualRiskConversation.nodeId === 'strong' || manualRiskConversation.nodeId === 'emergency-warning')
+  const manualRiskAlertFlashKey = manualRiskAlertFlash
+    ? `${manualRiskConversation.riskId}-${manualRiskConversation.nodeId}`
+    : undefined
   const navigationViewportClassName = [
     'relative col-start-1 min-h-0 overflow-hidden rounded-[1.1rem] border border-white/70 bg-[var(--nav-frame)] shadow-[0_18px_46px_rgb(15_23_42/0.24)] ring-1 ring-[rgb(148_163_184/0.18)]',
     manualNavigationActive
@@ -3478,20 +3482,26 @@ export function NavigationShell({
     <motion.main
       data-testid="navigation-stage"
       data-manual-risk-alert-flash={manualRiskAlertFlash ? 'true' : 'false'}
-      initial={false}
-      animate={manualRiskAlertFlash
-        ? shouldReduceMotion
-          ? { backgroundColor: 'rgb(65 12 20)' }
-          : { backgroundColor: ['rgb(6 8 12)', 'rgb(65 12 20)', 'rgb(6 8 12)', 'rgb(65 12 20)', 'rgb(6 8 12)'] }
-        : { backgroundColor: 'rgb(6 8 12)' }}
-      transition={manualRiskAlertFlash && !shouldReduceMotion
-        ? { duration: 1.1, times: [0, 0.18, 0.4, 0.58, 1] }
-        : { duration: 0.18 }}
+      data-manual-risk-alert-flash-key={manualRiskAlertFlashKey}
       className={[
         'relative grid h-screen min-h-0 grid-cols-[minmax(0,1fr)_24rem] gap-3 bg-[#06080c] p-3',
         manualNavigationActive ? 'items-center' : 'grid-rows-[minmax(17rem,38vh)_minmax(0,1fr)]',
       ].join(' ')}
     >
+      {manualRiskAlertFlashKey ? (
+        <motion.div
+          key={manualRiskAlertFlashKey}
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0"
+          initial={shouldReduceMotion ? false : { backgroundColor: 'rgb(6 8 12)' }}
+          animate={shouldReduceMotion
+            ? { backgroundColor: 'rgb(65 12 20)' }
+            : { backgroundColor: ['rgb(6 8 12)', 'rgb(65 12 20)', 'rgb(6 8 12)', 'rgb(65 12 20)', 'rgb(6 8 12)'] }}
+          transition={shouldReduceMotion
+            ? { duration: 0 }
+            : { duration: 1.1, times: [0, 0.18, 0.4, 0.58, 1] }}
+        />
+      ) : null}
       {!manualNavigationActive ? (
         <>
           {/* Top cockpit surface: this area is reserved for the driver's in-cabin video. */}
@@ -8713,6 +8723,7 @@ function ReportDrawerContent({
     count: behavior.eventCount,
     fill: getBehaviorChartColor(behavior.behaviorType),
   }))
+  const drawerBehaviorChartHeight = getReportDrawerBehaviorChartHeight(drawerBehaviorChartData.length)
 
   return (
     <>
@@ -8752,13 +8763,19 @@ function ReportDrawerContent({
           </div>
           <span className="text-xs font-bold text-[var(--nav-muted)]">{topBehavior ? getBehaviorLabel(topBehavior.behaviorType) : '기록 없음'}</span>
         </div>
-        <div className="mt-3 h-34" data-chart-library="recharts" data-testid="report-drawer-behavior-chart">
+        <div
+          className="mt-3"
+          data-chart-library="recharts"
+          data-testid="report-drawer-behavior-chart"
+          style={{ height: drawerBehaviorChartHeight }}
+        >
           <ResponsiveContainer height="100%" width="100%">
             <BarChart data={drawerBehaviorChartData} layout="vertical" margin={{ top: 0, right: 24, bottom: 0, left: 2 }}>
               <XAxis axisLine={false} tick={false} tickLine={false} type="number" />
               <YAxis
                 axisLine={false}
                 dataKey="label"
+                interval={0}
                 tick={{ fill: REPORT_CHART_COLORS.ink, fontSize: 11, fontWeight: 700 }}
                 tickLine={false}
                 type="category"
@@ -9508,6 +9525,10 @@ function getBehaviorLabel(behaviorType: string) {
 
 function getBehaviorChartColor(behaviorType: string) {
   return REPORT_BEHAVIOR_META[behaviorType]?.color ?? REPORT_CHART_COLORS.primary
+}
+
+export function getReportDrawerBehaviorChartHeight(behaviorCount: number) {
+  return Math.max(136, behaviorCount * 32)
 }
 
 function formatReportChartCountLabel(value: unknown) {

@@ -9,6 +9,7 @@ import {
   getAssistantSpeechCharacterDelaySeconds,
   getAssistantVisibleOrbState,
   getRoadieAssistantPanelWidth,
+  getReportDrawerBehaviorChartHeight,
   isAssistantVoiceWaveVisible,
   NavigationShell,
   personalizeDemoRoadieMessage,
@@ -339,6 +340,11 @@ function createMockRouteOption(route: Awaited<ReturnType<typeof mockedGetRoute>>
 }
 
 describe('NavigationShell', () => {
+  it('sizes the report drawer behavior chart for every behavior row', () => {
+    expect(getReportDrawerBehaviorChartHeight(2)).toBe(136)
+    expect(getReportDrawerBehaviorChartHeight(5)).toBe(160)
+  })
+
   it('personalizes demo 로디 messages with the selected profile name', () => {
     expect(
       personalizeDemoRoadieMessage('{{profileName}}, 지금 눈이 조금 무거워 보여요.', '아빠'),
@@ -2379,6 +2385,37 @@ describe('NavigationShell', () => {
 
     expect(await screen.findByText('졸음 경고! 졸음 경고!')).toBeInTheDocument()
     expect(screen.getByTestId('navigation-stage')).toHaveAttribute('data-manual-risk-alert-flash', 'true')
+  }, 8_000)
+
+  it('replays the navigation-stage alert flash when an emergency warning follows a strong warning', async () => {
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '핸드폰 위험 상황 선택' }))
+    fireEvent.click(screen.getByRole('button', { name: '핸드폰 위험 상황 선택' }))
+    fireEvent.click(screen.getByRole('button', { name: '핸드폰 위험 상황 선택' }))
+
+    expect(await screen.findByText('휴대폰 사용을 즉시 중단하세요. 지금은 전방만 봐야 합니다.')).toBeInTheDocument()
+    const navigationStage = screen.getByTestId('navigation-stage')
+    const strongWarningFlashKey = navigationStage.getAttribute('data-manual-risk-alert-flash-key')
+    expect(strongWarningFlashKey).toBe('phone-strong')
+
+    fireEvent.click(screen.getByRole('button', { name: '경고 위험 상황 선택' }))
+    expect(navigationStage).toHaveAttribute('data-manual-risk-alert-flash', 'false')
+
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 3_100))
+    })
+
+    expect(await screen.findByText('핸드폰 사용 경고! 핸드폰 사용 경고!')).toBeInTheDocument()
+    expect(navigationStage).toHaveAttribute('data-manual-risk-alert-flash', 'true')
+    expect(navigationStage).toHaveAttribute('data-manual-risk-alert-flash-key', 'phone-emergency-warning')
+    expect(navigationStage).not.toHaveAttribute('data-manual-risk-alert-flash-key', strongWarningFlashKey ?? '')
   }, 8_000)
 
   it('dismisses first-stage and emergency manual warnings after six seconds', async () => {
