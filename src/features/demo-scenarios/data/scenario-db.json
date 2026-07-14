@@ -67,18 +67,6 @@
               "value": "I_AM_OK",
               "nextEventId": "drowsy_ok_response",
               "asUserSpeech": "괜찮아"
-            },
-            {
-              "label": "창문 살짝 열기",
-              "value": "OPEN_WINDOW",
-              "nextEventId": "drowsy_window_response",
-              "asUserSpeech": "조금 졸리네... 창문 좀 열어줘."
-            },
-            {
-              "label": "밝은 음악 틀기",
-              "value": "PLAY_BRIGHT_MUSIC",
-              "nextEventId": "drowsy_music_response",
-              "asUserSpeech": "조금 졸리네... 잠깨는 신나는 음악 틀어줄래?"
             }
           ],
           "report": {

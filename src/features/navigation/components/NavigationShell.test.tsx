@@ -506,18 +506,18 @@ describe('NavigationShell', () => {
     expect(getRoadieAssistantPanelWidth({ expanded: true, hasRecommendations: true })).toBe('min(23.5rem, calc(100vw - 2rem))')
   })
 
-  it('shows user response before the next 로디 response in a drowsy branch', () => {
+  it('shows the remaining user response before the next 로디 response for drowsiness', () => {
     let state = createInitialDemoScenarioState('drowsy_driver')
 
     while (state.scenarioEvent?.id !== 'drowsy_first_warning') {
       state = advanceDemoScenario(state)
     }
 
-    state = respondToDemoScenario(state, 'OPEN_WINDOW')
+    state = respondToDemoScenario(state, 'I_AM_OK')
 
     const userStep = createDemoAssistantStep(state, '민준')
 
-    expect(userStep.userText).toBe('조금 졸리네... 창문 좀 열어줘.')
+    expect(userStep.userText).toBe('괜찮아')
     expect(userStep.text).toBeUndefined()
     expect(userStep.mode).toBe('user-listening')
 
@@ -526,7 +526,7 @@ describe('NavigationShell', () => {
     const roadieStep = createDemoAssistantStep(state, '민준')
 
     expect(roadieStep.userText).toBeUndefined()
-    expect(roadieStep.text).toBe('창문을 살짝 열게요. 너무 피곤하면 쉬어가시는걸 추천드려요.')
+    expect(roadieStep.text).toBe('알겠어요. 그래도 피곤해 보이면 한 번 더 알려드릴게요.')
     expect(roadieStep.mode).toBe('assistant-speaking')
   })
 

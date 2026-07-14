@@ -171,39 +171,31 @@ describe('demo scenario engine', () => {
     expect(blockedState.scenarioEvent?.id).toBe('phone_assist_offer')
   })
 
+  it('offers only the I_AM_OK response for the first drowsiness warning', () => {
+    const scenario = getDemoScenario('drowsy_driver')
+    const firstWarning = scenario.events.find((event) => event.id === 'drowsy_first_warning')
+
+    expect(firstWarning?.responseOptions.map((option) => option.value)).toEqual(['I_AM_OK'])
+  })
+
   it('continues through response buttons as user speech events', () => {
     let state = createInitialDemoScenarioState('drowsy_driver')
     while (state.scenarioEvent?.id !== 'drowsy_first_warning') {
       state = advanceDemoScenario(state)
     }
 
-    state = respondToDemoScenario(state, 'OPEN_WINDOW')
+    state = respondToDemoScenario(state, 'I_AM_OK')
 
     expect(state.scenarioEvent).toMatchObject({
-      id: 'drowsy_window_response',
+      id: 'drowsy_ok_response',
       eventType: 'USER_RESPONSE',
-      userSpeech: '조금 졸리네... 창문 좀 열어줘.',
+      userSpeech: '괜찮아',
     })
 
     state = advanceDemoScenario(state)
 
-    expect(state.scenarioEvent?.id).toBe('drowsy_window_started')
-    expect(state.scenarioEvent?.roadieMessage).toBe('창문을 살짝 열게요. 너무 피곤하면 쉬어가시는걸 추천드려요.')
-
-    let musicState = createInitialDemoScenarioState('drowsy_driver')
-    while (musicState.scenarioEvent?.id !== 'drowsy_first_warning') {
-      musicState = advanceDemoScenario(musicState)
-    }
-
-    musicState = respondToDemoScenario(musicState, 'PLAY_BRIGHT_MUSIC')
-    expect(musicState.scenarioEvent).toMatchObject({
-      id: 'drowsy_music_response',
-      eventType: 'USER_RESPONSE',
-      userSpeech: '조금 졸리네... 잠깨는 신나는 음악 틀어줄래?',
-    })
-
-    musicState = advanceDemoScenario(musicState)
-    expect(musicState.scenarioEvent?.roadieMessage).toBe('밝은 음악으로 바꿔드릴게요. 너무 피곤하면 쉬어가시는걸 추천드려요.')
+    expect(state.scenarioEvent?.id).toBe('drowsy_ok_acknowledged')
+    expect(state.scenarioEvent?.roadieMessage).toBe('알겠어요. 그래도 피곤해 보이면 한 번 더 알려드릴게요.')
   })
 
   it('keeps every response branch split into user speech and the next Roadie step', () => {
