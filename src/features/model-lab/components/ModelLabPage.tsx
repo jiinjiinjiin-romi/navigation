@@ -6,6 +6,7 @@ import { useModelLabInference } from '../useModelLabInference'
 export function ModelLabPage() {
   const [fileName, setFileName] = useState('')
   const [videoUrl, setVideoUrl] = useState('')
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const inference = useModelLabInference({ videoRef })
 
@@ -28,6 +29,21 @@ export function ModelLabPage() {
   function handleStartAnalysis() {
     void videoRef.current?.play()
     inference.start()
+  }
+
+  function openFilePicker() {
+    if (!videoUrl) {
+      fileInputRef.current?.click()
+    }
+  }
+
+  function handleVideoFrameKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (videoUrl || (event.key !== 'Enter' && event.key !== ' ')) {
+      return
+    }
+
+    event.preventDefault()
+    fileInputRef.current?.click()
   }
 
   useEffect(() => {
@@ -80,8 +96,18 @@ export function ModelLabPage() {
 
         <section className="flex flex-col overflow-hidden rounded-lg border border-[var(--nav-border)] bg-white">
           <div
-            className="flex aspect-video w-full items-center justify-center bg-slate-950"
+            aria-label={!videoUrl ? '동영상 업로드 영역' : undefined}
+            className={[
+              'flex aspect-video w-full items-center justify-center bg-slate-950',
+              !videoUrl
+                ? 'cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--nav-primary)]'
+                : '',
+            ].join(' ')}
             data-testid="model-lab-video-frame"
+            onClick={openFilePicker}
+            onKeyDown={handleVideoFrameKeyDown}
+            role={!videoUrl ? 'button' : undefined}
+            tabIndex={!videoUrl ? 0 : undefined}
           >
             {videoUrl ? (
               <video ref={videoRef} src={videoUrl} className="h-full w-full object-contain" controls muted playsInline />
@@ -95,7 +121,14 @@ export function ModelLabPage() {
               <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-[var(--nav-border)] bg-white px-4 py-2 text-sm font-medium hover:bg-[var(--nav-panel)]">
                 <UploadSimple className="size-4" weight="bold" />
                 동영상 파일 선택
-                <input aria-label="동영상 파일 선택" className="sr-only" type="file" accept="video/*" onChange={handleFileChange} />
+                <input
+                  aria-label="동영상 파일 선택"
+                  className="sr-only"
+                  type="file"
+                  accept="video/*"
+                  onChange={handleFileChange}
+                  ref={fileInputRef}
+                />
               </label>
               <span className="text-sm text-[var(--nav-muted)]">{fileName || '선택된 파일 없음'}</span>
             </div>

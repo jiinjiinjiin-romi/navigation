@@ -14,6 +14,24 @@ describe('ModelLabPage', () => {
     expect(screen.getByText('섭취')).toBeInTheDocument()
   })
 
+  it('opens the video picker from the empty video frame', () => {
+    const inputClick = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => undefined)
+
+    render(<ModelLabPage />)
+
+    const videoFrame = screen.getByTestId('model-lab-video-frame')
+
+    expect(videoFrame).toHaveAttribute('role', 'button')
+    fireEvent.click(videoFrame)
+    expect(inputClick).toHaveBeenCalledTimes(1)
+
+    fireEvent.keyDown(videoFrame, { key: 'Enter' })
+    fireEvent.keyDown(videoFrame, { key: ' ' })
+    expect(inputClick).toHaveBeenCalledTimes(3)
+
+    inputClick.mockRestore()
+  })
+
   it('enables analysis after selecting a video file', () => {
     const createObjectUrl = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:model-lab-video')
 
@@ -26,7 +44,9 @@ describe('ModelLabPage', () => {
     })
 
     expect(screen.getByRole('button', { name: /분석 시작/ })).toBeEnabled()
-    expect(screen.getByTestId('model-lab-video-frame').querySelector('video')).toHaveClass('h-full', 'w-full', 'object-contain')
+    const videoFrame = screen.getByTestId('model-lab-video-frame')
+    expect(videoFrame).not.toHaveAttribute('role')
+    expect(videoFrame.querySelector('video')).toHaveClass('h-full', 'w-full', 'object-contain')
     expect(screen.getByText('sample.mp4')).toBeInTheDocument()
 
     createObjectUrl.mockRestore()
