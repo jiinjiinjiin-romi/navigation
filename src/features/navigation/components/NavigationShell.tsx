@@ -22,6 +22,7 @@ import {
   HouseLine,
   MagnifyingGlass,
   MapPin,
+  Microphone,
   Minus,
   Moon,
   MusicNotes,
@@ -126,6 +127,7 @@ import {
 } from '../api/searchHistoryApi'
 import { getCurrentAddress, getRoadMatch, getRouteOptions, searchPlaces } from '../api/tmapApi'
 import { synthesizeVoice, type VoiceTtsOptions } from '../api/voiceApi'
+import { matchManualRiskVoice, transcribeManualRiskVoice } from '../api/manualRiskVoiceApi'
 import { getMusicRecommendations, type MusicMood, type MusicRecommendationTrack } from '../api/musicApi'
 import { submitDriveSummary, type DriveSummaryEvent } from '../api/behaviorWarningSensitivityApi'
 import { createRoundedRoutePath } from '../map/routeGeometry'
@@ -874,6 +876,7 @@ interface ManualRiskUserConversation {
   text: string
   nextNodeId: ManualRiskConversationNodeId
   effectId?: ManualRiskEffectId
+  suppressUserTts?: boolean
 }
 
 type ManualRiskConversation = ManualRiskAssistantConversation | ManualRiskUserConversation
@@ -900,6 +903,8 @@ interface ManualRiskResponseTransition {
   nextNodeId: ManualRiskConversationNodeId
   effectId?: ManualRiskEffectId
 }
+
+type ManualRiskVoiceStatus = 'idle' | 'requesting' | 'recording' | 'transcribing' | 'matching'
 
 const MANUAL_RISK_MESSAGE_DISMISS_DELAY_MS = 2_000
 const MANUAL_RISK_RESTAURANT_DISMISS_DELAY_MS = 9_000
@@ -1321,6 +1326,7 @@ export function NavigationShell({
   const [assistantScenarioId, setAssistantScenarioId] = useState<RoadieAssistantScenarioId>('drowsiness-rest-area')
   const [assistantStepIndex, setAssistantStepIndex] = useState(0)
   const [manualRiskConversation, setManualRiskConversation] = useState<ManualRiskConversation | null>(null)
+  const [manualRiskVoiceStatus, setManualRiskVoiceStatus] = useState<ManualRiskVoiceStatus>('idle')
   const [manualRiskEvents, setManualRiskEvents] = useState(createInitialManualRiskEvents)
   const [driveSummaryLocked, setDriveSummaryLocked] = useState(false)
   const [openSensitivityPanelVersion, setOpenSensitivityPanelVersion] = useState(0)
@@ -1367,6 +1373,11 @@ export function NavigationShell({
   const manualEmergencyWarningTimerRef = useRef<number | undefined>(undefined)
   const manualEmergencyWarningCountdownTimerRef = useRef<number | undefined>(undefined)
   const manualEmergencyWarningAbortControllerRef = useRef<AbortController | undefined>(undefined)
+  const manualRiskVoiceStreamRef = useRef<MediaStream | undefined>(undefined)
+  const manualRiskVoiceRecorderRef = useRef<MediaRecorder | undefined>(undefined)
+  const manualRiskVoiceChunksRef = useRef<Blob[]>([])
+  const manualRiskVoiceTargetRef = useRef<Pick<ManualRiskAssistantConversation, 'riskId' | 'depth' | 'nodeId'> | null>(null)
+  const manualRiskVoiceAbortControllerRef = useRef<AbortController | undefined>(undefined)
   const debouncedOriginKeyword = useDebouncedValue(originKeyword.trim(), SEARCH_DEBOUNCE_MS)
   const debouncedDestinationKeyword = useDebouncedValue(destinationKeyword.trim(), SEARCH_DEBOUNCE_MS)
   const debouncedMusicSearchKeyword = useDebouncedValue(musicSearchKeyword.trim(), SEARCH_DEBOUNCE_MS)
@@ -1996,6 +2007,17 @@ export function NavigationShell({
   const manualRiskAssistantStep = manualRiskConversation
     ? createManualRiskAssistantStep(manualRiskConversation)
     : undefined
+  const manualRiskVoiceListeningStep = manualRiskConversation?.kind === 'assistant'
+    && (manualRiskVoiceStatus === 'requesting' || manualRiskVoiceStatus === 'recording' || manualRiskVoiceStatus === 'transcribing')
+    ? {
+      id: `manual-risk-${manualRiskConversation.riskId}-voice-listening-${manualRiskConversation.depth}`,
+      label: MANUAL_RISK_LABELS[manualRiskConversation.riskId],
+      mode: 'user-listening' as const,
+      orbState: 'listening' as const,
+      energy: 0.72,
+      statusLabel: '듣는 중...',
+    }
+    : undefined
   const manualRiskResponseOptions = getManualRiskResponseOptions(manualRiskConversation)
   const manualRiskResultCards = manualRiskConversation?.kind === 'assistant'
     ? manualRiskConversation.resultCards ?? []
@@ -2008,7 +2030,7 @@ export function NavigationShell({
       maxDepth: MANUAL_RISK_MAX_DEPTH[manualRiskConversation.riskId],
     }
     : null
-  const visibleAssistantStep = demoAssistantStep ?? manualRiskAssistantStep ?? assistantStep
+  const visibleAssistantStep = demoAssistantStep ?? manualRiskVoiceListeningStep ?? manualRiskAssistantStep ?? assistantStep
   const motionTiming = shouldReduceMotion
     ? { duration: 0 }
     : { duration: 0.22, ease: PRODUCT_EASE }
@@ -2575,15 +2597,16 @@ export function NavigationShell({
     })
   }, [manualRiskConversation, submitManualRiskDriveSummary])
 
-  const advanceManualRiskResponse = useCallback(() => {
-    if (!manualRiskConversation || manualRiskConversation.kind !== 'user') {
+  const advanceManualRiskResponse = useCallback((conversationOverride?: ManualRiskUserConversation) => {
+    const conversation = conversationOverride ?? manualRiskConversation
+    if (!conversation || conversation.kind !== 'user') {
       return
     }
 
     const nextAssistantTarget = {
-      riskId: manualRiskConversation.riskId,
-      depth: manualRiskConversation.depth,
-      nodeId: manualRiskConversation.nextNodeId,
+      riskId: conversation.riskId,
+      depth: conversation.depth,
+      nodeId: conversation.nextNodeId,
     }
 
     setManualRiskConversation({
@@ -2595,10 +2618,180 @@ export function NavigationShell({
       scheduleManualRiskDismiss(nextAssistantTarget, { delayMs: MANUAL_RISK_MESSAGE_DISMISS_DELAY_MS })
     }
 
-    if (manualRiskConversation.effectId) {
-      void runManualRiskEffect(manualRiskConversation.effectId, nextAssistantTarget)
+    if (conversation.effectId) {
+      void runManualRiskEffect(conversation.effectId, nextAssistantTarget)
     }
   }, [manualRiskConversation, runManualRiskEffect, scheduleManualRiskDismiss])
+
+  const stopManualRiskVoiceStream = useCallback(() => {
+    manualRiskVoiceAbortControllerRef.current?.abort()
+    manualRiskVoiceAbortControllerRef.current = undefined
+    manualRiskVoiceRecorderRef.current?.stop()
+    manualRiskVoiceRecorderRef.current = undefined
+    manualRiskVoiceStreamRef.current?.getTracks().forEach((track) => track.stop())
+    manualRiskVoiceStreamRef.current = undefined
+  }, [])
+
+  const showManualRiskVoiceReprompt = useCallback((conversation: ManualRiskAssistantConversation, text: string) => {
+    setManualRiskConversation({ ...conversation, text })
+    setManualRiskVoiceStatus('idle')
+  }, [])
+
+  const startManualRiskVoiceInput = useCallback(async () => {
+    if (manualRiskVoiceStatus === 'recording') {
+      manualRiskVoiceRecorderRef.current?.stop()
+      return
+    }
+
+    if (manualRiskVoiceStatus !== 'idle' || !manualRiskConversation || manualRiskConversation.kind !== 'assistant') {
+      return
+    }
+
+    const options = getManualRiskResponseOptions(manualRiskConversation)
+    if (!options.length || !navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+      showManualRiskVoiceReprompt(manualRiskConversation, '마이크를 사용할 수 없어요. 버튼으로 선택해 주세요.')
+      return
+    }
+
+    const target = {
+      riskId: manualRiskConversation.riskId,
+      depth: manualRiskConversation.depth,
+      nodeId: manualRiskConversation.nodeId,
+    }
+    manualRiskVoiceTargetRef.current = target
+    manualRiskVoiceAbortControllerRef.current?.abort()
+    const abortController = new AbortController()
+    manualRiskVoiceAbortControllerRef.current = abortController
+    const isTargetActive = () => {
+      const current = manualRiskConversationRef.current
+      return current?.riskId === target.riskId && current.depth === target.depth
+    }
+
+    setManualRiskVoiceStatus('requesting')
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const recorder = new MediaRecorder(stream)
+      manualRiskVoiceStreamRef.current = stream
+      manualRiskVoiceRecorderRef.current = recorder
+      manualRiskVoiceChunksRef.current = []
+      recorder.ondataavailable = (event) => {
+        if (event.data.size) manualRiskVoiceChunksRef.current.push(event.data)
+      }
+      recorder.onstop = () => {
+        recorder.ondataavailable = null
+        recorder.onstop = null
+        manualRiskVoiceRecorderRef.current = undefined
+        stream.getTracks().forEach((track) => track.stop())
+        manualRiskVoiceStreamRef.current = undefined
+        if (!isTargetActive()) {
+          setManualRiskVoiceStatus('idle')
+          return
+        }
+        const audio = new Blob(manualRiskVoiceChunksRef.current, { type: recorder.mimeType || 'audio/webm' })
+        manualRiskVoiceChunksRef.current = []
+        if (!audio.size) {
+          showManualRiskVoiceReprompt(manualRiskConversation, '음성을 듣지 못했어요. 다시 말씀해 주세요.')
+          return
+        }
+
+        void (async () => {
+          setManualRiskVoiceStatus('transcribing')
+          try {
+            const transcript = await transcribeManualRiskVoice(audio, undefined, abortController.signal)
+            if (!isTargetActive()) {
+              setManualRiskVoiceStatus('idle')
+              return
+            }
+            if (!transcript) {
+              showManualRiskVoiceReprompt(manualRiskConversation, '음성을 인식하지 못했어요. 다시 말씀해 주세요.')
+              return
+            }
+
+            // 전사 결과가 패널에 먼저 렌더된 다음에만 의도 판정을 시작한다.
+            setManualRiskConversation({
+              kind: 'user',
+              riskId: manualRiskConversation.riskId,
+              depth: manualRiskConversation.depth,
+              text: transcript,
+              nextNodeId: manualRiskConversation.nodeId,
+              suppressUserTts: true,
+            })
+            requestAnimationFrame(async () => {
+              if (!isTargetActive()) {
+                setManualRiskVoiceStatus('idle')
+                return
+              }
+              setManualRiskVoiceStatus('matching')
+              try {
+                const optionId = await matchManualRiskVoice(transcript, options, undefined, abortController.signal)
+                if (!isTargetActive()) {
+                  setManualRiskVoiceStatus('idle')
+                  return
+                }
+                const option = options.find((item) => item.id === optionId)
+                const transition = option ? getManualRiskResponseTransition(option.id) : undefined
+                if (!option || !transition) {
+                  showManualRiskVoiceReprompt(manualRiskConversation, '어떤 도움을 원하시는지 다시 말씀해 주세요.')
+                  return
+                }
+
+                const voiceResponse: ManualRiskUserConversation = {
+                  kind: 'user',
+                  riskId: manualRiskConversation.riskId,
+                  depth: manualRiskConversation.depth,
+                  text: transcript,
+                  nextNodeId: transition.nextNodeId,
+                  effectId: transition.effectId,
+                  suppressUserTts: true,
+                }
+                setManualRiskConversation(voiceResponse)
+                setManualRiskVoiceStatus('idle')
+                requestAnimationFrame(() => {
+                  if (isTargetActive()) advanceManualRiskResponse(voiceResponse)
+                })
+              } catch {
+                if (abortController.signal.aborted) return
+                showManualRiskVoiceReprompt(manualRiskConversation, '요청을 처리하지 못했어요. 다시 말씀해 주세요.')
+              }
+            })
+          } catch {
+            if (abortController.signal.aborted) return
+            showManualRiskVoiceReprompt(manualRiskConversation, '음성을 인식하지 못했어요. 다시 말씀해 주세요.')
+          }
+        })()
+      }
+      recorder.start()
+      setManualRiskVoiceStatus('recording')
+    } catch {
+      stopManualRiskVoiceStream()
+      showManualRiskVoiceReprompt(manualRiskConversation, '마이크 권한이 필요합니다. 설정에서 허용하거나 버튼으로 선택해 주세요.')
+    }
+  }, [advanceManualRiskResponse, manualRiskConversation, manualRiskVoiceStatus, showManualRiskVoiceReprompt, stopManualRiskVoiceStream])
+
+  useEffect(() => () => {
+    const recorder = manualRiskVoiceRecorderRef.current
+    manualRiskVoiceAbortControllerRef.current?.abort()
+    manualRiskVoiceAbortControllerRef.current = undefined
+    if (recorder) {
+      recorder.ondataavailable = null
+      recorder.onstop = null
+      recorder.stop()
+    }
+    manualRiskVoiceRecorderRef.current = undefined
+    manualRiskVoiceStreamRef.current?.getTracks().forEach((track) => track.stop())
+    manualRiskVoiceStreamRef.current = undefined
+  }, [])
+
+  useEffect(() => {
+    const target = manualRiskVoiceTargetRef.current
+    if (!target) return
+
+    if (manualRiskConversation?.riskId === target.riskId && manualRiskConversation.depth === target.depth) return
+
+    manualRiskVoiceTargetRef.current = null
+    stopManualRiskVoiceStream()
+    setManualRiskVoiceStatus('idle')
+  }, [manualRiskConversation, stopManualRiskVoiceStream])
 
   useEffect(() => {
     if (
@@ -3742,7 +3935,7 @@ export function NavigationShell({
             <ManualRiskControlPanel
               agentPersonality={manualRiskAgentPersonality}
               agentVoiceId={selectedProfileVoiceId as TtsVoiceId}
-              canAdvanceResponse={manualRiskConversation?.kind === 'user'}
+              canAdvanceResponse={manualRiskConversation?.kind === 'user' && manualRiskVoiceStatus === 'idle'}
               canEndDrive={Object.values(manualRiskEvents).some((event) => event.clickCount > 0)}
               className="w-full"
               controlsLocked={manualRiskControlsLocked}
@@ -3754,7 +3947,8 @@ export function NavigationShell({
                 && manualRiskConversation.nodeId === 'drive-summary-complete'
               }
               responseOptions={manualRiskResponseOptions}
-              responseOptionsLocked={driveSummaryLocked}
+              responseOptionsLocked={driveSummaryLocked || manualRiskVoiceStatus !== 'idle'}
+              manualRiskVoiceStatus={manualRiskVoiceStatus}
               voiceSaveError={updateManualRiskSpeakerMutation.isError}
               voiceSaving={updateManualRiskSpeakerMutation.isPending}
               voiceStyleAvailable={Boolean(selectedProfile)}
@@ -3767,6 +3961,7 @@ export function NavigationShell({
               onEmergencyWarning={startManualEmergencyWarning}
               onEndDrive={openDriveSummaryConfirmation}
               onResponseOptionSelect={selectManualRiskResponseOption}
+              onManualRiskVoiceInput={startManualRiskVoiceInput}
               onReturnToProfileSelection={() => {
                 cancelManualEmergencyWarning()
                 resetManualRiskConversation()
@@ -5007,6 +5202,7 @@ function RoadieOrbControl({
     : ROADIE_ASSISTANT_CONTENT_REVEAL_DELAY_SECONDS
   const speechText = assistantStep.text ?? assistantStep.userText ?? ''
   const speakerRole = assistantStep.text ? 'assistant' : assistantStep.userText ? 'user' : null
+  const shouldSynthesizeSpeech = !(speakerRole === 'user' && assistantStep.suppressUserTts)
   const activeTtsOptions = assistantStep.ttsOptions ?? ttsOptions
   const preSpeechAudioSrc = assistantStep.preSpeechAudioSrc
   const preSpeechAudioMaxDurationMs = assistantStep.preSpeechAudioMaxDurationMs
@@ -5023,6 +5219,7 @@ function RoadieOrbControl({
       || !expanded
       || !speechText
       || !speakerRole
+      || !shouldSynthesizeSpeech
       || typeof Audio === 'undefined'
       || typeof URL.createObjectURL !== 'function'
     ) {
@@ -5170,6 +5367,7 @@ function RoadieOrbControl({
     speechPlaybackGain,
     speechAudioPromise,
     speechText,
+    shouldSynthesizeSpeech,
   ])
 
   if (hidden) {
@@ -5466,12 +5664,16 @@ function ManualRiskResponseOptionList({
   disabled,
   motionTiming,
   onSelect,
+  onVoiceInput,
   options,
+  voiceStatus,
 }: {
   disabled: boolean
   motionTiming: MotionTiming
   onSelect: (option: ManualRiskResponseOption) => void
+  onVoiceInput: () => void
   options: ManualRiskResponseOption[]
+  voiceStatus: ManualRiskVoiceStatus
 }) {
   return (
     <motion.div
@@ -5485,26 +5687,34 @@ function ManualRiskResponseOptionList({
         duration: motionTiming.duration === 0 ? 0 : 0.28,
       }}
     >
-      {options.map((option, index) => (
-        <motion.button
-          aria-label={option.label}
-          className="min-w-0 rounded-xl border border-[var(--nav-border)] bg-white px-3 py-2.5 text-left text-sm font-semibold text-[var(--nav-ink)] shadow-[0_8px_18px_rgb(15_23_42/0.05)] transition hover:border-[var(--nav-primary-soft)] hover:bg-[var(--nav-primary-soft)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
-          disabled={disabled}
-          key={option.id}
-          onClick={() => onSelect(option)}
-          title={option.label}
+      <div className="flex items-stretch gap-2">
+        <div className="grid min-w-0 flex-1 gap-2">
+          {options.map((option, index) => (
+            <motion.div
+              key={option.id}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ ...motionTiming, delay: motionTiming.duration === 0 ? 0 : index * 0.035, duration: motionTiming.duration === 0 ? 0 : 0.18 }}
+            >
+              <button
+                aria-label={option.label}
+                className="min-w-0 w-full rounded-xl border border-[var(--nav-border)] bg-white px-3 py-2.5 text-left text-sm font-semibold text-[var(--nav-ink)] shadow-[0_8px_18px_rgb(15_23_42/0.05)] transition hover:border-[var(--nav-primary-soft)] hover:bg-[var(--nav-primary-soft)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
+                disabled={disabled}
+                onClick={() => onSelect(option)} title={option.label} type="button"
+              ><span className="block truncate">{option.label}</span></button>
+            </motion.div>
+          ))}
+        </div>
+        <button
+          aria-label="선택지를 음성으로 말하기"
+          className="grid min-h-11 w-11 shrink-0 place-items-center self-stretch rounded-xl border border-[var(--nav-border)] bg-white text-[var(--nav-primary)] transition hover:bg-[var(--nav-primary-soft)] disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={disabled && voiceStatus !== 'recording'}
+          onClick={onVoiceInput}
+          title="음성으로 말하기"
           type="button"
-          initial={{ opacity: 0, y: 6 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{
-            ...motionTiming,
-            delay: motionTiming.duration === 0 ? 0 : index * 0.035,
-            duration: motionTiming.duration === 0 ? 0 : 0.18,
-          }}
-        >
-          <span className="block truncate">{option.label}</span>
-        </motion.button>
-      ))}
+        ><Microphone aria-hidden="true" size={19} weight={voiceStatus === 'recording' ? 'fill' : 'bold'} /></button>
+      </div>
+      {voiceStatus !== 'idle' ? <p aria-live="polite" className="text-xs font-medium text-[var(--nav-muted)]">{voiceStatus === 'requesting' ? '마이크 권한을 요청하고 있어요.' : voiceStatus === 'recording' ? '듣고 있어요. 마이크를 다시 누르면 완료됩니다.' : voiceStatus === 'transcribing' ? '음성을 텍스트로 바꾸고 있어요.' : '말씀하신 내용을 확인하고 있어요.'}</p> : null}
     </motion.div>
   )
 }
@@ -5934,6 +6144,7 @@ function createManualRiskAssistantStep(conversation: ManualRiskConversation): Ro
       energy: 0.72,
       statusLabel: '듣는 중...',
       userText: conversation.text,
+      suppressUserTts: conversation.suppressUserTts,
     }
   }
 
@@ -6769,10 +6980,12 @@ function ManualRiskControlPanel({
   onEmergencyWarning,
   onEndDrive,
   onResponseOptionSelect,
+  onManualRiskVoiceInput,
   onReturnToProfileSelection,
   onSelectRisk,
   responseOptions,
   responseOptionsLocked,
+  manualRiskVoiceStatus,
   voiceStyleAvailable,
   voiceSaveError,
   voiceSaving,
@@ -6796,10 +7009,12 @@ function ManualRiskControlPanel({
   onEmergencyWarning: () => void
   onEndDrive: () => void
   onResponseOptionSelect: (option: ManualRiskResponseOption) => void
+  onManualRiskVoiceInput: () => void
   onReturnToProfileSelection: () => void
   onSelectRisk: (riskId: ManualRiskId) => void
   responseOptions: ManualRiskResponseOption[]
   responseOptionsLocked: boolean
+  manualRiskVoiceStatus: ManualRiskVoiceStatus
   voiceStyleAvailable: boolean
   voiceSaveError: boolean
   voiceSaving: boolean
@@ -7056,8 +7271,10 @@ function ManualRiskControlPanel({
           <ManualRiskResponseOptionList
             motionTiming={motionTiming}
             onSelect={onResponseOptionSelect}
+            onVoiceInput={onManualRiskVoiceInput}
             options={responseOptions}
             disabled={responseOptionsLocked}
+            voiceStatus={manualRiskVoiceStatus}
           />
         ) : null}
         {canAdvanceResponse ? (

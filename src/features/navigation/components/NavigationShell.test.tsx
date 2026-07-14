@@ -37,6 +37,7 @@ import { createSearchHistory, listSearchHistories } from '../api/searchHistoryAp
 import { getCurrentAddress, getRoadMatch, getRouteOptions, searchPlaces } from '../api/tmapApi'
 import { getMusicRecommendations } from '../api/musicApi'
 import { synthesizeVoice } from '../api/voiceApi'
+import { matchManualRiskVoice, transcribeManualRiskVoice } from '../api/manualRiskVoiceApi'
 import { submitDriveSummary } from '../api/behaviorWarningSensitivityApi'
 
 let routeOptionsOverlayReadyByDefault = true
@@ -87,6 +88,11 @@ vi.mock('../api/musicApi', () => ({
 
 vi.mock('../api/voiceApi', () => ({
   synthesizeVoice: vi.fn(async () => new Blob(['audio'], { type: 'audio/mpeg' })),
+}))
+
+vi.mock('../api/manualRiskVoiceApi', () => ({
+  matchManualRiskVoice: vi.fn(),
+  transcribeManualRiskVoice: vi.fn(),
 }))
 
 vi.mock('../api/behaviorWarningSensitivityApi', () => ({
@@ -277,6 +283,8 @@ const mockedCreateSearchHistory = vi.mocked(createSearchHistory)
 const mockedListSearchHistories = vi.mocked(listSearchHistories)
 const mockedGetMusicRecommendations = vi.mocked(getMusicRecommendations)
 const mockedSynthesizeVoice = vi.mocked(synthesizeVoice)
+const mockedMatchManualRiskVoice = vi.mocked(matchManualRiskVoice)
+const mockedTranscribeManualRiskVoice = vi.mocked(transcribeManualRiskVoice)
 const mockedSubmitDriveSummary = vi.mocked(submitDriveSummary)
 
 const mockProfiles: Profile[] = [
@@ -769,11 +777,15 @@ describe('NavigationShell', () => {
     mockedListSearchHistories.mockReset()
     mockedGetMusicRecommendations.mockReset()
     mockedSynthesizeVoice.mockReset()
+    mockedMatchManualRiskVoice.mockReset()
+    mockedTranscribeManualRiskVoice.mockReset()
     mockedSubmitDriveSummary.mockReset()
     mockedSubmitDriveSummary.mockResolvedValue({
       behaviorWarningSensitivity: DEFAULT_BEHAVIOR_WARNING_SENSITIVITY,
     })
     mockedSynthesizeVoice.mockResolvedValue(new Blob(['audio'], { type: 'audio/mpeg' }))
+    mockedTranscribeManualRiskVoice.mockResolvedValue('창문 좀 열어줘')
+    mockedMatchManualRiskVoice.mockResolvedValue(null)
     mockedGetMusicRecommendations.mockResolvedValue([
       {
         id: 'itunes-soft-focus',
@@ -1627,6 +1639,191 @@ describe('NavigationShell', () => {
       expect(screen.queryByText('기기 조작은 잠시 멈추고 운전에 집중해주세요.')).not.toBeInTheDocument()
     }, { timeout: 1_000 })
   }, 20_000)
+
+  it('renders the manual risk voice transcript before requesting a match', async () => {
+    const stream = { getTracks: () => [] }
+    class Recorder {
+      static latest: Recorder
+      mimeType = 'audio/webm'
+      ondataavailable: ((event: { data: Blob }) => void) | null = null
+      onstop: (() => void) | null = null
+      constructor(_: MediaStream) { Recorder.latest = this }
+      start() {}
+      stop() { this.ondataavailable?.({ data: new Blob(['voice']) }); this.onstop?.() }
+    }
+    Object.defineProperty(globalThis, 'MediaRecorder', { configurable: true, value: Recorder })
+    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: vi.fn().mockResolvedValue(stream) } })
+    mockedMatchManualRiskVoice.mockImplementation(async () => {
+      expect(screen.getByTestId('roadie-assistant-user-text')).toHaveTextContent('창문 좀 열어줘')
+      return null
+    })
+
+    render(<QueryClientProvider client={new QueryClient()}><NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" /></QueryClientProvider>)
+    fireEvent.click(screen.getByRole('button', { name: '졸음 위험 상황 선택' }))
+    fireEvent.click(screen.getByRole('button', { name: '졸음 위험 상황 선택' }))
+    const sharedMicrophone = await screen.findByRole('button', { name: '선택지를 음성으로 말하기' })
+    expect(screen.queryByRole('button', { name: '창문 조금만 열어줘. 음성으로 말하기' })).not.toBeInTheDocument()
+    mockedSynthesizeVoice.mockClear()
+    fireEvent.click(sharedMicrophone)
+    await waitFor(() => expect(Recorder.latest).toBeDefined())
+    expect(screen.getByText('듣는 중...')).toBeInTheDocument()
+    expect(screen.getByTestId('voice-orb')).toHaveAttribute('data-state', 'listening')
+    expect(screen.queryByTestId('roadie-assistant-speech-text')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '선택지를 음성으로 말하기' }))
+    await waitFor(() => expect(mockedMatchManualRiskVoice).toHaveBeenCalled())
+    expect(mockedSynthesizeVoice.mock.calls.some(([request]) => request.speakerRole === 'user' && request.text === '창문 좀 열어줘')).toBe(false)
+  })
+
+  it('keeps the manual risk voice panel listening while transcription is pending', async () => {
+    const stream = { getTracks: () => [] }
+    class Recorder {
+      static latest: Recorder
+      mimeType = 'audio/webm'
+      ondataavailable: ((event: { data: Blob }) => void) | null = null
+      onstop: (() => void) | null = null
+      constructor(_: MediaStream) { Recorder.latest = this }
+      start() {}
+      stop() { this.ondataavailable?.({ data: new Blob(['voice']) }); this.onstop?.() }
+    }
+    let resolveTranscript: (transcript: string) => void = () => undefined
+    mockedTranscribeManualRiskVoice.mockImplementation(() => new Promise((resolve) => {
+      resolveTranscript = resolve
+    }))
+    Object.defineProperty(globalThis, 'MediaRecorder', { configurable: true, value: Recorder })
+    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: vi.fn().mockResolvedValue(stream) } })
+
+    render(<QueryClientProvider client={new QueryClient()}><NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" /></QueryClientProvider>)
+    fireEvent.click(screen.getByRole('button', { name: '졸음 위험 상황 선택' }))
+    fireEvent.click(screen.getByRole('button', { name: '졸음 위험 상황 선택' }))
+    fireEvent.click(await screen.findByRole('button', { name: '선택지를 음성으로 말하기' }))
+    await waitFor(() => expect(Recorder.latest).toBeDefined())
+    fireEvent.click(screen.getByRole('button', { name: '선택지를 음성으로 말하기' }))
+
+    await waitFor(() => expect(mockedTranscribeManualRiskVoice).toHaveBeenCalled())
+    expect(screen.getByText('듣는 중...')).toBeInTheDocument()
+    expect(screen.queryByText('눈이 무거워 보여요. 전방을 보고 자세를 바로잡아주세요.')).not.toBeInTheDocument()
+
+    await act(async () => {
+      resolveTranscript('창문 좀 열어줘')
+    })
+  })
+
+  it('does not show the next button while a transcribed manual risk voice response is matching', async () => {
+    const stream = { getTracks: () => [] }
+    class Recorder {
+      static latest: Recorder
+      mimeType = 'audio/webm'
+      ondataavailable: ((event: { data: Blob }) => void) | null = null
+      onstop: (() => void) | null = null
+      constructor(_: MediaStream) { Recorder.latest = this }
+      start() {}
+      stop() { this.ondataavailable?.({ data: new Blob(['voice']) }); this.onstop?.() }
+    }
+    let resolveMatch: (optionId: string | null) => void = () => undefined
+    mockedMatchManualRiskVoice.mockImplementation(() => new Promise((resolve) => {
+      resolveMatch = resolve
+    }))
+    Object.defineProperty(globalThis, 'MediaRecorder', { configurable: true, value: Recorder })
+    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: vi.fn().mockResolvedValue(stream) } })
+
+    render(<QueryClientProvider client={new QueryClient()}><NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" /></QueryClientProvider>)
+    fireEvent.click(screen.getByRole('button', { name: '졸음 위험 상황 선택' }))
+    fireEvent.click(screen.getByRole('button', { name: '졸음 위험 상황 선택' }))
+    fireEvent.click(await screen.findByRole('button', { name: '선택지를 음성으로 말하기' }))
+    await waitFor(() => expect(Recorder.latest).toBeDefined())
+    fireEvent.click(screen.getByRole('button', { name: '선택지를 음성으로 말하기' }))
+
+    await waitFor(() => expect(mockedMatchManualRiskVoice).toHaveBeenCalled())
+    expect(screen.getByTestId('roadie-assistant-user-text')).toHaveTextContent('창문 좀 열어줘')
+    expect(screen.queryByRole('button', { name: '다음' })).not.toBeInTheDocument()
+
+    await act(async () => {
+      resolveMatch(null)
+    })
+  })
+
+  it('keeps TTS for a directly selected manual risk response', async () => {
+    render(<QueryClientProvider client={new QueryClient()}><NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" /></QueryClientProvider>)
+    fireEvent.click(screen.getByRole('button', { name: '졸음 위험 상황 선택' }))
+    fireEvent.click(screen.getByRole('button', { name: '졸음 위험 상황 선택' }))
+    await screen.findByRole('button', { name: '창문 조금만 열어줘.' })
+    mockedSynthesizeVoice.mockClear()
+
+    fireEvent.click(screen.getByRole('button', { name: '창문 조금만 열어줘.' }))
+
+    await waitFor(() => {
+      expect(mockedSynthesizeVoice).toHaveBeenCalledWith(
+        expect.objectContaining({ text: '창문 조금만 열어줘.', speakerRole: 'user' }),
+        undefined,
+        expect.any(AbortSignal),
+      )
+    })
+  })
+
+  it('auto-executes the matched manual risk voice effect', async () => {
+    const stream = { getTracks: () => [] }
+    class Recorder {
+      static latest: Recorder
+      mimeType = 'audio/webm'
+      ondataavailable: ((event: { data: Blob }) => void) | null = null
+      onstop: (() => void) | null = null
+      constructor(_: MediaStream) { Recorder.latest = this }
+      start() {}
+      stop() { this.ondataavailable?.({ data: new Blob(['voice']) }); this.onstop?.() }
+    }
+    Object.defineProperty(globalThis, 'MediaRecorder', { configurable: true, value: Recorder })
+    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: vi.fn().mockResolvedValue(stream) } })
+    mockedTranscribeManualRiskVoice.mockResolvedValue('잠 깨는 음악 틀어줘')
+    mockedMatchManualRiskVoice.mockResolvedValue('drowsiness-music')
+
+    render(<QueryClientProvider client={new QueryClient()}><NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" /></QueryClientProvider>)
+    fireEvent.click(screen.getByRole('button', { name: '졸음 위험 상황 선택' }))
+    fireEvent.click(screen.getByRole('button', { name: '졸음 위험 상황 선택' }))
+    fireEvent.click(await screen.findByRole('button', { name: '선택지를 음성으로 말하기' }))
+    await waitFor(() => expect(Recorder.latest).toBeDefined())
+    fireEvent.click(screen.getByRole('button', { name: '선택지를 음성으로 말하기' }))
+
+    expect(await screen.findByTestId('music-mini-player')).toBeInTheDocument()
+  })
+
+  it('keeps manual risk voice choices usable when the match has no result', async () => {
+    const stream = { getTracks: () => [] }
+    class Recorder {
+      static latest: Recorder
+      mimeType = 'audio/webm'
+      ondataavailable: ((event: { data: Blob }) => void) | null = null
+      onstop: (() => void) | null = null
+      constructor(_: MediaStream) { Recorder.latest = this }
+      start() {}
+      stop() { this.ondataavailable?.({ data: new Blob(['voice']) }); this.onstop?.() }
+    }
+    Object.defineProperty(globalThis, 'MediaRecorder', { configurable: true, value: Recorder })
+    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: vi.fn().mockResolvedValue(stream) } })
+    mockedMatchManualRiskVoice.mockResolvedValue(null)
+
+    render(<QueryClientProvider client={new QueryClient()}><NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" /></QueryClientProvider>)
+    fireEvent.click(screen.getByRole('button', { name: '졸음 위험 상황 선택' }))
+    fireEvent.click(screen.getByRole('button', { name: '졸음 위험 상황 선택' }))
+    fireEvent.click(await screen.findByRole('button', { name: '선택지를 음성으로 말하기' }))
+    await waitFor(() => expect(Recorder.latest).toBeDefined())
+    fireEvent.click(screen.getByRole('button', { name: '선택지를 음성으로 말하기' }))
+
+    expect(await screen.findByText('어떤 도움을 원하시는지 다시 말씀해 주세요.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '창문 조금만 열어줘.' })).toBeEnabled()
+    expect(mockedGetMusicRecommendations).not.toHaveBeenCalled()
+  })
+
+  it('keeps manual risk voice choices usable when microphone permission is denied', async () => {
+    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: vi.fn().mockRejectedValue(new DOMException('denied', 'NotAllowedError')) } })
+
+    render(<QueryClientProvider client={new QueryClient()}><NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" /></QueryClientProvider>)
+    fireEvent.click(screen.getByRole('button', { name: '졸음 위험 상황 선택' }))
+    fireEvent.click(screen.getByRole('button', { name: '졸음 위험 상황 선택' }))
+    fireEvent.click(await screen.findByRole('button', { name: '선택지를 음성으로 말하기' }))
+
+    expect(await screen.findByText('마이크 권한이 필요합니다. 설정에서 허용하거나 버튼으로 선택해 주세요.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '창문 조금만 열어줘.' })).toBeEnabled()
+  })
 
   it('uses configured search cards and real music data for manual risk follow-up cards', async () => {
     const queryClient = new QueryClient()
