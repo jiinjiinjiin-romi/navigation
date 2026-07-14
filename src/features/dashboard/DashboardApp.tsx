@@ -891,7 +891,7 @@ function DashboardBrand({ inverted = false }: { inverted?: boolean }) {
         <SteeringWheel className="size-6" weight="fill" />
       </div>
       <div>
-        <div className={cn('text-base font-semibold tracking-normal', inverted ? 'text-white' : 'text-gray-900')}>ROADIE</div>
+        <div className={cn('text-base font-semibold tracking-normal', inverted ? 'text-white' : 'text-gray-900')}>ROADY</div>
         <div className={cn('text-xs font-medium', inverted ? 'text-white/60' : 'text-gray-500')}>운전자 대시보드</div>
       </div>
     </div>

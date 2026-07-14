@@ -816,7 +816,7 @@ describe('NavigationShell', () => {
       {
         id: 'itunes-drive-neon',
         title: 'Drive Neon',
-        artist: 'ROADIE Session',
+        artist: 'ROADY Session',
         album: 'City Pulse',
         duration: '3:24',
         durationSeconds: 204,
