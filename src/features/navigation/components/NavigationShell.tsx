@@ -2042,6 +2042,25 @@ export function NavigationShell({
   const manualRiskAlertFlashKey = manualRiskAlertFlash
     ? `${manualRiskConversation.riskId}-${manualRiskConversation.nodeId}`
     : undefined
+  const manualRiskAlertFlashInitial = shouldReduceMotion ? false : { backgroundColor: 'rgb(6 8 12)' }
+  const manualRiskAlertFlashAnimation = shouldReduceMotion
+    ? { backgroundColor: 'rgb(65 12 20)' }
+    : { backgroundColor: ['rgb(6 8 12)', 'rgb(65 12 20)', 'rgb(6 8 12)', 'rgb(65 12 20)', 'rgb(6 8 12)'] }
+  const manualRiskMapAlertFlashInitial = shouldReduceMotion ? false : { backgroundColor: 'rgba(124, 18, 31, 0)' }
+  const manualRiskMapAlertFlashAnimation = shouldReduceMotion
+    ? { backgroundColor: 'rgba(124, 18, 31, 0.32)' }
+    : {
+      backgroundColor: [
+        'rgba(124, 18, 31, 0)',
+        'rgba(124, 18, 31, 0.32)',
+        'rgba(124, 18, 31, 0)',
+        'rgba(124, 18, 31, 0.32)',
+        'rgba(124, 18, 31, 0)',
+      ],
+    }
+  const manualRiskAlertFlashTransition = shouldReduceMotion
+    ? { duration: 0 }
+    : { duration: 1.1, times: [0, 0.18, 0.4, 0.58, 1] }
   const navigationViewportClassName = [
     'relative z-10 col-start-1 min-h-0 overflow-hidden rounded-[1.1rem] border border-white/70 bg-[var(--nav-frame)] shadow-[0_18px_46px_rgb(15_23_42/0.24)] ring-1 ring-[rgb(148_163_184/0.18)]',
     manualNavigationActive
@@ -3494,13 +3513,9 @@ export function NavigationShell({
           aria-hidden="true"
           className="pointer-events-none absolute inset-0 z-0"
           data-testid="manual-risk-alert-flash"
-          initial={shouldReduceMotion ? false : { backgroundColor: 'rgb(6 8 12)' }}
-          animate={shouldReduceMotion
-            ? { backgroundColor: 'rgb(65 12 20)' }
-            : { backgroundColor: ['rgb(6 8 12)', 'rgb(65 12 20)', 'rgb(6 8 12)', 'rgb(65 12 20)', 'rgb(6 8 12)'] }}
-          transition={shouldReduceMotion
-            ? { duration: 0 }
-            : { duration: 1.1, times: [0, 0.18, 0.4, 0.58, 1] }}
+          initial={manualRiskAlertFlashInitial}
+          animate={manualRiskAlertFlashAnimation}
+          transition={manualRiskAlertFlashTransition}
         />
       ) : null}
       {!manualNavigationActive ? (
@@ -3553,6 +3568,17 @@ export function NavigationShell({
               }}
               onRequestLocation={requestCurrentLocation}
             />
+            {manualRiskAlertFlashKey ? (
+              <motion.div
+                key={manualRiskAlertFlashKey}
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 z-20"
+                data-testid="manual-risk-map-alert-flash"
+                initial={manualRiskMapAlertFlashInitial}
+                animate={manualRiskMapAlertFlashAnimation}
+                transition={manualRiskAlertFlashTransition}
+              />
+            ) : null}
             <RoadieOrbControl
               assistantStep={visibleAssistantStep}
               hidden={Boolean(activeSidePanel || (musicModalOpen && demoScenarioState?.scenario?.scenarioId !== 'device_operation'))}

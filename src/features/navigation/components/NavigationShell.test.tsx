@@ -2334,9 +2334,14 @@ describe('NavigationShell', () => {
 
     expect(await screen.findByText('휴대폰 사용을 즉시 중단하세요. 지금은 전방만 봐야 합니다.')).toBeInTheDocument()
     expect(screen.getByTestId('manual-risk-alert-flash')).toHaveClass('z-0')
+    expect(screen.getByTestId('manual-risk-map-alert-flash')).toHaveClass('z-20')
+    expect(screen.getByTestId('manual-risk-map-alert-flash')).toHaveStyle({
+      backgroundColor: 'rgba(124, 18, 31, 0)',
+    })
     expect(screen.getByTestId('navigation-viewport')).toHaveClass('z-10')
     expect(screen.getByTestId('manual-navigation-layout')).toHaveClass('z-10')
     expect(screen.getByTestId('manual-risk-control-panel')).toBeInTheDocument()
+    expect(screen.getByLabelText('로디 AI 에이전트')).toHaveClass('z-40')
   })
 
   it('starts and cancels the emergency warning countdown from the warning button', async () => {
