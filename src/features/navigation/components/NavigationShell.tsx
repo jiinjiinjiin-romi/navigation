@@ -2035,6 +2035,9 @@ export function NavigationShell({
     ? { duration: 0 }
     : { duration: 0.22, ease: PRODUCT_EASE }
   const manualNavigationActive = navigationEntryMode === 'free-navigation'
+  const manualRiskAlertFlash = manualNavigationActive
+    && manualRiskConversation?.kind === 'assistant'
+    && (manualRiskConversation.nodeId === 'strong' || manualRiskConversation.nodeId === 'emergency-warning')
   const navigationViewportClassName = [
     'relative col-start-1 min-h-0 overflow-hidden rounded-[1.1rem] border border-white/70 bg-[var(--nav-frame)] shadow-[0_18px_46px_rgb(15_23_42/0.24)] ring-1 ring-[rgb(148_163_184/0.18)]',
     manualNavigationActive
@@ -3472,8 +3475,18 @@ export function NavigationShell({
   }, [activeRoute, simulationRunning])
 
   return (
-    <main
+    <motion.main
       data-testid="navigation-stage"
+      data-manual-risk-alert-flash={manualRiskAlertFlash ? 'true' : 'false'}
+      initial={false}
+      animate={manualRiskAlertFlash
+        ? shouldReduceMotion
+          ? { backgroundColor: 'rgb(65 12 20)' }
+          : { backgroundColor: ['rgb(6 8 12)', 'rgb(65 12 20)', 'rgb(6 8 12)', 'rgb(65 12 20)', 'rgb(6 8 12)'] }
+        : { backgroundColor: 'rgb(6 8 12)' }}
+      transition={manualRiskAlertFlash && !shouldReduceMotion
+        ? { duration: 1.1, times: [0, 0.18, 0.4, 0.58, 1] }
+        : { duration: 0.18 }}
       className={[
         'relative grid h-screen min-h-0 grid-cols-[minmax(0,1fr)_24rem] gap-3 bg-[#06080c] p-3',
         manualNavigationActive ? 'items-center' : 'grid-rows-[minmax(17rem,38vh)_minmax(0,1fr)]',
@@ -4007,7 +4020,7 @@ export function NavigationShell({
           </p>
         </div>
       )}
-    </main>
+    </motion.main>
   )
 }
 

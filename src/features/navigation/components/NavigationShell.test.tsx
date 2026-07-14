@@ -2296,6 +2296,23 @@ describe('NavigationShell', () => {
     })
   })
 
+  it('signals the navigation-stage alert flash for a third-stage manual risk warning', async () => {
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '핸드폰 위험 상황 선택' }))
+    fireEvent.click(screen.getByRole('button', { name: '핸드폰 위험 상황 선택' }))
+    fireEvent.click(screen.getByRole('button', { name: '핸드폰 위험 상황 선택' }))
+
+    expect(await screen.findByText('휴대폰 사용을 즉시 중단하세요. 지금은 전방만 봐야 합니다.')).toBeInTheDocument()
+    expect(screen.getByTestId('navigation-stage')).toHaveAttribute('data-manual-risk-alert-flash', 'true')
+  })
+
   it('starts and cancels the emergency warning countdown from the warning button', async () => {
     const queryClient = new QueryClient()
 
@@ -2308,6 +2325,7 @@ describe('NavigationShell', () => {
     fireEvent.click(screen.getByRole('button', { name: '경고 위험 상황 선택' }))
 
     expect(screen.getByText('3초 후 긴급 경고가 시작됩니다.')).toBeInTheDocument()
+    expect(screen.getByTestId('navigation-stage')).toHaveAttribute('data-manual-risk-alert-flash', 'false')
     expect(mockedSynthesizeVoice).toHaveBeenCalledWith(
       expect.objectContaining({
         text: '졸음 경고! 졸음 경고!',
@@ -2341,6 +2359,26 @@ describe('NavigationShell', () => {
     })
 
     expect(screen.queryByText('졸음 경고! 졸음 경고!')).not.toBeInTheDocument()
+  }, 8_000)
+
+  it('signals the navigation-stage alert flash after the emergency warning countdown completes', async () => {
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell initialProfileSetupComplete initialSelectedProfileId="profile-1" />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '경고 위험 상황 선택' }))
+    expect(screen.getByTestId('navigation-stage')).toHaveAttribute('data-manual-risk-alert-flash', 'false')
+
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 3_100))
+    })
+
+    expect(await screen.findByText('졸음 경고! 졸음 경고!')).toBeInTheDocument()
+    expect(screen.getByTestId('navigation-stage')).toHaveAttribute('data-manual-risk-alert-flash', 'true')
   }, 8_000)
 
   it('dismisses first-stage and emergency manual warnings after six seconds', async () => {
