@@ -996,6 +996,55 @@ describe('NavigationShell', () => {
     await screen.findByTestId('tmap-panel')
   }
 
+  it('opens on demo mode selection without requiring a profile', async () => {
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell />
+      </QueryClientProvider>,
+    )
+
+    expect(await screen.findByTestId('demo-entry-mode-selection')).toBeInTheDocument()
+    expect(screen.queryByTestId('navigation-profile-setup')).not.toBeInTheDocument()
+    expect(screen.getByTestId('demo-entry-scenario-button')).toBeInTheDocument()
+    expect(screen.getByTestId('demo-entry-manual-control-button')).toBeInTheDocument()
+  })
+
+  it('uses 상우 in representative scenario selection without selecting a profile', async () => {
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(await screen.findByTestId('demo-entry-scenario-button'))
+
+    expect(await screen.findByTestId('demo-scenario-selection')).toHaveTextContent('상우')
+    expect(screen.getByTestId('demo-scenario-selection')).not.toHaveTextContent('민준 프로필')
+  })
+
+  it('opens profile selection for manual control and enters navigation after choosing a profile', async () => {
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(await screen.findByTestId('demo-entry-manual-control-button'))
+    fireEvent.click(await screen.findByRole('button', { name: /민준 프로필 선택/ }))
+
+    await waitFor(() => {
+      expect(mockedSelectProfile).toHaveBeenCalledWith('profile-1')
+    })
+    expect(await screen.findByTestId('manual-risk-control-panel')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '프로필 변경' })).toBeInTheDocument()
+  })
+
   const openOriginEditor = async () => {
     await openRouteSearchSummary()
     fireEvent.click(screen.getByRole('button', { name: '경로 입력으로 돌아가기' }))
@@ -2585,7 +2634,7 @@ describe('NavigationShell', () => {
     expect(screen.getByRole('heading', { name: '로디가 개인화 맞춤 설정을 준비하고 있어요' })).toBeInTheDocument()
   })
 
-  it('runs calibration automatically for a newly created profile before scenario selection', async () => {
+  it('runs calibration automatically for a newly created profile before manual navigation', async () => {
     const queryClient = new QueryClient()
 
     render(
@@ -2594,6 +2643,7 @@ describe('NavigationShell', () => {
       </QueryClientProvider>,
     )
 
+    fireEvent.click(await screen.findByTestId('demo-entry-manual-control-button'))
     fireEvent.click(await screen.findByRole('button', { name: '프로필 추가' }))
     fireEvent.change(screen.getByLabelText('프로필 이름'), {
       target: { value: '도현' },
@@ -2609,7 +2659,7 @@ describe('NavigationShell', () => {
     await waitFor(() => {
       expect(mockedSelectProfile).toHaveBeenCalledWith('profile-created')
     })
-    expect(await screen.findByTestId('demo-entry-mode-selection')).toBeInTheDocument()
+    expect(await screen.findByTestId('manual-risk-control-panel')).toBeInTheDocument()
   })
 
   it('deletes a backend profile from the profile settings screen', async () => {

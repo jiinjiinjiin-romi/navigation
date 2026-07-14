@@ -159,6 +159,7 @@ type SidePanelId = 'labels' | 'settings' | 'report' | 'connect'
 type ProfileSetupView = 'list' | 'create' | 'edit' | 'calibration'
 type ProfileSettingsPageId = 'basic' | 'guidance' | 'behavior'
 type NavigationEntryMode = 'free-navigation' | 'demo-scenario'
+type EntryScreen = 'demo-mode' | 'profile-selection' | 'scenario-selection' | null
 export type DriverVideoSource = {
   name: string
   type: string
@@ -1273,7 +1274,9 @@ export function NavigationShell({
   const [navigationEntryMode, setNavigationEntryMode] = useState<NavigationEntryMode | null>(
     initialProfileSetupComplete ? 'free-navigation' : null,
   )
-  const [demoScenarioSelectionOpen, setDemoScenarioSelectionOpen] = useState(false)
+  const [entryScreen, setEntryScreen] = useState<EntryScreen>(
+    initialProfileSetupComplete ? null : 'demo-mode',
+  )
   const [demoScenarioState, setDemoScenarioState] = useState<DemoScenarioControllerState | null>(null)
   const [demoSimulationStartPending, setDemoSimulationStartPending] = useState(false)
   const [demoCompleted, setDemoCompleted] = useState(false)
@@ -1326,6 +1329,9 @@ export function NavigationShell({
   const [driverVideo, setDriverVideo] = useState<DriverVideoSource | null>(null)
   const [driverVideoError, setDriverVideoError] = useState(false)
   const [showLocationFallbackToast, setShowLocationFallbackToast] = useState(false)
+  const runtimeNavigationActive = Boolean(
+    navigationEntryMode && (profileSetupComplete || navigationEntryMode === 'demo-scenario'),
+  )
   const [mapCameraSettings, setMapCameraSettings] = useState<MapCameraSettings>(DEFAULT_MAP_CAMERA_SETTINGS)
   const updateMapCameraSettings = useCallback((settings: Partial<MapCameraSettings>) => {
     setMapCameraSettings((currentSettings) => {
@@ -1432,7 +1438,7 @@ export function NavigationShell({
       undefined,
       signal,
     ),
-    enabled: profileSetupComplete && (
+    enabled: runtimeNavigationActive && (
       musicModalOpen
       || musicPlaying
       || assistantMusicRecommendationVisible
@@ -1552,7 +1558,7 @@ export function NavigationShell({
       setCalibrationProgress(0)
       setProfileSetupComplete(false)
       setNavigationEntryMode(null)
-      setDemoScenarioSelectionOpen(false)
+      setEntryScreen('profile-selection')
       setDemoScenarioState(null)
       setDemoSimulationStartPending(false)
       setDemoCompleted(false)
@@ -1586,7 +1592,8 @@ export function NavigationShell({
 
     selectProfileAfterCalibration(calibratingProfileId, {
       onSuccess: () => {
-        setNavigationEntryMode(null)
+        setNavigationEntryMode('free-navigation')
+        setEntryScreen(null)
         setProfileSetupView('list')
         setCalibratingProfileId(undefined)
         setCalibrationStepIndex(0)
@@ -1645,14 +1652,14 @@ export function NavigationShell({
   const originSearch = useQuery({
     queryKey: ['places', debouncedOriginKeyword],
     queryFn: ({ signal }) => searchPlaces(debouncedOriginKeyword, undefined, signal),
-    enabled: profileSetupComplete && activeField === 'origin' && debouncedOriginKeyword.length >= 2 && debouncedOriginKeyword !== origin?.name,
+    enabled: runtimeNavigationActive && activeField === 'origin' && debouncedOriginKeyword.length >= 2 && debouncedOriginKeyword !== origin?.name,
     placeholderData: keepPreviousData,
   })
 
   const destinationSearch = useQuery({
     queryKey: ['places', debouncedDestinationKeyword],
     queryFn: ({ signal }) => searchPlaces(debouncedDestinationKeyword, undefined, signal),
-    enabled: profileSetupComplete && activeField === 'destination' && debouncedDestinationKeyword.length >= 2 && debouncedDestinationKeyword !== destination?.name,
+    enabled: runtimeNavigationActive && activeField === 'destination' && debouncedDestinationKeyword.length >= 2 && debouncedDestinationKeyword !== destination?.name,
     placeholderData: keepPreviousData,
   })
   const activeRouteSearchKeyword = activeField === 'origin'
@@ -1689,20 +1696,20 @@ export function NavigationShell({
       measureRoutePerformance('route-options-query-total', 'route-options-query-start', 'route-options-query-end')
       return options
     },
-    enabled: profileSetupComplete && Boolean(origin && destination && routeOptionsSearchReady) && !selectedRouteOptionId,
+    enabled: runtimeNavigationActive && Boolean(origin && destination && routeOptionsSearchReady) && !selectedRouteOptionId,
   })
 
   const weatherQuery = useQuery({
     queryKey: ['weather', weatherQueryCoordinate?.lat, weatherQueryCoordinate?.lng],
     queryFn: () => getCurrentWeatherLabel(weatherQueryCoordinate!),
-    enabled: profileSetupComplete && Boolean(weatherQueryCoordinate),
+    enabled: runtimeNavigationActive && Boolean(weatherQueryCoordinate),
     staleTime: WEATHER_STALE_TIME_MS,
     retry: false,
   })
   const currentAddressQuery = useQuery({
     queryKey: ['current-address', addressQueryCoordinate?.lat, addressQueryCoordinate?.lng],
     queryFn: ({ signal }) => getCurrentAddress(addressQueryCoordinate!, undefined, signal),
-    enabled: profileSetupComplete && Boolean(addressQueryCoordinate),
+    enabled: runtimeNavigationActive && Boolean(addressQueryCoordinate),
     staleTime: WEATHER_STALE_TIME_MS,
     retry: false,
   })
@@ -1751,7 +1758,7 @@ export function NavigationShell({
   const roadMatchQuery = useQuery({
     queryKey: ['road-match', selectedRouteOptionId, activeRoute?.coordinates.length],
     queryFn: ({ signal }) => getRoadMatch(activeRoute!.coordinates, undefined, signal),
-    enabled: profileSetupComplete && Boolean(activeRoute?.coordinates.length),
+    enabled: runtimeNavigationActive && Boolean(activeRoute?.coordinates.length),
     staleTime: 5 * 60 * 1000,
     retry: false,
   })
@@ -1766,7 +1773,7 @@ export function NavigationShell({
       currentRoadMatchCoordinates?.[0].lng,
     ],
     queryFn: ({ signal }) => getRoadMatch(currentRoadMatchCoordinates!, undefined, signal),
-    enabled: profileSetupComplete && Boolean(currentRoadMatchCoordinates) && !activeRoute,
+    enabled: runtimeNavigationActive && Boolean(currentRoadMatchCoordinates) && !activeRoute,
     staleTime: 60 * 1000,
     retry: false,
   })
@@ -1982,7 +1989,7 @@ export function NavigationShell({
   const demoActive = navigationEntryMode === 'demo-scenario' && Boolean(demoScenarioState)
   const demoNavigationLocked = demoActive
   const demoAssistantStep = demoScenarioState
-    ? createDemoAssistantStep(demoScenarioState, selectedProfileName, selectedProfile?.agentPersonality ?? 'FRIENDLY')
+    ? createDemoAssistantStep(demoScenarioState, '상우', 'FRIENDLY')
     : undefined
   const manualRiskAssistantStep = manualRiskConversation
     ? createManualRiskAssistantStep(manualRiskConversation)
@@ -2576,7 +2583,7 @@ export function NavigationShell({
   }, [manualRiskConversation, musicPlaying, musicRecommendationsLoading, scheduleManualRiskDismiss])
 
   useEffect(() => {
-    if (!profileSetupComplete) {
+    if (!runtimeNavigationActive) {
       return
     }
 
@@ -2591,7 +2598,7 @@ export function NavigationShell({
     }, 5_000)
 
     return () => window.clearTimeout(timer)
-  }, [locationStatus, profileSetupComplete])
+  }, [locationStatus, runtimeNavigationActive])
 
   const openSidePanel = useCallback((panel: SidePanelId) => {
     setMusicModalOpen(false)
@@ -2626,12 +2633,12 @@ export function NavigationShell({
   }, [clearPendingRouteSearchEditor])
 
   useEffect(() => {
-    if (!profileSetupComplete) {
+    if (!runtimeNavigationActive) {
       return
     }
 
     requestCurrentLocation()
-  }, [profileSetupComplete, requestCurrentLocation])
+  }, [runtimeNavigationActive, requestCurrentLocation])
 
   useEffect(() => {
     if (locationStatus !== 'granted' || origin?.id !== CURRENT_LOCATION_PLACE_ID || !currentPosition) {
@@ -3096,10 +3103,11 @@ export function NavigationShell({
       const nextState = advanceDemoScenarioForPresenter(currentState)
       applyDemoSetupSideEffects(nextState)
       if (shouldOpenDemoReport(nextState)) {
-        setNavigationEntryMode('free-navigation')
-        setActiveSidePanel('report')
+        setNavigationEntryMode(null)
+        setEntryScreen('demo-mode')
+        setActiveSidePanel(null)
         setReportFullscreenOpen(false)
-        setDemoCompleted(true)
+        setDemoCompleted(false)
         return null
       }
       return nextState
@@ -3126,7 +3134,7 @@ export function NavigationShell({
     endGuidance()
     setDemoScenarioState(null)
     setNavigationEntryMode(null)
-    setDemoScenarioSelectionOpen(false)
+    setEntryScreen('demo-mode')
     setDemoCompleted(false)
   }, [endGuidance])
 
@@ -3257,7 +3265,7 @@ export function NavigationShell({
             'w-full',
           ].join(' ')}
         >
-          {profileSetupComplete && navigationEntryMode ? (
+          {runtimeNavigationActive ? (
             <>
             <TmapPanel
               cameraSettings={mapCameraSettings}
@@ -3298,10 +3306,10 @@ export function NavigationShell({
                   setMusicModalOpen(false)
                 }
               }}
-              profileName={selectedProfileName}
+              profileName={demoActive ? '상우' : selectedProfileName}
               assistantVoiceId={activeAssistantVoiceId}
               reducedMotion={Boolean(shouldReduceMotion)}
-              ttsOptions={resolveAgentPersonalityTtsOptions(activeRoadieAgentPersonality)}
+              ttsOptions={resolveAgentPersonalityTtsOptions(demoActive ? 'FRIENDLY' : activeRoadieAgentPersonality)}
             />
             {!activeRoute ? (
               <>
@@ -3501,36 +3509,30 @@ export function NavigationShell({
             ) : null}
             </>
           ) : null}
-          {profileSetupComplete && !navigationEntryMode ? (
-            demoScenarioSelectionOpen ? (
+          {!navigationEntryMode && entryScreen ? (
+            entryScreen === 'scenario-selection' ? (
               <DemoScenarioSelection
                 motionTiming={motionTiming}
-                profileName={selectedProfile?.displayName ?? '운전자'}
-                onBackToEntryMode={() => setDemoScenarioSelectionOpen(false)}
+                profileName="상우"
+                onBackToEntryMode={() => setEntryScreen('demo-mode')}
                 onStartScenario={(scenarioId) => {
                   setNavigationEntryMode('demo-scenario')
+                  setEntryScreen(null)
                   setDemoScenarioState(createInitialDemoScenarioState(scenarioId))
                   setDemoCompleted(false)
                 }}
               />
-            ) : (
+            ) : entryScreen === 'demo-mode' ? (
               <DemoEntryModeSelection
                 motionTiming={motionTiming}
-                profileName={selectedProfile?.displayName ?? '운전자'}
-                onReturnToProfileSelection={() => {
-                  setDemoScenarioSelectionOpen(false)
-                  setNavigationEntryMode(null)
-                  setProfileSetupView('list')
-                  setProfileSetupComplete(false)
-                }}
-                onOpenScenarioSelection={() => setDemoScenarioSelectionOpen(true)}
+                onOpenScenarioSelection={() => setEntryScreen('scenario-selection')}
                 onStartManualControl={() => {
-                  setNavigationEntryMode('free-navigation')
+                  setEntryScreen('profile-selection')
                   setDemoScenarioState(null)
                   setDemoCompleted(false)
                 }}
               />
-            )
+            ) : null
           ) : null}
         </div>
 
@@ -3586,7 +3588,7 @@ export function NavigationShell({
           </AnimatePresence>
         ) : null}
         <AnimatePresence initial={false}>
-          {!profileSetupComplete ? (
+          {entryScreen === 'profile-selection' ? (
             <NavigationProfileSetup
               createError={createProfileMutation.isError}
               creating={createProfileMutation.isPending}
@@ -3613,6 +3615,10 @@ export function NavigationShell({
                 setEditingProfileId(undefined)
                 setProfileForm(DEFAULT_PROFILE_CREATE_REQUEST)
               }}
+              onBackToDemoMode={() => {
+                setProfileSetupView('list')
+                setEntryScreen('demo-mode')
+              }}
               onChangeForm={setProfileForm}
               onCreateProfile={() => createProfileMutation.mutate(normalizeProfileForm(profileForm))}
               onDeleteProfile={(profileId) => deleteProfileMutation.mutate(profileId)}
@@ -3626,10 +3632,23 @@ export function NavigationShell({
                 setProfileForm(createProfileFormFromProfile(profile))
                 setProfileSetupView('edit')
               }}
-              onSelectProfile={(profileId) => setSelectedProfileId(profileId)}
+              onSelectProfile={(profileId) => {
+                setSelectedProfileId(profileId)
+                selectProfileMutation.mutate(profileId, {
+                  onSuccess: () => {
+                    setNavigationEntryMode('free-navigation')
+                    setEntryScreen(null)
+                  },
+                })
+              }}
               onStart={() => {
                 if (selectedProfileId) {
-                  selectProfileMutation.mutate(selectedProfileId)
+                  selectProfileMutation.mutate(selectedProfileId, {
+                    onSuccess: () => {
+                      setNavigationEntryMode('free-navigation')
+                      setEntryScreen(null)
+                    },
+                  })
                 }
               }}
               onUpdateProfile={() => {
@@ -3649,7 +3668,7 @@ export function NavigationShell({
           motionTiming={motionTiming}
           routeReady={Boolean(activeRoute)}
           routeOptionsReady={routeOptionsReady}
-          profileName={selectedProfileName}
+          profileName="상우"
           state={demoScenarioState}
           onExit={exitActiveDemoScenario}
           onNext={advanceActiveDemoScenario}
@@ -3662,7 +3681,7 @@ export function NavigationShell({
           onBackToScenarios={() => {
             setActiveSidePanel(null)
             setNavigationEntryMode(null)
-            setDemoScenarioSelectionOpen(false)
+            setEntryScreen('demo-mode')
             setDemoCompleted(false)
           }}
         />
@@ -3708,7 +3727,7 @@ export function NavigationShell({
               setActiveSidePanel(null)
               setNavigationEntryMode(null)
               setProfileSetupView('list')
-              setProfileSetupComplete(false)
+              setEntryScreen('profile-selection')
             }}
             onSelectRisk={selectManualRisk}
             responseOptions={demoAssistantStep ? [] : manualRiskResponseOptions}
@@ -3754,6 +3773,7 @@ function NavigationProfileSetup({
   selectedProfile,
   updateError,
   onBackToList,
+  onBackToDemoMode,
   onChangeForm,
   onCreateProfile,
   onDeleteProfile,
@@ -3784,6 +3804,7 @@ function NavigationProfileSetup({
   selectedProfile?: NavigationProfile
   updateError: boolean
   onBackToList: () => void
+  onBackToDemoMode: () => void
   onChangeForm: (form: ProfileCreateRequest) => void
   onCreateProfile: () => void
   onDeleteProfile: (profileId: string) => void
@@ -3843,6 +3864,13 @@ function NavigationProfileSetup({
           />
         ) : (
           <>
+            <button
+              className="absolute left-0 top-0 inline-flex h-9 items-center rounded-lg border border-white/80 bg-white px-3 text-xs font-semibold text-[var(--nav-ink)] shadow-[0_8px_18px_rgb(15_23_42/0.08)] transition hover:border-[var(--nav-primary)] hover:bg-[var(--nav-selection)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
+              onClick={onBackToDemoMode}
+              type="button"
+            >
+              {'< 데모 모드 선택'}
+            </button>
             <motion.div
               className="text-center"
               initial={{ opacity: 0, y: 10 }}
@@ -6256,14 +6284,10 @@ export function personalizeDemoRoadieMessage(message: string, profileName: strin
 
 function DemoEntryModeSelection({
   motionTiming,
-  profileName,
-  onReturnToProfileSelection,
   onOpenScenarioSelection,
   onStartManualControl,
 }: {
   motionTiming: MotionTiming
-  profileName: string
-  onReturnToProfileSelection: () => void
   onOpenScenarioSelection: () => void
   onStartManualControl: () => void
 }) {
@@ -6279,16 +6303,9 @@ function DemoEntryModeSelection({
         <div className="mx-auto max-w-[42rem] text-center">
           <h2 className="text-2xl font-black leading-tight">데모 모드 선택</h2>
           <p className="mt-2 text-sm font-semibold text-[var(--nav-muted)]">
-            {profileName} 프로필 · 원하는 방식으로 로디 데모를 시작하세요
+            원하는 방식으로 로디 데모를 시작하세요
           </p>
         </div>
-        <button
-          className="absolute left-0 top-0 inline-flex h-9 items-center rounded-lg border border-white/80 bg-white px-3 text-xs font-semibold text-[var(--nav-ink)] shadow-[0_8px_18px_rgb(15_23_42/0.08)] transition hover:border-[var(--nav-primary)] hover:bg-[var(--nav-selection)] hover:shadow-[0_12px_24px_rgb(15_23_42/0.12)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
-          onClick={onReturnToProfileSelection}
-          type="button"
-        >
-          {'< 프로필 선택'}
-        </button>
       </div>
 
       <div className="mx-auto mt-7 grid w-full max-w-[56rem] grid-cols-2 gap-3 max-sm:grid-cols-1">
@@ -6361,7 +6378,7 @@ function DemoScenarioSelection({
         <div className="max-w-[38rem] text-center">
           <h2 className="text-2xl font-black leading-tight">대표 위험행동 데모 선택</h2>
           <p className="mt-2 text-sm font-semibold text-[var(--nav-muted)]">
-            {profileName} 프로필 · Calibration 적용됨
+            {profileName} · 대표 시나리오를 선택하세요
           </p>
         </div>
         <button
@@ -6792,7 +6809,7 @@ function ManualRiskControlPanel({
         </div>
         <div className="flex shrink-0 items-center gap-1">
           <button
-            aria-label="프로필 선택으로 돌아가기"
+            aria-label="프로필 변경"
             className={[
               'inline-flex h-8 items-center gap-1 rounded-md px-1.5 text-xs font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]',
               profileReturnAttention
@@ -6804,7 +6821,7 @@ function ManualRiskControlPanel({
             type="button"
           >
             <CaretLeft className="size-3.5" weight="bold" />
-            <span>프로필</span>
+            <span>프로필 변경</span>
             {profileReturnAttention ? <Sparkle aria-hidden="true" className="size-3" weight="fill" /> : null}
           </button>
           <button
