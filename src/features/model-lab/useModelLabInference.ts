@@ -35,6 +35,8 @@ export function useModelLabInference({ videoRef }: UseModelLabInferenceParams) {
       intervalRef.current = undefined
     }
 
+    videoRef.current?.pause()
+
     const socket = socketRef.current
     socketRef.current = null
 
@@ -47,7 +49,7 @@ export function useModelLabInference({ videoRef }: UseModelLabInferenceParams) {
     }
 
     setState('idle')
-  }, [])
+  }, [videoRef])
 
   const sendCurrentFrame = useCallback(async () => {
     const socket = socketRef.current
@@ -73,6 +75,11 @@ export function useModelLabInference({ videoRef }: UseModelLabInferenceParams) {
 
   const start = useCallback(() => {
     stop()
+    const video = videoRef.current
+    video?.pause()
+    if (video?.ended) {
+      video.currentTime = 0
+    }
     setError('')
     setState('connecting')
     frameIndexRef.current = 0
@@ -105,11 +112,28 @@ export function useModelLabInference({ videoRef }: UseModelLabInferenceParams) {
       }
 
       if (message.type === 'session_started') {
-        setState('running')
-        void sendCurrentFrame()
-        intervalRef.current = window.setInterval(() => {
+        void (async () => {
+          const video = videoRef.current
+          if (!video) {
+            setError('No video is selected for model inference.')
+            setState('error')
+            return
+          }
+
+          try {
+            await video.play()
+          } catch {
+            setError('Video playback failed after model session started.')
+            setState('error')
+            return
+          }
+
+          setState('running')
           void sendCurrentFrame()
-        }, 1000 / MODEL_LAB_TARGET_FPS)
+          intervalRef.current = window.setInterval(() => {
+            void sendCurrentFrame()
+          }, 1000 / MODEL_LAB_TARGET_FPS)
+        })()
         return
       }
 
@@ -145,7 +169,7 @@ export function useModelLabInference({ videoRef }: UseModelLabInferenceParams) {
       socketRef.current = null
       setState((currentState) => currentState === 'running' || currentState === 'connecting' ? 'idle' : currentState)
     }
-  }, [sendCurrentFrame, stop])
+  }, [sendCurrentFrame, stop, videoRef])
 
   useEffect(() => stop, [stop])
 

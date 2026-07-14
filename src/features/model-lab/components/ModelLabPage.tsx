@@ -27,7 +27,7 @@ export function ModelLabPage() {
   }
 
   function handleStartAnalysis() {
-    void videoRef.current?.play()
+    videoRef.current?.pause()
     inference.start()
   }
 
