@@ -18,7 +18,7 @@ export const debugScenarios: AiaiScenarioDefinition[] = [
     id: 'drowsiness-rest-area',
     title: '졸음 감지 → 졸음쉼터 안내',
     steps: [
-      { title: '정상 주행', description: '기본 네비게이션 주행 화면입니다.' },
+      { title: '정상 주행', description: '기본 내비게이션 주행 화면입니다.' },
       { title: '졸음 감지 발생', description: '운전자 졸음 이벤트를 더미로 발생시킵니다.', detectionEvent: '졸음 감지' },
       { title: '에이전트 음성 안내', description: 'AI 에이전트가 휴식을 권장합니다.', agentSpeech: '잠시 쉬어가면 좋겠습니다. 신탄진 졸음쉼터를 찾아드릴까요?' },
       { title: '사용자 음성 응답', description: '운전자가 음성으로 졸음쉼터 안내를 요청합니다.', userSpeech: '신탄진 졸음쉼터로 안내해줘' },
@@ -33,7 +33,7 @@ export const debugScenarios: AiaiScenarioDefinition[] = [
     id: 'fatigue-music',
     title: '졸음 감지 → 음악 추천',
     steps: [
-      { title: '정상 주행', description: '기본 네비게이션 주행 화면입니다.' },
+      { title: '정상 주행', description: '기본 내비게이션 주행 화면입니다.' },
       { title: '졸음 감지 발생', description: '운전자 졸음 이벤트를 더미로 발생시킵니다.', detectionEvent: '졸음 감지' },
       { title: '에이전트 음성 안내', description: 'AI 에이전트가 기분 전환을 제안합니다.', agentSpeech: '잠깐 리듬을 바꿔볼까요? 밝은 음악을 준비해드릴게요.' },
       { title: '사용자 음성 응답', description: '운전자가 음악 재생을 요청합니다.', userSpeech: '밝은 음악 틀어줘' },
@@ -48,7 +48,7 @@ export const debugScenarios: AiaiScenarioDefinition[] = [
     id: 'phone-message',
     title: '휴대폰 사용 감지 → 문자 대행',
     steps: [
-      { title: '정상 주행', description: '기본 네비게이션 주행 화면입니다.' },
+      { title: '정상 주행', description: '기본 내비게이션 주행 화면입니다.' },
       { title: '휴대폰 사용 감지 발생', description: '휴대폰 사용 이벤트를 더미로 발생시킵니다.', detectionEvent: '휴대폰 사용 감지' },
       { title: '에이전트 음성 안내', description: 'AI 에이전트가 연락 대행을 제안합니다.', agentSpeech: '운전 중에는 제가 대신 도와드릴게요. 메시지를 보낼까요?' },
       { title: '사용자 음성 응답', description: '운전자가 문자 대행을 요청합니다.', userSpeech: '엄마한테 10분 늦는다고 문자 보내줘' },
@@ -63,7 +63,7 @@ export const debugScenarios: AiaiScenarioDefinition[] = [
     id: 'fatigue-window',
     title: '졸음 감지 → 창문 열기',
     steps: [
-      { title: '정상 주행', description: '기본 네비게이션 주행 화면입니다.' },
+      { title: '정상 주행', description: '기본 내비게이션 주행 화면입니다.' },
       { title: '졸음 감지 발생', description: '운전자 졸음 이벤트를 더미로 발생시킵니다.', detectionEvent: '졸음 감지' },
       { title: '에이전트 음성 안내', description: '환기를 제안합니다.', agentSpeech: '실내 공기를 조금 바꿔볼까요? 창문을 살짝 열 수 있어요.' },
       { title: '사용자 음성 응답', description: '운전자가 창문 제어를 요청합니다.', userSpeech: '창문 살짝 열어줘' },
@@ -78,7 +78,7 @@ export const debugScenarios: AiaiScenarioDefinition[] = [
     id: 'fatigue-conversation',
     title: '졸음 감지 → 짧은 이야기',
     steps: [
-      { title: '정상 주행', description: '기본 네비게이션 주행 화면입니다.' },
+      { title: '정상 주행', description: '기본 내비게이션 주행 화면입니다.' },
       { title: '졸음 감지 발생', description: '운전자 졸음 이벤트를 더미로 발생시킵니다.', detectionEvent: '졸음 감지' },
       { title: '에이전트 음성 안내', description: '짧은 이야기를 제안합니다.', agentSpeech: '잠깐 기분 전환해 볼까요? 짧은 이야기를 들려드릴 수 있어요.' },
       { title: '사용자 음성 응답', description: '운전자가 짧은 이야기를 요청합니다.', userSpeech: '짧은 이야기 해줘' },
@@ -92,7 +92,7 @@ export const debugScenarios: AiaiScenarioDefinition[] = [
     id: 'long-drive-rest-area',
     title: '장시간 운전 → 휴게소 추천',
     steps: [
-      { title: '정상 주행', description: '기본 네비게이션 주행 화면입니다.' },
+      { title: '정상 주행', description: '기본 내비게이션 주행 화면입니다.' },
       { title: '장시간 운전 감지 발생', description: '장시간 운전 이벤트를 더미로 발생시킵니다.', detectionEvent: '장시간 운전' },
       { title: '에이전트 음성 안내', description: '휴식을 권장합니다.', agentSpeech: '잠시 쉬어가면 좋겠습니다. 죽암휴게소를 찾아드릴까요?' },
       { title: '사용자 음성 응답', description: '운전자가 휴게소 검색을 요청합니다.', userSpeech: '죽암휴게소 찾아줘' },
@@ -107,7 +107,7 @@ export const debugScenarios: AiaiScenarioDefinition[] = [
     id: 'distraction-voice-guide',
     title: '주의 분산 감지 → 음성 안내 강화',
     steps: [
-      { title: '정상 주행', description: '기본 네비게이션 주행 화면입니다.' },
+      { title: '정상 주행', description: '기본 내비게이션 주행 화면입니다.' },
       { title: '주의 분산 감지 발생', description: '주의 분산 이벤트를 더미로 발생시킵니다.', detectionEvent: '주의 분산' },
       { title: '에이전트 음성 안내', description: '전방 주시를 요청합니다.', agentSpeech: '전방을 확인해 주세요. 안내는 음성으로 더 자세히 도와드릴게요.' },
       { title: '사용자 음성 응답', description: '운전자가 음성 안내 강화를 요청합니다.', userSpeech: '알겠어. 음성 안내 켜줘' },

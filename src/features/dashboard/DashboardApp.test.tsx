@@ -166,8 +166,8 @@ describe('DashboardApp', () => {
     expect(screen.getByRole('tab', { name: '주행 영상' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: '운전 행동' })).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('link', { name: '네비게이션 설정' }))
-    expect(await screen.findByRole('heading', { name: '네비게이션 설정' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('link', { name: '내비게이션 설정' }))
+    expect(await screen.findByRole('heading', { name: '내비게이션 설정' })).toBeInTheDocument()
   })
 
   test('updates driving video event detail when an event marker is selected', () => {
@@ -276,7 +276,7 @@ describe('DashboardApp', () => {
     expect(mockedSelectProfile).toHaveBeenCalledWith('profile-mom')
     expect(await screen.findByText('77점')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('link', { name: '네비게이션 설정' }))
+    fireEvent.click(screen.getByRole('link', { name: '내비게이션 설정' }))
 
     expect(await screen.findByDisplayValue('엄마')).toBeInTheDocument()
     expect(screen.getByDisplayValue('mom@example.com')).toBeInTheDocument()

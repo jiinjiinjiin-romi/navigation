@@ -999,7 +999,7 @@ describe('NavigationShell', () => {
       await waitFor(() => {
         expect(
           screen.queryByTestId('demo-entry-manual-control-button') ??
-            screen.queryByRole('button', { name: '네비게이션 이용하기' }),
+            screen.queryByRole('button', { name: '내비게이션 이용하기' }),
         ).toBeTruthy()
       })
 
@@ -1007,7 +1007,7 @@ describe('NavigationShell', () => {
       if (directControlButton) {
         fireEvent.click(directControlButton)
       } else {
-        fireEvent.click(await screen.findByRole('button', { name: '네비게이션 이용하기' }))
+        fireEvent.click(await screen.findByRole('button', { name: '내비게이션 이용하기' }))
       }
     }
 
@@ -1220,7 +1220,7 @@ describe('NavigationShell', () => {
     fireEvent.click(screen.getByRole('button', { name: '민준(으)로 시작' }))
     fireEvent.click(await screen.findByRole('button', { name: /대표 시나리오 보기/ }))
     expect(screen.getByTestId('demo-scenario-selection')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '네비게이션 이용하기' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '내비게이션 이용하기' })).not.toBeInTheDocument()
   })
 
   it('returns between demo selection screens with labeled back buttons', async () => {

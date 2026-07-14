@@ -212,7 +212,7 @@ const dashboardRoutes: Array<{
 }> = [
   { path: '/dashboard/overview', label: '개요', icon: ChartLineUp },
   { path: '/dashboard/analysis', label: '분석', icon: FileText },
-  { path: '/dashboard/settings/navigation', label: '네비게이션 설정', icon: GearSix },
+  { path: '/dashboard/settings/navigation', label: '내비게이션 설정', icon: GearSix },
   { path: '/dashboard/settings/notifications', label: '알림', icon: Bell },
 ]
 
@@ -1773,7 +1773,7 @@ function NavigationSettingsPage({ favoritePlaces, notify, onSaveProfileVoice, pr
     setProfileSettings(draft)
     setFavoritePlaces(placesDraft)
     setSaved(true)
-    notify('네비게이션 설정을 저장했습니다.')
+    notify('내비게이션 설정을 저장했습니다.')
     window.setTimeout(() => setSaved(false), 1600)
   }
 
@@ -1803,7 +1803,7 @@ function NavigationSettingsPage({ favoritePlaces, notify, onSaveProfileVoice, pr
   return (
     <section>
       <PageHeader
-        title="네비게이션 설정"
+        title="내비게이션 설정"
         action={<div className="flex flex-wrap gap-2"><DashboardActionButton disabled={!hasChanges} variant="secondary" onClick={cancel}>취소</DashboardActionButton><DashboardActionButton variant="secondary" onClick={reset}>초기화</DashboardActionButton><DashboardActionButton disabled={!hasChanges} onClick={save}>설정 저장</DashboardActionButton>{saved ? <Badge className="h-10 rounded-lg px-3" variant="secondary">저장됨</Badge> : null}</div>}
       />
       <Tabs className="mb-4" value={activeTab} onValueChange={(value) => setActiveTab(value as 'settings' | 'favorites')}>
