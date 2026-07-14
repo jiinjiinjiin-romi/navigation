@@ -8797,7 +8797,7 @@ function ReportDrawerContent({
           style={{ height: drawerBehaviorChartHeight }}
         >
           <ResponsiveContainer height="100%" width="100%">
-            <BarChart data={drawerBehaviorChartData} layout="vertical" margin={{ top: 0, right: 24, bottom: 0, left: 2 }}>
+            <BarChart data={drawerBehaviorChartData} layout="vertical" margin={{ top: 0, right: REPORT_DRAWER_BEHAVIOR_CHART_RIGHT_MARGIN, bottom: 0, left: 2 }}>
               <XAxis axisLine={false} tick={false} tickLine={false} type="number" />
               <YAxis
                 axisLine={false}
@@ -9557,6 +9557,8 @@ function getBehaviorChartColor(behaviorType: string) {
 export function getReportDrawerBehaviorChartHeight(behaviorCount: number) {
   return Math.max(136, behaviorCount * 32)
 }
+
+export const REPORT_DRAWER_BEHAVIOR_CHART_RIGHT_MARGIN = 48
 
 function formatReportChartCountLabel(value: unknown) {
   return `${value ?? 0}건`

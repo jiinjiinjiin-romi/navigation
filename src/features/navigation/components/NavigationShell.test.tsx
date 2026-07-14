@@ -10,6 +10,7 @@ import {
   getAssistantVisibleOrbState,
   getRoadieAssistantPanelWidth,
   getReportDrawerBehaviorChartHeight,
+  REPORT_DRAWER_BEHAVIOR_CHART_RIGHT_MARGIN,
   isAssistantVoiceWaveVisible,
   NavigationShell,
   personalizeDemoRoadieMessage,
@@ -343,6 +344,10 @@ describe('NavigationShell', () => {
   it('sizes the report drawer behavior chart for every behavior row', () => {
     expect(getReportDrawerBehaviorChartHeight(2)).toBe(136)
     expect(getReportDrawerBehaviorChartHeight(5)).toBe(160)
+  })
+
+  it('reserves enough right gutter for every report drawer count label', () => {
+    expect(REPORT_DRAWER_BEHAVIOR_CHART_RIGHT_MARGIN).toBeGreaterThanOrEqual(48)
   })
 
   it('personalizes demo 로디 messages with the selected profile name', () => {
