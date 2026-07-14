@@ -5,6 +5,7 @@ import {
   createModelLabWebSocketUrl,
   createSessionStartMessage,
   getActiveModelLabClassIds,
+  normalizeModelLabDetections,
   sendFrameMessage,
 } from './modelLabProtocol'
 
@@ -80,5 +81,21 @@ describe('modelLabProtocol', () => {
       { variableName: 'class_2', score: 0.5 },
       { variableName: 'class_3', score: 0.8 },
     ])).toEqual(new Set(['class_2', 'class_3']))
+  })
+
+  it('normalizes model detections to the 5-class ViT labels', () => {
+    expect(normalizeModelLabDetections([
+      { variableName: 'safe_driving', score: 0.95 },
+      { classId: '1', score: 0.12 },
+      { displayName: 'phone_usage', score: 0.87 },
+      { variableName: 'class_3', score: 0.2 },
+      { variableName: 'eating_smoking', score: 0.44 },
+    ])).toEqual([
+      { classId: '0', displayName: '정상', score: 0.95, variableName: 'class_0' },
+      { classId: '1', displayName: '기기조작', score: 0.12, variableName: 'class_1' },
+      { classId: '2', displayName: '핸드폰', score: 0.87, variableName: 'class_2' },
+      { classId: '3', displayName: '졸음', score: 0.2, variableName: 'class_3' },
+      { classId: '4', displayName: '섭취', score: 0.44, variableName: 'class_4' },
+    ])
   })
 })

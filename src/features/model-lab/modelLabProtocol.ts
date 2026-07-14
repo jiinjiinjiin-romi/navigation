@@ -2,6 +2,33 @@ export const MODEL_LAB_FRAME_SIZE = 224
 export const MODEL_LAB_DEFAULT_CLASS_COUNT = 5
 export const MODEL_LAB_DEFAULT_THRESHOLD = 0.5
 export const MODEL_LAB_TARGET_FPS = 4
+export const MODEL_LAB_CLASSES = [
+  {
+    classId: '0',
+    displayName: '정상',
+    aliases: ['0', 'class_0', 'safe_driving'],
+  },
+  {
+    classId: '1',
+    displayName: '기기조작',
+    aliases: ['1', 'class_1', 'device_operation'],
+  },
+  {
+    classId: '2',
+    displayName: '핸드폰',
+    aliases: ['2', 'class_2', 'phone_usage'],
+  },
+  {
+    classId: '3',
+    displayName: '졸음',
+    aliases: ['3', 'class_3', 'fatigue'],
+  },
+  {
+    classId: '4',
+    displayName: '섭취',
+    aliases: ['4', 'class_4', 'eating_smoking'],
+  },
+] as const
 
 export interface ModelLabSessionStartInput {
   clientStartedAt: number
@@ -71,9 +98,9 @@ export function sendFrameMessage(socket: Pick<WebSocket, 'readyState' | 'send'>,
 }
 
 export function createDefaultModelLabDetections(count = MODEL_LAB_DEFAULT_CLASS_COUNT) {
-  return Array.from({ length: count }, (_, index) => ({
-    classId: `class_${index}`,
-    displayName: `class_${index}`,
+  return MODEL_LAB_CLASSES.slice(0, count).map((metadata, index) => ({
+    classId: metadata.classId,
+    displayName: metadata.displayName,
     score: 0,
     variableName: `class_${index}`,
   }))
@@ -83,12 +110,12 @@ export function normalizeModelLabDetections(detections: ModelLabDetection[] | un
   const defaults = createDefaultModelLabDetections()
   const byId = new Map(
     detections?.map((detection, index) => {
-      const classId = detection.variableName ?? detection.classId ?? `class_${index}`
-      return [classId, {
-        classId,
-        displayName: detection.displayName ?? classId,
+      const metadata = resolveModelLabClassMetadata(detection, index)
+      return [metadata.variableName, {
+        classId: metadata.classId,
+        displayName: metadata.displayName,
         score: Number.isFinite(detection.score) ? detection.score : 0,
-        variableName: classId,
+        variableName: metadata.variableName,
       }]
     }) ?? [],
   )
@@ -99,12 +126,7 @@ export function normalizeModelLabDetections(detections: ModelLabDetection[] | un
       return byFallback
     }
     return detections?.[index]
-      ? {
-          classId: detections[index].classId ?? fallback.classId,
-          displayName: detections[index].displayName ?? fallback.displayName,
-          score: Number.isFinite(detections[index].score) ? detections[index].score : 0,
-          variableName: detections[index].variableName ?? detections[index].classId ?? fallback.variableName,
-        }
+      ? normalizeModelLabDetection(detections[index], index)
       : fallback
   })
 }
@@ -118,4 +140,31 @@ export function getActiveModelLabClassIds(detections: ModelLabDetection[], thres
 
     return detection.score >= threshold ? [classId] : []
   }))
+}
+
+function normalizeModelLabDetection(detection: ModelLabDetection, index: number) {
+  const metadata = resolveModelLabClassMetadata(detection, index)
+
+  return {
+    classId: metadata.classId,
+    displayName: metadata.displayName,
+    score: Number.isFinite(detection.score) ? detection.score : 0,
+    variableName: metadata.variableName,
+  }
+}
+
+function resolveModelLabClassMetadata(detection: ModelLabDetection, index: number) {
+  const identifiers = [detection.variableName, detection.classId, detection.displayName]
+    .filter((identifier): identifier is string => Boolean(identifier))
+  const matchedIndex = MODEL_LAB_CLASSES.findIndex((metadata) => (
+    identifiers.some((identifier) => (metadata.aliases as readonly string[]).includes(identifier))
+  ))
+  const classIndex = matchedIndex >= 0 ? matchedIndex : index
+  const metadata = MODEL_LAB_CLASSES[classIndex] ?? MODEL_LAB_CLASSES[0]
+
+  return {
+    classId: metadata.classId,
+    displayName: metadata.displayName,
+    variableName: `class_${classIndex}`,
+  }
 }

@@ -10,8 +10,8 @@ describe('ModelLabPage', () => {
     expect(screen.getAllByTestId('model-class-indicator')).toHaveLength(5)
     expect(screen.getByTestId('model-lab-video-frame')).toHaveClass('aspect-video')
     expect(screen.getByRole('button', { name: /분석 시작/ })).toBeDisabled()
-    expect(screen.getByText('class_0')).toBeInTheDocument()
-    expect(screen.getByText('class_4')).toBeInTheDocument()
+    expect(screen.getByText('정상')).toBeInTheDocument()
+    expect(screen.getByText('섭취')).toBeInTheDocument()
   })
 
   it('enables analysis after selecting a video file', () => {
