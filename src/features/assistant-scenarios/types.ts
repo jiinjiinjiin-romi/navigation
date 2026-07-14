@@ -59,6 +59,7 @@ export interface RoadieAssistantStep {
   statusLabel?: string
   text?: string
   userText?: string
+  suppressUserTts?: boolean
   preSpeechAudioSrc?: string
   preSpeechAudioMaxDurationMs?: number
   speechAudioPromise?: Promise<Blob>
