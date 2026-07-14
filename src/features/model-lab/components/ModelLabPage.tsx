@@ -59,7 +59,7 @@ export function ModelLabPage() {
       <div className="mx-auto flex min-h-[calc(100vh-3rem)] max-w-6xl flex-col gap-5">
         <header className="flex flex-col gap-2">
           <p className="text-sm font-medium text-[var(--nav-muted)]">ROADIE Model Lab</p>
-          <h1 className="text-2xl font-semibold">비디오 모델 분석</h1>
+          <h1 className="text-2xl font-semibold">운전자 행동 탐지 모델 테스트</h1>
         </header>
 
         <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5" aria-label="모델 클래스 점수">
