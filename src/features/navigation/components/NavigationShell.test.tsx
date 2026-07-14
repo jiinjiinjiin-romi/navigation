@@ -1026,6 +1026,59 @@ describe('NavigationShell', () => {
     expect(screen.getByTestId('demo-scenario-selection')).not.toHaveTextContent('민준 프로필')
   })
 
+  it('resets the completed demo destination to Sejong before starting another representative scenario', async () => {
+    mockGeolocationError()
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(await screen.findByTestId('demo-entry-scenario-button'))
+    fireEvent.click(await screen.findByTestId('demo-scenario-card-agent_personality_voice_change'))
+
+    for (let step = 0; step < 4; step += 1) {
+      fireEvent.click(await screen.findByRole('button', { name: '다음' }))
+    }
+
+    expect(await screen.findByTestId('tmap-panel')).toHaveTextContent('sim:36.3378,127.4309')
+
+    fireEvent.click(screen.getByRole('button', { name: '다음' }))
+    fireEvent.click(await screen.findByTestId('demo-entry-scenario-button'))
+    fireEvent.click(await screen.findByTestId('demo-scenario-card-agent_personality_voice_change'))
+
+    expect(await screen.findByTestId('tmap-panel')).toHaveTextContent('current:37.5502,127.0730')
+  })
+
+  it('resets the completed demo destination to Sejong before entering manual navigation with a profile', async () => {
+    mockGeolocationError()
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(await screen.findByTestId('demo-entry-scenario-button'))
+    fireEvent.click(await screen.findByTestId('demo-scenario-card-agent_personality_voice_change'))
+
+    for (let step = 0; step < 4; step += 1) {
+      fireEvent.click(await screen.findByRole('button', { name: '다음' }))
+    }
+
+    expect(await screen.findByTestId('tmap-panel')).toHaveTextContent('sim:36.3378,127.4309')
+
+    fireEvent.click(screen.getByRole('button', { name: '다음' }))
+    fireEvent.click(await screen.findByTestId('demo-entry-manual-control-button'))
+    fireEvent.click(await screen.findByRole('button', { name: /민준 프로필 선택/ }))
+
+    expect(await screen.findByTestId('manual-risk-control-panel')).toBeInTheDocument()
+    expect(screen.getByTestId('tmap-panel')).toHaveTextContent('current:37.5502,127.0730')
+  })
+
   it('opens profile selection for manual control and enters navigation after choosing a profile', async () => {
     const queryClient = new QueryClient()
 

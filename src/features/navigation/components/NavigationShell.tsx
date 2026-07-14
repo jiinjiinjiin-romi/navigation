@@ -1362,6 +1362,7 @@ export function NavigationShell({
   const guidanceDistanceDisplayRef = useRef<GuidanceDistanceDisplayStore>(new Map())
   const routeSelectionCameraSettingsRef = useRef<MapCameraSettings | undefined>(undefined)
   const routeSearchEditorTimerRef = useRef<number | undefined>(undefined)
+  const resetNavigationOriginRef = useRef<() => void>(() => undefined)
   const manualRiskDismissTimerRef = useRef<number | undefined>(undefined)
   const manualEmergencyWarningTimerRef = useRef<number | undefined>(undefined)
   const manualEmergencyWarningCountdownTimerRef = useRef<number | undefined>(undefined)
@@ -1592,6 +1593,7 @@ export function NavigationShell({
 
     selectProfileAfterCalibration(calibratingProfileId, {
       onSuccess: () => {
+        resetNavigationOriginRef.current()
         setNavigationEntryMode('free-navigation')
         setEntryScreen(null)
         setProfileSetupView('list')
@@ -2108,6 +2110,43 @@ export function NavigationShell({
       },
     )
   }, [])
+
+  const resetNavigationOrigin = useCallback(() => {
+    if (animationFrameRef.current !== undefined) {
+      window.cancelAnimationFrame(animationFrameRef.current)
+      animationFrameRef.current = undefined
+    }
+
+    simulationStartedAtRef.current = undefined
+    simulationElapsedMsRef.current = 0
+    simulationLastUiUpdateAtRef.current = undefined
+    simulationLastSpeedUpdateAtRef.current = undefined
+    simulationSkipInitialFrameWorkRef.current = false
+    simulationSkipInitialUiUpdateRef.current = false
+    activeSimulationPlanRef.current = undefined
+    setSimulationRunning(false)
+    setSimulationSpeedKph(0)
+    setCurrentPosition(DEFAULT_CURRENT_LOCATION_PLACE.coordinate)
+    setOrigin(DEFAULT_CURRENT_LOCATION_PLACE)
+    setOriginKeyword(DEFAULT_CURRENT_LOCATION_PLACE.name)
+    setDestination(undefined)
+    setDestinationKeyword('')
+    setSimulationPosition(undefined)
+    setSimulationRemainingDistance(0)
+    setSimulationRemainingDuration(0)
+    setGuidanceDistanceUpdateKey(0)
+    setSelectedRouteOptionId(undefined)
+    setPreviewRouteOptionId(undefined)
+    setRouteOptionsSearchReady(false)
+    setRouteSearchOpen(false)
+    setActiveField(null)
+    setHighlightedIndex(0)
+    setDemoSimulationStartPending(false)
+    guidanceDistanceDisplayRef.current.clear()
+    requestCurrentLocation()
+  }, [requestCurrentLocation])
+
+  resetNavigationOriginRef.current = resetNavigationOrigin
 
   const selectAssistantScenario = useCallback((scenarioId: RoadieAssistantScenarioId) => {
     setAssistantScenarioId(scenarioId)
@@ -3527,6 +3566,7 @@ export function NavigationShell({
                 profileName="상우"
                 onBackToEntryMode={() => setEntryScreen('demo-mode')}
                 onStartScenario={(scenarioId) => {
+                  resetNavigationOrigin()
                   setNavigationEntryMode('demo-scenario')
                   setEntryScreen(null)
                   setDemoScenarioState(createInitialDemoScenarioState(scenarioId))
@@ -3647,6 +3687,7 @@ export function NavigationShell({
                 setSelectedProfileId(profileId)
                 selectProfileMutation.mutate(profileId, {
                   onSuccess: () => {
+                    resetNavigationOrigin()
                     setNavigationEntryMode('free-navigation')
                     setEntryScreen(null)
                   },
@@ -3656,6 +3697,7 @@ export function NavigationShell({
                 if (selectedProfileId) {
                   selectProfileMutation.mutate(selectedProfileId, {
                     onSuccess: () => {
+                      resetNavigationOrigin()
                       setNavigationEntryMode('free-navigation')
                       setEntryScreen(null)
                     },
