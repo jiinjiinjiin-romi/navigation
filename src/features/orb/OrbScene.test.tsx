@@ -15,14 +15,14 @@ vi.mock('@react-three/fiber', () => ({
 }))
 
 vi.mock('./OrbCharacter', () => ({
-  OrbCharacter: () => <div data-testid="orb-character" />,
+  GillMascotCharacter: () => <div data-testid="gill-mascot-character" />,
 }))
 
 describe('OrbScene', () => {
-  it('renders without a remote environment preset request', () => {
+  it('renders the gill mascot without a remote environment preset request', () => {
     render(<OrbScene state="idle" volume={0} />)
 
-    expect(screen.getByTestId('orb-character')).toBeInTheDocument()
+    expect(screen.getByTestId('gill-mascot-character')).toBeInTheDocument()
     expect(screen.queryByTestId('remote-environment')).not.toBeInTheDocument()
     expect(environmentMock).not.toHaveBeenCalled()
   })
