@@ -4,6 +4,7 @@
 .codex
 .vite-codex-cache*
 .vite-navigation-cache*
+docs/
 
 ### JetBrains ###
 # Covers JetBrains IDEs: IntelliJ, RubyMine, PhpStorm, AppCode, PyCharm, CLion, Android Studio, WebStorm and Rider
