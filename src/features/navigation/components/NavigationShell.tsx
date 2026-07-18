@@ -203,6 +203,7 @@ const DEVICE_NORMAL_DRIVING_VIDEO_SOURCE: DriverVideoSource = {
   type: 'video/mp4',
   url: versionVideoAssetUrl('/videos/device-normal-driving.mp4'),
 }
+const INTRO_VIDEO_SOURCE = versionVideoAssetUrl('/intro.mp4')
 const DROWSY_NORMAL_DRIVING_VIDEO_EVENT_IDS = new Set([
   'drowsy_ok_response',
   'drowsy_ok_acknowledged',
@@ -2120,6 +2121,9 @@ export function NavigationShell({
     ? { duration: 0 }
     : { duration: 1.1, times: [0, 0.18, 0.4, 0.58, 1] }
   const cockpitLayoutActive = !manualNavigationActive
+  const driverVideoPanelVisible = cockpitLayoutActive
+    && !demoCompleted
+    && (entryScreen === 'scenario-selection' || navigationEntryMode === 'demo-scenario')
   const demoDriverVideoSource = getDemoDriverVideoSource(demoScenarioState)
   const rootSideRailActive = cockpitLayoutActive
   const rootDemoReadyVisible = cockpitLayoutActive && !demoScenarioState && !demoCompleted
@@ -2127,13 +2131,13 @@ export function NavigationShell({
     'relative z-10 col-start-1 min-h-0 overflow-hidden rounded-[1.1rem] border border-white/70 bg-[var(--nav-frame)] shadow-[0_18px_46px_rgb(15_23_42/0.24)] ring-1 ring-[rgb(148_163_184/0.18)]',
     manualNavigationActive
       ? 'aspect-[16/10] w-full max-h-full self-center'
-      : 'row-start-2 h-full',
+      : driverVideoPanelVisible ? 'row-start-2 h-full' : 'aspect-[16/10] w-full max-h-full self-center',
   ].join(' ')
   const navigationStageClassName = [
     'roadie-navigation-root-stage relative grid h-screen min-h-0 gap-3 p-3',
     rootSideRailActive || manualNavigationActive || demoScenarioState || demoCompleted ? 'pl-[25rem]' : '',
     'grid-cols-[minmax(0,1fr)]',
-    cockpitLayoutActive ? 'grid-rows-[minmax(17rem,38vh)_minmax(0,1fr)]' : 'items-center',
+    driverVideoPanelVisible ? 'grid-rows-[minmax(17rem,38vh)_minmax(0,1fr)]' : 'items-center',
   ].join(' ')
 
   useEffect(() => () => {
@@ -3570,16 +3574,17 @@ export function NavigationShell({
       ) : null}
       {cockpitLayoutActive ? (
         <>
-          {/* Top cockpit surface: this area is reserved for the driver's in-cabin video. */}
-          <DriverVideoPanel
-            emptyDescription="대표 시나리오를 시작하면 자동으로 재생됩니다."
-            emptyTitle="대표 시나리오 영상 대기"
-            error={driverVideoError}
-            fileName={demoDriverVideoSource?.name ?? '대표 시나리오 영상 대기'}
-            motionTiming={motionTiming}
-            source={demoDriverVideoSource}
-            onError={() => setDriverVideoError(true)}
-          />
+          {driverVideoPanelVisible ? (
+            <DriverVideoPanel
+              emptyDescription="대표 시나리오를 시작하면 자동으로 재생됩니다."
+              emptyTitle="대표 시나리오 영상 대기"
+              error={driverVideoError}
+              fileName={demoDriverVideoSource?.name ?? '대표 시나리오 영상 대기'}
+              motionTiming={motionTiming}
+              source={demoDriverVideoSource}
+              onError={() => setDriverVideoError(true)}
+            />
+          ) : null}
           <NavigationRootSideRail
             demoReadyVisible={rootDemoReadyVisible}
             manualRiskStack={manualRiskStackInfo}
@@ -3598,6 +3603,7 @@ export function NavigationShell({
             'w-full',
           ].join(' ')}
         >
+          <NavigationIntroVideo />
           {runtimeNavigationActive ? (
             <>
             <TmapPanel
@@ -5063,6 +5069,47 @@ function normalizeOptionalProfileText(value: string | null) {
   const normalized = value?.trim() ?? ''
 
   return normalized ? normalized : null
+}
+
+function NavigationIntroVideo() {
+  const [visible, setVisible] = useState(true)
+  const [fading, setFading] = useState(false)
+
+  if (!visible) {
+    return null
+  }
+
+  return (
+    <div
+      aria-hidden="true"
+      className={[
+        'pointer-events-auto absolute inset-0 z-[70] overflow-hidden bg-black transition-opacity duration-1000 ease-out motion-reduce:duration-0',
+        fading ? 'opacity-0' : 'opacity-100',
+      ].join(' ')}
+      data-testid="navigation-intro-video-layer"
+      onTransitionEnd={() => {
+        if (fading) {
+          setVisible(false)
+        }
+      }}
+    >
+      <video
+        aria-hidden="true"
+        autoPlay
+        className="pointer-events-none h-full w-full select-none object-cover"
+        controls={false}
+        controlsList="nodownload nofullscreen noplaybackrate"
+        data-testid="navigation-intro-video"
+        disablePictureInPicture
+        draggable={false}
+        onEnded={() => setFading(true)}
+        playsInline
+        preload="auto"
+        src={INTRO_VIDEO_SOURCE}
+        tabIndex={-1}
+      />
+    </div>
+  )
 }
 
 export function DriverVideoPanel({

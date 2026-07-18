@@ -98,7 +98,7 @@ function AppShell({
         aria-label="주요 페이지"
         className={[
           'roadie-paper-sidebar roadie-global-sidebar fixed left-4 top-4 z-50 flex h-[calc(100vh-2rem)] min-h-0 flex-col rounded-[1.35rem] px-4 py-5 transition-[width] duration-200 ease-out',
-          collapsed ? 'w-20' : 'w-[16.5rem] max-md:w-20',
+          collapsed ? 'w-20' : 'w-[15.5rem] max-xl:w-20',
         ].join(' ')}
         data-collapsed={String(collapsed)}
         data-testid="global-sidebar"
@@ -119,7 +119,7 @@ function AppShell({
             {collapsed ? null : (
               <img
                 alt="ROADY"
-                className="h-10 w-auto min-w-0 max-w-[10rem] object-contain max-md:hidden"
+                className="h-10 w-auto min-w-0 max-w-[10rem] object-contain max-xl:hidden"
                 draggable={false}
                 src="/text_logo.webp"
               />
@@ -128,7 +128,7 @@ function AppShell({
           {collapsed ? null : (
             <button
               aria-label="사이드바 접기"
-              className="grid size-9 shrink-0 place-items-center rounded-lg text-[#716b5f] transition hover:bg-[#ebe7dc] hover:text-[#191713] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)] max-md:hidden"
+              className="grid size-9 shrink-0 place-items-center rounded-lg text-[#716b5f] transition hover:bg-[#ebe7dc] hover:text-[#191713] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)] max-xl:hidden"
               onClick={onToggleSidebar}
               type="button"
             >
@@ -176,7 +176,7 @@ function AppShell({
       <main
         className={[
           'roadie-paper-content min-h-screen min-w-0 overflow-auto transition-[margin-left] duration-200 ease-out',
-          collapsed ? 'ml-[7.75rem]' : 'ml-[19.25rem] max-md:ml-[7.75rem]',
+          collapsed ? 'ml-[7.75rem]' : 'ml-[18.25rem] max-xl:ml-[7.75rem]',
         ].join(' ')}
         data-testid="app-content"
       >
@@ -212,7 +212,7 @@ function SidebarLink({
       aria-label={label}
       className={[
         'group relative flex min-h-13 items-center rounded-2xl py-2 text-base font-extrabold tracking-normal transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]',
-        collapsed ? 'justify-center px-0' : 'gap-3.5 px-3.5 max-md:justify-center max-md:px-0',
+        collapsed ? 'justify-center px-0' : 'gap-3.5 px-3.5 max-xl:justify-center max-xl:px-0',
         active
           ? 'bg-white text-[#111827] shadow-[0_12px_24px_rgb(45_72_112/0.10)]'
           : 'text-[#475467] hover:bg-white/76 hover:text-[#111827]',
@@ -223,7 +223,7 @@ function SidebarLink({
       <span aria-hidden="true" className={['shrink-0 transition', active ? 'text-[var(--nav-primary)]' : 'text-inherit group-hover:text-[var(--nav-primary)]'].join(' ')}>
         {icon}
       </span>
-      {collapsed ? null : <span className="min-w-0 whitespace-normal leading-5 max-md:hidden">{label}</span>}
+      {collapsed ? null : <span className="min-w-0 whitespace-normal leading-5 max-xl:hidden">{label}</span>}
     </a>
   )
 }

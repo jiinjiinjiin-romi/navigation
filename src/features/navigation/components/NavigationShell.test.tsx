@@ -1036,6 +1036,67 @@ describe('NavigationShell', () => {
     expect(screen.queryByTestId('navigation-profile-setup')).not.toBeInTheDocument()
     expect(screen.getByTestId('demo-entry-scenario-button')).toBeInTheDocument()
     expect(screen.getByTestId('demo-entry-manual-control-button')).toBeInTheDocument()
+    expect(screen.queryByTestId('driver-video-panel')).not.toBeInTheDocument()
+    expect(screen.getByTestId('navigation-viewport')).toHaveClass('aspect-[16/10]')
+    expect(screen.getByTestId('navigation-viewport')).toHaveClass('self-center')
+    expect(screen.getByTestId('navigation-viewport')).not.toHaveClass('h-full')
+    const introLayer = screen.getByTestId('navigation-intro-video-layer')
+    const introVideo = screen.getByTestId('navigation-intro-video') as HTMLVideoElement
+
+    expect(introLayer).toHaveClass('pointer-events-auto')
+    expect(introLayer).toHaveClass('opacity-100')
+    expect(introLayer).toHaveClass('duration-1000')
+    expect(introVideo).toHaveAttribute('src', '/intro.mp4?v=llast-20260715')
+    expect(introVideo).toHaveClass('pointer-events-none')
+    expect(introVideo).toHaveAttribute('autoPlay')
+    expect(introVideo).not.toHaveAttribute('loop')
+    expect(introVideo).toHaveAttribute('playsInline')
+    expect(introVideo).not.toHaveAttribute('controls')
+    expect(introVideo.controls).toBe(false)
+    expect(introVideo).not.toHaveAttribute('muted')
+    expect(introVideo.muted).toBe(false)
+    expect(introVideo.tabIndex).toBe(-1)
+    expect(screen.queryByText('영상 선택')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('운전자 영상 파일 선택')).not.toBeInTheDocument()
+  })
+
+  it('fades out the intro video after playback ends and reveals the navigation surface', async () => {
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell />
+      </QueryClientProvider>,
+    )
+
+    const introLayer = await screen.findByTestId('navigation-intro-video-layer')
+
+    fireEvent.ended(screen.getByTestId('navigation-intro-video'))
+
+    expect(introLayer).toHaveClass('opacity-0')
+    expect(screen.getByTestId('demo-entry-mode-selection')).toBeInTheDocument()
+
+    fireEvent.transitionEnd(introLayer)
+
+    expect(screen.queryByTestId('navigation-intro-video-layer')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('navigation-intro-video')).not.toBeInTheDocument()
+    expect(screen.getByTestId('demo-entry-mode-selection')).toBeInTheDocument()
+  })
+
+  it('shows the waiting driver-video panel after opening representative scenarios', async () => {
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(await screen.findByTestId('demo-entry-scenario-button'))
+
+    expect(await screen.findByTestId('demo-scenario-selection')).toBeInTheDocument()
+    expect(screen.getByTestId('navigation-viewport')).toHaveClass('row-start-2')
+    expect(screen.getByTestId('navigation-viewport')).toHaveClass('h-full')
     const driverVideoPanel = screen.getByTestId('driver-video-panel')
     expect(driverVideoPanel).toBeInTheDocument()
     expect(within(driverVideoPanel).getAllByText('대표 시나리오 영상 대기')).toHaveLength(2)

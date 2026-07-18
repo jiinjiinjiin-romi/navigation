@@ -344,6 +344,9 @@
       radial-gradient(ellipse at 60% 14%, rgb(231 214 255 / 0.66), transparent 38rem),
       radial-gradient(ellipse at 98% 88%, rgb(201 247 223 / 0.72), transparent 36rem),
       linear-gradient(145deg, #ffffff 0%, #f7fbff 44%, #fffaf7 100%);
+    background-position: 0% 0%, 0% 100%, 58% 8%, 100% 100%, 0 0;
+    background-size: 118% 118%, 116% 116%, 120% 120%, 116% 116%, 100% 100%;
+    animation: roadie-page-gradient-drift 10s ease-in-out infinite alternate;
   }
 
   .roadie-paper-sidebar {
@@ -371,4 +374,24 @@
     backdrop-filter: blur(20px);
   }
 
+}
+
+@keyframes roadie-page-gradient-drift {
+  0% {
+    background-position: 0% 0%, 0% 100%, 58% 8%, 100% 100%, 0 0;
+  }
+
+  50% {
+    background-position: 7% 4%, 10% 92%, 52% 14%, 93% 88%, 0 0;
+  }
+
+  100% {
+    background-position: 3% 9%, 4% 88%, 64% 4%, 96% 92%, 0 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .roadie-paper-app-shell {
+    animation: none;
+  }
 }

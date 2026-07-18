@@ -99,7 +99,9 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: '사이드바 펼치기' }))
 
     expect(screen.getByTestId('global-sidebar')).toHaveAttribute('data-collapsed', 'false')
-    expect(screen.getByTestId('app-content')).toHaveClass('ml-[19.25rem]')
+    expect(screen.getByTestId('global-sidebar')).toHaveClass('max-xl:w-20')
+    expect(screen.getByTestId('app-content')).toHaveClass('ml-[18.25rem]')
+    expect(screen.getByTestId('app-content')).toHaveClass('max-xl:ml-[7.75rem]')
     expect(screen.getByRole('img', { name: 'ROADY' })).toHaveAttribute('src', '/text_logo.webp')
     expect(localStorage.getItem('roadie-app-sidebar-collapsed')).toBe('false')
 
