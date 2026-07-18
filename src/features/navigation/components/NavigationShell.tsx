@@ -2134,8 +2134,8 @@ export function NavigationShell({
       : driverVideoPanelVisible ? 'row-start-2 h-full' : 'aspect-[16/10] w-full max-h-full self-center',
   ].join(' ')
   const navigationStageClassName = [
-    'roadie-navigation-root-stage relative grid h-screen min-h-0 gap-3 p-3',
-    rootSideRailActive || manualNavigationActive || demoScenarioState || demoCompleted ? 'pl-[25rem]' : '',
+    'roadie-navigation-root-stage roadie-navigation-density-scope roadie-navigation-word-boundary relative grid h-screen min-h-0 gap-[var(--roadie-nav-stage-gap)] p-[var(--roadie-nav-stage-padding)]',
+    rootSideRailActive || manualNavigationActive || demoScenarioState || demoCompleted ? 'pl-[var(--roadie-nav-side-offset)]' : '',
     'grid-cols-[minmax(0,1fr)]',
     driverVideoPanelVisible ? 'grid-rows-[minmax(17rem,38vh)_minmax(0,1fr)]' : 'items-center',
   ].join(' ')
@@ -4018,7 +4018,7 @@ export function NavigationShell({
       </section>
       {manualNavigationActive ? (
         <div
-          className="absolute left-0 top-1/2 z-20 flex w-96 -translate-y-1/2 flex-col gap-3"
+          className="roadie-navigation-density-surface absolute left-0 top-1/2 z-20 flex w-[var(--roadie-nav-side-rail-width)] -translate-y-1/2 flex-col gap-3"
           data-testid="manual-navigation-layout"
         >
           <ManualRiskStackStatus
@@ -4197,9 +4197,10 @@ function NavigationProfileSetup({
       />
       <div
         className={[
-          'relative z-[1] flex w-full max-w-4xl flex-col items-center',
+          'roadie-navigation-density-surface relative z-[1] flex w-full max-w-4xl flex-col items-center',
           profileSetupView !== 'list' ? 'h-full min-h-0' : 'justify-center',
         ].join(' ')}
+        data-testid="navigation-profile-setup-content"
       >
         {profileSetupView === 'calibration' ? (
           <ProfileCalibrationFlow
@@ -5194,7 +5195,7 @@ export function DriverVideoPanel({
       />
 
       {!source ? (
-        <div className="pointer-events-none absolute inset-0 flex h-full w-full flex-col items-center justify-center gap-4 px-6 text-center">
+        <div className="roadie-navigation-density-surface pointer-events-none absolute inset-0 flex h-full w-full flex-col items-center justify-center gap-4 px-6 text-center">
           <div className="grid size-14 place-items-center rounded-full bg-white/10 text-white">
             <FileVideo className="size-7" weight="duotone" />
           </div>
@@ -5207,7 +5208,7 @@ export function DriverVideoPanel({
         </div>
       ) : null}
 
-      <div className="absolute left-4 top-4 flex max-w-[calc(100%-2rem)] items-center gap-2 rounded-full bg-black/58 px-3 py-2 text-xs font-semibold text-white backdrop-blur">
+      <div className="roadie-navigation-density-surface absolute left-4 top-4 flex max-w-[calc(100%-2rem)] items-center gap-2 rounded-full bg-black/58 px-3 py-2 text-xs font-semibold text-white backdrop-blur">
         <span className="min-w-0 truncate">{fileName ?? '선택된 영상 없음'}</span>
         {error ? <span className="shrink-0 text-[#fda4af]">재생 오류</span> : null}
       </div>
@@ -5323,7 +5324,7 @@ function NavigationRootSideRail({
   return (
     <motion.div
       aria-label="네비게이션 루트 상태"
-      className="roadie-paper-sidebar absolute left-0 top-1/2 z-20 flex w-96 -translate-y-1/2 flex-col rounded-[1.15rem] px-4 py-4 text-[var(--nav-ink)]"
+      className="roadie-navigation-density-surface roadie-paper-sidebar absolute left-0 top-1/2 z-20 flex w-[var(--roadie-nav-side-rail-width)] -translate-y-1/2 flex-col rounded-[1.15rem] px-4 py-4 text-[var(--nav-ink)]"
       data-testid="navigation-root-side-rail"
       initial={{ opacity: 0, x: -8 }}
       animate={{ opacity: 1, x: 0 }}
@@ -5621,7 +5622,7 @@ function RoadieOrbControl({
   return (
     <div
       aria-label="로디 AI 에이전트"
-      className="pointer-events-none absolute bottom-[calc(43px+0.75rem)] right-6 top-6 z-40 flex min-h-0 items-start justify-end text-center text-[var(--nav-ink)] max-sm:bottom-[calc(37px+0.75rem)] max-sm:right-3 max-sm:top-3"
+      className="roadie-navigation-density-surface pointer-events-none absolute bottom-[calc(43px+0.75rem)] right-6 top-6 z-40 flex min-h-0 items-start justify-end text-center text-[var(--nav-ink)] max-sm:bottom-[calc(37px+0.75rem)] max-sm:right-3 max-sm:top-3"
     >
       <motion.div
         className="pointer-events-none relative flex max-h-full min-h-0 flex-col self-start overflow-hidden"
@@ -6824,53 +6825,55 @@ function DemoEntryModeSelection({
       animate={{ opacity: 1, y: 0 }}
       transition={motionTiming}
     >
-      <div className="relative mx-auto w-full max-w-[56rem]">
-        <div className="mx-auto max-w-[42rem] text-center">
-          <h2 className="text-2xl font-black leading-tight">데모 모드 선택</h2>
-          <p className="mt-2 text-sm font-semibold text-[var(--nav-muted)]">
-            원하는 방식으로 로디 데모를 시작하세요
-          </p>
+      <div className="roadie-navigation-density-surface w-full">
+        <div className="relative mx-auto w-full max-w-[56rem]">
+          <div className="mx-auto max-w-[42rem] text-center">
+            <h2 className="text-2xl font-black leading-tight">데모 모드 선택</h2>
+            <p className="mt-2 text-sm font-semibold text-[var(--nav-muted)]">
+              원하는 방식으로 로디 데모를 시작하세요
+            </p>
+          </div>
         </div>
-      </div>
 
-      <div className="mx-auto mt-7 grid w-full max-w-[56rem] grid-cols-2 gap-3 max-sm:grid-cols-1">
-        <button
-          className="group flex min-h-[13rem] flex-col items-center justify-center rounded-2xl border border-white/80 bg-white px-6 py-6 text-center shadow-[0_14px_32px_rgb(15_23_42/0.10)] transition hover:-translate-y-0.5 hover:border-[var(--nav-primary)] hover:shadow-[0_20px_44px_rgb(15_23_42/0.14)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--nav-primary)]"
-          data-testid="demo-entry-scenario-button"
-          onClick={onOpenScenarioSelection}
-          type="button"
-        >
-          <span className="grid size-12 place-items-center rounded-full bg-[var(--nav-primary-soft)] text-[var(--nav-primary)]">
-            <RoadHorizon className="size-6" weight="bold" />
-          </span>
-          <span className="mt-5 text-xl font-black leading-7">대표 시나리오 보기</span>
-          <span className="mt-3 text-sm font-semibold leading-6 text-[var(--nav-muted)]">
-            준비된 위험행동 흐름을 순서대로 확인합니다.
-          </span>
-          <span className="mt-6 inline-flex items-center gap-1.5 text-sm font-bold text-[var(--nav-primary)]">
-            선택
-            <CaretRight className="size-4 transition group-hover:translate-x-0.5" weight="bold" />
-          </span>
-        </button>
+        <div className="mx-auto mt-7 grid w-full max-w-[56rem] grid-cols-2 gap-3 max-sm:grid-cols-1">
+          <button
+            className="group flex min-h-[13rem] flex-col items-center justify-center rounded-2xl border border-white/80 bg-white px-6 py-6 text-center shadow-[0_14px_32px_rgb(15_23_42/0.10)] transition hover:-translate-y-0.5 hover:border-[var(--nav-primary)] hover:shadow-[0_20px_44px_rgb(15_23_42/0.14)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--nav-primary)]"
+            data-testid="demo-entry-scenario-button"
+            onClick={onOpenScenarioSelection}
+            type="button"
+          >
+            <span className="grid size-12 place-items-center rounded-full bg-[var(--nav-primary-soft)] text-[var(--nav-primary)]">
+              <RoadHorizon className="size-6" weight="bold" />
+            </span>
+            <span className="mt-5 text-xl font-black leading-7">대표 시나리오 보기</span>
+            <span className="mt-3 text-sm font-semibold leading-6 text-[var(--nav-muted)]">
+              준비된 위험행동 흐름을 순서대로 확인합니다.
+            </span>
+            <span className="mt-6 inline-flex items-center gap-1.5 text-sm font-bold text-[var(--nav-primary)]">
+              선택
+              <CaretRight className="size-4 transition group-hover:translate-x-0.5" weight="bold" />
+            </span>
+          </button>
 
-        <button
-          className="group flex min-h-[13rem] flex-col items-center justify-center rounded-2xl border border-white/80 bg-white px-6 py-6 text-center shadow-[0_14px_32px_rgb(15_23_42/0.10)] transition hover:-translate-y-0.5 hover:border-[var(--nav-warning)] hover:shadow-[0_20px_44px_rgb(15_23_42/0.14)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--nav-warning)]"
-          data-testid="demo-entry-manual-control-button"
-          onClick={onStartManualControl}
-          type="button"
-        >
-          <span className="grid size-12 place-items-center rounded-full bg-[rgb(255_247_237)] text-[var(--nav-warning)]">
-            <Warning className="size-6" weight="bold" />
-          </span>
-          <span className="mt-5 text-xl font-black leading-7">실시간 위험 상황 조작</span>
-          <span className="mt-3 text-sm font-semibold leading-6 text-[var(--nav-muted)]">
-            데모 사용자가 직접 위험 상황을 선택하고 조작합니다.
-          </span>
-          <span className="mt-6 inline-flex items-center gap-1.5 text-sm font-bold text-[var(--nav-warning)]">
-            선택
-            <CaretRight className="size-4 transition group-hover:translate-x-0.5" weight="bold" />
-          </span>
-        </button>
+          <button
+            className="group flex min-h-[13rem] flex-col items-center justify-center rounded-2xl border border-white/80 bg-white px-6 py-6 text-center shadow-[0_14px_32px_rgb(15_23_42/0.10)] transition hover:-translate-y-0.5 hover:border-[var(--nav-warning)] hover:shadow-[0_20px_44px_rgb(15_23_42/0.14)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--nav-warning)]"
+            data-testid="demo-entry-manual-control-button"
+            onClick={onStartManualControl}
+            type="button"
+          >
+            <span className="grid size-12 place-items-center rounded-full bg-[rgb(255_247_237)] text-[var(--nav-warning)]">
+              <Warning className="size-6" weight="bold" />
+            </span>
+            <span className="mt-5 text-xl font-black leading-7">실시간 위험 상황 조작</span>
+            <span className="mt-3 text-sm font-semibold leading-6 text-[var(--nav-muted)]">
+              데모 사용자가 직접 위험 상황을 선택하고 조작합니다.
+            </span>
+            <span className="mt-6 inline-flex items-center gap-1.5 text-sm font-bold text-[var(--nav-warning)]">
+              선택
+              <CaretRight className="size-4 transition group-hover:translate-x-0.5" weight="bold" />
+            </span>
+          </button>
+        </div>
       </div>
     </motion.div>
   )
@@ -6899,100 +6902,102 @@ function DemoScenarioSelection({
       animate={{ opacity: 1, y: 0 }}
       transition={motionTiming}
     >
-      <div className="relative mx-auto flex w-full max-w-[76rem] justify-center">
-        <div className="max-w-[38rem] text-center">
-          <h2 className="text-2xl font-black leading-tight">대표 위험행동 데모 선택</h2>
-          <p className="mt-2 text-sm font-semibold text-[var(--nav-muted)]">
-            {profileName} · 대표 시나리오를 선택하세요
-          </p>
-        </div>
-        <button
-          className="absolute left-0 top-0 inline-flex h-9 items-center rounded-lg border border-white/80 bg-white px-3 text-xs font-semibold text-[var(--nav-ink)] shadow-[0_8px_18px_rgb(15_23_42/0.08)] transition hover:border-[var(--nav-primary)] hover:bg-[var(--nav-selection)] hover:shadow-[0_12px_24px_rgb(15_23_42/0.12)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
-          onClick={onBackToEntryMode}
-          type="button"
-        >
-          {'< 데모 모드 선택'}
-        </button>
-      </div>
-
-      <div className="mx-auto mt-7 grid w-full max-w-[76rem] grid-cols-3 gap-3">
-        {primaryScenarios.map((scenario, index) => (
+      <div className="roadie-navigation-density-surface roadie-navigation-scenario-density w-full">
+        <div className="relative mx-auto flex w-full max-w-[68rem] justify-center">
+          <div className="max-w-[38rem] text-center">
+            <h2 className="text-2xl font-black leading-tight">대표 위험행동 데모 선택</h2>
+            <p className="mt-2 text-sm font-semibold text-[var(--nav-muted)]">
+              {profileName} · 대표 시나리오를 선택하세요
+            </p>
+          </div>
           <button
-            key={scenario.scenarioId}
-            className="group relative flex min-h-[12rem] overflow-hidden rounded-2xl border border-white/80 bg-white px-5 py-4 text-center shadow-[0_14px_32px_rgb(15_23_42/0.10)] transition hover:-translate-y-0.5 hover:border-[var(--nav-primary)] hover:shadow-[0_20px_44px_rgb(15_23_42/0.14)]"
-            data-testid={`demo-scenario-card-${scenario.scenarioId}`}
-            onClick={() => onStartScenario(scenario.scenarioId)}
+            className="absolute left-0 top-0 inline-flex h-9 items-center rounded-lg border border-white/80 bg-white px-3 text-xs font-semibold text-[var(--nav-ink)] shadow-[0_8px_18px_rgb(15_23_42/0.08)] transition hover:border-[var(--nav-primary)] hover:bg-[var(--nav-selection)] hover:shadow-[0_12px_24px_rgb(15_23_42/0.12)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
+            onClick={onBackToEntryMode}
             type="button"
           >
-            <span
-              aria-hidden="true"
-              className="absolute inset-x-0 top-0 h-1 bg-[var(--nav-primary)] opacity-80"
-            />
-            <span
-              aria-hidden="true"
-              className="relative self-start text-2xl font-black leading-none text-[var(--nav-primary)]"
-            >
-              {String(index + 1).padStart(2, '0')}
-            </span>
-            <span className="relative flex min-h-0 flex-1 flex-col items-center pt-4">
-              <span className="text-lg font-black leading-6">{scenario.title}</span>
-              <span className="mt-3 block max-w-[20rem] text-sm font-semibold leading-6 text-[var(--nav-muted)]">
-                {scenario.description}
-              </span>
-              <span className="mt-auto inline-flex items-center gap-1.5 pt-6 text-sm font-bold text-[var(--nav-primary)]">
-                시작
-                <CaretRight className="size-4 transition group-hover:translate-x-0.5" weight="bold" />
-              </span>
-            </span>
+            {'< 데모 모드 선택'}
           </button>
-        ))}
-      </div>
+        </div>
 
-      <div className="mx-auto mt-3 grid w-full max-w-[76rem] grid-cols-3 gap-3">
-        {miniScenarios.map((scenario, index) => {
-          const scenarioIndex = primaryScenarios.length + index
-
-          return (
+        <div className="mx-auto mt-6 grid w-full max-w-[68rem] grid-cols-3 gap-3">
+          {primaryScenarios.map((scenario, index) => (
             <button
               key={scenario.scenarioId}
-              className="group relative flex min-h-[5.75rem] items-center overflow-hidden rounded-xl border border-white/80 bg-white px-4 py-4 text-left shadow-[0_10px_22px_rgb(15_23_42/0.08)] transition hover:-translate-y-0.5 hover:border-[var(--nav-primary)] hover:shadow-[0_14px_28px_rgb(15_23_42/0.12)]"
+              className="group relative flex min-h-[10.5rem] overflow-hidden rounded-2xl border border-white/80 bg-white px-4 py-3.5 text-center shadow-[0_14px_32px_rgb(15_23_42/0.10)] transition hover:-translate-y-0.5 hover:border-[var(--nav-primary)] hover:shadow-[0_20px_44px_rgb(15_23_42/0.14)]"
               data-testid={`demo-scenario-card-${scenario.scenarioId}`}
               onClick={() => onStartScenario(scenario.scenarioId)}
               type="button"
             >
-              <span aria-hidden="true" className="absolute inset-x-0 top-0 h-1 bg-[var(--nav-primary)] opacity-80" />
-              <span aria-hidden="true" className="mr-4 text-2xl font-black leading-none text-[var(--nav-primary)]">
-                {String(scenarioIndex + 1).padStart(2, '0')}
+              <span
+                aria-hidden="true"
+                className="absolute inset-x-0 top-0 h-1 bg-[var(--nav-primary)] opacity-80"
+              />
+              <span
+                aria-hidden="true"
+                className="relative self-start text-xl font-black leading-none text-[var(--nav-primary)]"
+              >
+                {String(index + 1).padStart(2, '0')}
               </span>
-              <span className="relative min-w-0 flex-1">
-                <span className="block truncate text-sm font-black leading-5">
-                  {scenario.title}
-                </span>
-                <span className="mt-1 block truncate text-xs font-semibold text-[var(--nav-muted)]">
+              <span className="relative flex min-h-0 flex-1 flex-col items-center pt-4">
+                <span className="text-lg font-black leading-6">{scenario.title}</span>
+                <span className="mt-3 block max-w-[20rem] text-sm font-semibold leading-6 text-[var(--nav-muted)]">
                   {scenario.description}
                 </span>
+                <span className="mt-auto inline-flex items-center gap-1.5 pt-6 text-sm font-bold text-[var(--nav-primary)]">
+                  시작
+                  <CaretRight className="size-4 transition group-hover:translate-x-0.5" weight="bold" />
+                </span>
               </span>
-              <CaretRight className="ml-3 size-4 shrink-0 text-[var(--nav-primary)] transition group-hover:translate-x-0.5" weight="bold" />
             </button>
-          )
-        })}
-        {Array.from({ length: miniPlaceholderCount }, (_, index) => (
-          <button
-            key={`mini-placeholder-${index}`}
-            className="relative flex min-h-[5.75rem] cursor-not-allowed items-center overflow-hidden rounded-xl border border-dashed border-[var(--nav-border)] bg-white/55 px-4 py-4 text-left text-[var(--nav-muted)]"
-            data-testid="demo-scenario-placeholder-card"
-            disabled
-            type="button"
-          >
-            <span aria-hidden="true" className="mr-4 text-2xl font-black leading-none text-[rgb(152_162_179/0.62)]">
-              {String(primaryScenarios.length + miniScenarios.length + index + 1).padStart(2, '0')}
-            </span>
-            <span className="min-w-0">
-              <span className="block truncate text-sm font-black leading-5">시나리오 준비 중</span>
-              <span className="mt-1 block truncate text-xs font-semibold">추가 데모 슬롯</span>
-            </span>
-          </button>
-        ))}
+          ))}
+        </div>
+
+        <div className="mx-auto mt-3 grid w-full max-w-[68rem] grid-cols-3 gap-3">
+          {miniScenarios.map((scenario, index) => {
+            const scenarioIndex = primaryScenarios.length + index
+
+            return (
+              <button
+                key={scenario.scenarioId}
+                className="group relative flex min-h-[4.75rem] items-center overflow-hidden rounded-xl border border-white/80 bg-white px-4 py-3 text-left shadow-[0_10px_22px_rgb(15_23_42/0.08)] transition hover:-translate-y-0.5 hover:border-[var(--nav-primary)] hover:shadow-[0_14px_28px_rgb(15_23_42/0.12)]"
+                data-testid={`demo-scenario-card-${scenario.scenarioId}`}
+                onClick={() => onStartScenario(scenario.scenarioId)}
+                type="button"
+              >
+                <span aria-hidden="true" className="absolute inset-x-0 top-0 h-1 bg-[var(--nav-primary)] opacity-80" />
+                <span aria-hidden="true" className="mr-4 text-xl font-black leading-none text-[var(--nav-primary)]">
+                  {String(scenarioIndex + 1).padStart(2, '0')}
+                </span>
+                <span className="relative min-w-0 flex-1">
+                  <span className="block truncate text-sm font-black leading-5">
+                    {scenario.title}
+                  </span>
+                  <span className="mt-1 block truncate text-xs font-semibold text-[var(--nav-muted)]">
+                    {scenario.description}
+                  </span>
+                </span>
+                <CaretRight className="ml-3 size-4 shrink-0 text-[var(--nav-primary)] transition group-hover:translate-x-0.5" weight="bold" />
+              </button>
+            )
+          })}
+          {Array.from({ length: miniPlaceholderCount }, (_, index) => (
+            <button
+              key={`mini-placeholder-${index}`}
+              className="relative flex min-h-[4.75rem] cursor-not-allowed items-center overflow-hidden rounded-xl border border-dashed border-[var(--nav-border)] bg-white/55 px-4 py-3 text-left text-[var(--nav-muted)]"
+              data-testid="demo-scenario-placeholder-card"
+              disabled
+              type="button"
+            >
+              <span aria-hidden="true" className="mr-4 text-xl font-black leading-none text-[rgb(152_162_179/0.62)]">
+                {String(primaryScenarios.length + miniScenarios.length + index + 1).padStart(2, '0')}
+              </span>
+              <span className="min-w-0">
+                <span className="block truncate text-sm font-black leading-5">시나리오 준비 중</span>
+                <span className="mt-1 block truncate text-xs font-semibold">추가 데모 슬롯</span>
+              </span>
+            </button>
+          ))}
+        </div>
       </div>
     </motion.div>
   )
@@ -7034,7 +7039,7 @@ function DemoScenarioPresenterPanel({
   return (
     <motion.section
       aria-label="데모 시나리오 진행 패널"
-      className="roadie-paper-sidebar absolute left-0 top-1/2 z-20 w-96 -translate-y-1/2 rounded-[1.15rem] p-4 text-[var(--nav-ink)] [&_button:disabled]:cursor-not-allowed [&_button:disabled]:opacity-50"
+      className="roadie-navigation-density-surface roadie-paper-sidebar absolute left-0 top-1/2 z-20 w-[var(--roadie-nav-side-rail-width)] -translate-y-1/2 rounded-[1.15rem] p-4 text-[var(--nav-ink)] [&_button:disabled]:cursor-not-allowed [&_button:disabled]:opacity-50"
       data-testid="demo-scenario-presenter-panel"
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
@@ -7691,7 +7696,7 @@ function DemoScenarioCompletedPanel({
   return (
     <motion.section
       aria-label="데모 완료 패널"
-      className="roadie-paper-sidebar absolute left-0 top-1/2 z-20 w-96 -translate-y-1/2 rounded-[1.15rem] p-4 text-[var(--nav-ink)]"
+      className="roadie-navigation-density-surface roadie-paper-sidebar absolute left-0 top-1/2 z-20 w-[var(--roadie-nav-side-rail-width)] -translate-y-1/2 rounded-[1.15rem] p-4 text-[var(--nav-ink)]"
       data-testid="demo-scenario-completed-panel"
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
@@ -7765,7 +7770,7 @@ function AppIconDock({
     >
       <div
         data-testid="right-rail-dock"
-        className="pointer-events-auto inline-flex flex-col gap-1 rounded-bl-none rounded-r-none rounded-tl-[1.15rem] border-t border-white/70 bg-white p-1.5"
+        className="roadie-navigation-density-surface pointer-events-auto inline-flex flex-col gap-1 rounded-bl-none rounded-r-none rounded-tl-[1.15rem] border-t border-white/70 bg-white p-1.5"
       >
         <button
           aria-controls="settings-drawer"
@@ -7954,7 +7959,7 @@ function SideDrawerPanel({
   return (
     <motion.aside
       aria-label={drawerMeta.label}
-      className="pointer-events-auto absolute bottom-[43px] right-0 top-0 z-20 w-[320px] overflow-hidden bg-white text-[var(--nav-ink)] shadow-[0_14px_36px_rgb(15_23_42/0.12)] max-sm:bottom-[37px] max-sm:w-[min(20rem,calc(100vw-4rem))]"
+      className="roadie-navigation-density-surface pointer-events-auto absolute bottom-[43px] right-0 top-0 z-20 w-[320px] overflow-hidden bg-white text-[var(--nav-ink)] shadow-[0_14px_36px_rgb(15_23_42/0.12)] max-sm:bottom-[37px] max-sm:w-[min(20rem,calc(100vw-4rem))]"
       id={`${panel}-drawer`}
       data-testid={`${panel}-drawer`}
       exit={{ opacity: 1, x: drawerOffset }}
@@ -9235,7 +9240,7 @@ function ReportFullscreenOverlay({
       transition={motionTiming}
       role="dialog"
     >
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div className="roadie-navigation-density-surface flex min-h-0 flex-1 flex-col overflow-hidden">
         <header className="flex items-center justify-between gap-4 px-6 py-5">
           <div className="min-w-0">
             <h2 className="truncate text-2xl font-bold tracking-normal">운행 리포트</h2>
@@ -10001,7 +10006,7 @@ function MusicPopover({
   return (
     <motion.section
       aria-label="음악"
-      className="pointer-events-auto absolute bottom-14 right-[4.25rem] z-50 flex max-h-[calc(100%-4.25rem)] min-h-0 flex-col overflow-hidden rounded-[1.15rem] bg-white/94 text-[var(--nav-ink)] shadow-[0_12px_30px_rgb(15_23_42/0.12)] backdrop-blur-xl max-sm:bottom-13 max-sm:right-2"
+      className="roadie-navigation-density-surface pointer-events-auto absolute bottom-14 right-[4.25rem] z-50 flex max-h-[calc(100%-4.25rem)] min-h-0 flex-col overflow-hidden rounded-[1.15rem] bg-white/94 text-[var(--nav-ink)] shadow-[0_12px_30px_rgb(15_23_42/0.12)] backdrop-blur-xl max-sm:bottom-13 max-sm:right-2"
       id="music-popover"
       data-testid="music-popover"
       exit={{ opacity: 0, y: -8, scale: 0.985 }}
@@ -10161,7 +10166,7 @@ function MiniPlayer({
 
   return (
     <motion.div
-      className="pointer-events-none absolute left-1/2 z-40 w-[min(31rem,calc(100%-1rem))] -translate-x-1/2"
+      className="roadie-navigation-density-surface pointer-events-none absolute left-1/2 z-40 w-[min(31rem,calc(100%-1rem))] -translate-x-1/2"
       data-testid="music-mini-player"
       style={{ bottom }}
       initial={{ opacity: 0, y: 10, scale: 0.99 }}
@@ -10502,7 +10507,7 @@ function RouteSearchSheet({
 
   return (
     <motion.div
-      className="pointer-events-none absolute bottom-18 left-1/2 z-20 w-[min(34rem,calc(100%-1.5rem))] -translate-x-1/2 text-[var(--nav-ink)] max-sm:bottom-15 max-sm:w-[calc(100%-1rem)]"
+      className="roadie-navigation-density-surface pointer-events-none absolute bottom-18 left-1/2 z-20 w-[min(34rem,calc(100%-1.5rem))] -translate-x-1/2 text-[var(--nav-ink)] max-sm:bottom-15 max-sm:w-[calc(100%-1rem)]"
       initial={{ opacity: 0, y: 22, scale: 0.98 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: 14, scale: 0.985 }}
@@ -10707,7 +10712,7 @@ function IdleMapControls({
   const navigationBlocked = false
 
   return (
-    <div className="pointer-events-none absolute inset-0 text-[var(--nav-ink)]">
+    <div className="roadie-navigation-density-surface pointer-events-none absolute inset-0 text-[var(--nav-ink)]">
       <AnimatePresence initial={false}>
         {!searchOpen ? (
           <motion.div
@@ -10789,7 +10794,7 @@ function RouteSelectionSummary({
 
   return (
     <motion.div
-      className="pointer-events-none absolute bottom-20 left-1/2 z-20 w-[calc(100%-2rem)] -translate-x-1/2 text-[var(--nav-ink)] max-sm:bottom-[4.5rem] max-sm:w-[calc(100%-1.5rem)]"
+      className="roadie-navigation-density-surface pointer-events-none absolute bottom-20 left-1/2 z-20 w-[calc(100%-2rem)] -translate-x-1/2 text-[var(--nav-ink)] max-sm:bottom-[4.5rem] max-sm:w-[calc(100%-1.5rem)]"
       data-testid="route-selection-summary"
       initial={{ opacity: 0, y: 14, scale: 0.985 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -10931,7 +10936,7 @@ function RouteSearchLoadingModal({
       transition={motionTiming}
     >
       <motion.div
-        className="roadie-assistant-aura relative flex w-[min(19rem,calc(100vw-3rem))] flex-col items-center overflow-hidden rounded-3xl px-6 pb-6 pt-5 text-center shadow-[0_22px_56px_rgb(15_23_42/0.20)]"
+        className="roadie-navigation-density-surface roadie-assistant-aura relative flex w-[min(19rem,calc(100vw-3rem))] flex-col items-center overflow-hidden rounded-3xl px-6 pb-6 pt-5 text-center shadow-[0_22px_56px_rgb(15_23_42/0.20)]"
         initial={{ opacity: 0, y: 10, scale: 0.985 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 8, scale: 0.985 }}
@@ -10977,7 +10982,7 @@ function DrivingHud({
 }) {
   return (
     <motion.div
-      className="pointer-events-none absolute inset-0 z-40 text-[var(--nav-ink)]"
+      className="roadie-navigation-density-surface pointer-events-none absolute inset-0 z-40 text-[var(--nav-ink)]"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={motionTiming}
@@ -11063,7 +11068,7 @@ function DrivingAssistOverlay({
 }) {
   return (
     <motion.div
-      className="pointer-events-none absolute left-4 top-[11rem] z-40 max-sm:left-2 max-sm:top-[9rem]"
+      className="roadie-navigation-density-surface pointer-events-none absolute left-4 top-[11rem] z-40 max-sm:left-2 max-sm:top-[9rem]"
       data-testid="driving-assist-signs"
       initial={{ opacity: 0, x: -12, y: -4 }}
       animate={{ opacity: 1, x: 0, y: 0 }}
@@ -11113,7 +11118,7 @@ function BottomStatusBar({
     <motion.div
       data-testid="bottom-status-bar"
       className={[
-        'absolute bottom-0 left-0 right-0 z-30 grid h-[43px] items-center rounded-tl-xl rounded-tr-none bg-white text-[var(--nav-ink)] shadow-[0_-8px_24px_rgba(15,23,42,0.10)] max-sm:h-[37px]',
+        'roadie-navigation-density-surface absolute bottom-0 left-0 right-0 z-30 grid h-[43px] items-center rounded-tl-xl rounded-tr-none bg-white text-[var(--nav-ink)] shadow-[0_-8px_24px_rgba(15,23,42,0.10)] max-sm:h-[37px]',
         hasRoute ? 'grid-cols-5' : 'grid-cols-3',
       ].join(' ')}
       initial={{ opacity: 0, y: 16 }}

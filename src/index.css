@@ -337,6 +337,32 @@
     background: transparent;
   }
 
+  .roadie-navigation-container {
+    container: roadie-navigation-content / inline-size;
+  }
+
+  .roadie-navigation-density-scope {
+    --roadie-nav-ui-scale: 1;
+    --roadie-nav-stage-gap: 0.75rem;
+    --roadie-nav-stage-padding: 0.75rem;
+    --roadie-nav-side-offset: 25rem;
+    --roadie-nav-side-rail-width: 24rem;
+    --roadie-nav-scenario-scale: 0.9;
+  }
+
+  .roadie-navigation-density-surface {
+    zoom: var(--roadie-nav-ui-scale);
+  }
+
+  .roadie-navigation-word-boundary {
+    word-break: keep-all;
+    overflow-wrap: normal;
+  }
+
+  .roadie-navigation-scenario-density {
+    zoom: var(--roadie-nav-scenario-scale);
+  }
+
   .roadie-paper-app-shell {
     background:
       radial-gradient(ellipse at 3% 5%, rgb(197 245 224 / 0.78), transparent 42rem),
@@ -374,6 +400,39 @@
     backdrop-filter: blur(20px);
   }
 
+}
+
+@container roadie-navigation-content (max-width: 96rem) {
+  .roadie-navigation-density-scope {
+    --roadie-nav-ui-scale: 0.92;
+    --roadie-nav-stage-gap: 0.625rem;
+    --roadie-nav-stage-padding: 0.625rem;
+    --roadie-nav-side-offset: 23rem;
+    --roadie-nav-side-rail-width: 22rem;
+    --roadie-nav-scenario-scale: 0.84;
+  }
+}
+
+@container roadie-navigation-content (max-width: 84rem) {
+  .roadie-navigation-density-scope {
+    --roadie-nav-ui-scale: 0.86;
+    --roadie-nav-stage-gap: 0.5rem;
+    --roadie-nav-stage-padding: 0.5rem;
+    --roadie-nav-side-offset: 21rem;
+    --roadie-nav-side-rail-width: 20rem;
+    --roadie-nav-scenario-scale: 0.78;
+  }
+}
+
+@container roadie-navigation-content (max-width: 72rem) {
+  .roadie-navigation-density-scope {
+    --roadie-nav-ui-scale: 0.8;
+    --roadie-nav-stage-gap: 0.5rem;
+    --roadie-nav-stage-padding: 0.5rem;
+    --roadie-nav-side-offset: 19rem;
+    --roadie-nav-side-rail-width: 18rem;
+    --roadie-nav-scenario-scale: 0.72;
+  }
 }
 
 @keyframes roadie-page-gradient-drift {

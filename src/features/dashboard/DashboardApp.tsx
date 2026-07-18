@@ -747,10 +747,13 @@ export function DashboardApp() {
 
   return (
     <div
-      className="min-h-dvh bg-transparent font-sans text-gray-900 lg:h-dvh lg:overflow-hidden"
+      className="min-h-dvh bg-transparent font-sans text-gray-900 lg:h-dvh lg:overflow-hidden lg:p-4"
       data-testid="dashboard-app"
     >
-      <div className="mx-auto flex min-h-dvh w-full max-w-[88rem] gap-5 p-0 lg:h-full lg:min-h-0 lg:p-5">
+      <div
+        className="mx-auto flex min-h-dvh w-full max-w-[88rem] gap-0 bg-white p-0 lg:h-full lg:min-h-0 lg:overflow-hidden lg:rounded-[1.5rem] lg:p-4 lg:shadow-[0_18px_42px_rgb(45_72_112/0.08)] lg:ring-1 lg:ring-[var(--roadie-paper-line)]"
+        data-testid="dashboard-shell"
+      >
         <DashboardSidebar
           activePath={path}
           onLogout={handleLogout}
@@ -921,7 +924,7 @@ function DashboardSidebar({
   selectedProfile?: Profile
 }) {
   return (
-    <aside className="sticky top-5 hidden w-[17rem] shrink-0 self-start rounded-2xl border border-gray-200 bg-white p-4 shadow-theme-xs lg:block">
+    <aside className="hidden w-[17rem] shrink-0 bg-transparent p-4 lg:block">
       <DashboardBrand />
       <div className="mt-6">
         <DashboardNavList activePath={activePath} onNavigate={onNavigate} />

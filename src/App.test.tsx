@@ -32,7 +32,10 @@ describe('App', () => {
 
     expect(screen.getByTestId('app-shell')).toBeInTheDocument()
     expect(screen.getByTestId('app-shell')).toHaveClass('roadie-paper-app-shell')
+    expect(screen.getByTestId('app-shell')).toHaveClass('h-screen')
+    expect(screen.getByTestId('app-shell')).toHaveClass('overflow-hidden')
     expect(screen.getByTestId('global-sidebar')).toBeInTheDocument()
+    expect(screen.getByTestId('app-content')).toHaveClass('overflow-hidden')
     expect(screen.getByTestId('navigation-shell')).toBeInTheDocument()
   })
 
@@ -45,6 +48,7 @@ describe('App', () => {
     expect(screen.getByTestId('global-sidebar')).toHaveClass('top-4')
     expect(screen.getByTestId('global-sidebar')).toHaveClass('h-[calc(100vh-2rem)]')
     expect(screen.getByTestId('global-sidebar')).not.toHaveClass('h-screen')
+    expect(screen.getByTestId('app-content')).toHaveClass('roadie-navigation-container')
     expect(screen.getByTestId('app-content')).toHaveClass('ml-[7.75rem]')
   })
 
@@ -62,6 +66,11 @@ describe('App', () => {
 
     expect(screen.getByTestId('global-sidebar')).toBeInTheDocument()
     expect(screen.getByTestId('app-shell')).toHaveClass('roadie-paper-app-shell')
+    expect(screen.getByTestId('app-shell')).toHaveClass('h-screen')
+    expect(screen.getByTestId('app-shell')).toHaveClass('overflow-hidden')
+    expect(screen.getByTestId('app-content')).toHaveClass('h-screen')
+    expect(screen.getByTestId('app-content')).toHaveClass('overflow-auto')
+    expect(screen.getByTestId('app-content')).toHaveClass('lg:overflow-hidden')
     expect(screen.getByTestId('dashboard-page')).toBeInTheDocument()
   })
 
@@ -72,6 +81,8 @@ describe('App', () => {
 
     expect(screen.getByTestId('global-sidebar')).toBeInTheDocument()
     expect(screen.getByTestId('app-shell')).toHaveClass('roadie-paper-app-shell')
+    expect(screen.getByTestId('app-content')).toHaveClass('overflow-auto')
+    expect(screen.getByTestId('app-content')).not.toHaveClass('lg:overflow-hidden')
     expect(screen.getByTestId('model-lab-page')).toBeInTheDocument()
   })
 

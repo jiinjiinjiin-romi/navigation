@@ -91,7 +91,7 @@ function AppShell({
 
   return (
     <div
-      className="roadie-paper-app-shell relative min-h-screen text-[var(--nav-ink)]"
+      className="roadie-paper-app-shell relative h-screen min-h-0 overflow-hidden text-[var(--nav-ink)]"
       data-testid="app-shell"
     >
       <aside
@@ -175,7 +175,10 @@ function AppShell({
       </aside>
       <main
         className={[
-          'roadie-paper-content min-h-screen min-w-0 overflow-auto transition-[margin-left] duration-200 ease-out',
+          'roadie-paper-content roadie-navigation-container h-screen min-h-0 min-w-0 transition-[margin-left] duration-200 ease-out',
+          activeSection === 'dashboard'
+            ? 'overflow-auto lg:overflow-hidden'
+            : activeSection === 'model-lab' ? 'overflow-auto' : 'overflow-hidden',
           collapsed ? 'ml-[7.75rem]' : 'ml-[18.25rem] max-xl:ml-[7.75rem]',
         ].join(' ')}
         data-testid="app-content"

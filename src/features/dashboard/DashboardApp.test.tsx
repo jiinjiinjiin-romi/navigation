@@ -148,6 +148,13 @@ describe('DashboardApp', () => {
 
     expect(screen.getByRole('heading', { name: '운전 리포트 개요' })).toBeInTheDocument()
     expect(screen.getByTestId('dashboard-app')).toHaveClass('bg-transparent')
+    expect(screen.getByTestId('dashboard-app')).toHaveClass('lg:p-4')
+    expect(screen.getByTestId('dashboard-shell')).toHaveClass('bg-white')
+    expect(screen.getByTestId('dashboard-shell')).toHaveClass('lg:overflow-hidden')
+    expect(screen.getByRole('complementary')).toHaveClass('bg-transparent')
+    expect(screen.getByRole('complementary')).not.toHaveClass('border-r')
+    expect(screen.getByRole('complementary')).not.toHaveClass('rounded-2xl')
+    expect(screen.getByRole('complementary')).not.toHaveClass('shadow-theme-xs')
     expect(screen.getByText('안전 점수')).toBeInTheDocument()
     expect(container.querySelector('img[src="/roady_logo.webp"]')).toBeInTheDocument()
     expect(screen.getByRole('img', { name: 'ROADY' })).toHaveAttribute('src', '/text_logo.webp')
