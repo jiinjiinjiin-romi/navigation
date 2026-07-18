@@ -134,7 +134,7 @@ function activateTab(name: string) {
 
 describe('DashboardApp', () => {
   test('guards dashboard pages behind mock login and opens overview after login', () => {
-    render(<DashboardApp />)
+    const { container } = render(<DashboardApp />)
 
     expect(screen.getByLabelText('이메일')).toBeInTheDocument()
 
@@ -147,7 +147,10 @@ describe('DashboardApp', () => {
     fireEvent.click(screen.getByRole('button', { name: '로그인' }))
 
     expect(screen.getByRole('heading', { name: '운전 리포트 개요' })).toBeInTheDocument()
+    expect(screen.getByTestId('dashboard-app')).toHaveClass('bg-transparent')
     expect(screen.getByText('안전 점수')).toBeInTheDocument()
+    expect(container.querySelector('img[src="/roady_logo.webp"]')).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'ROADY' })).toHaveAttribute('src', '/text_logo.webp')
     expect(localStorage.getItem('roadie-dashboard-session')).toBe('active')
   })
 

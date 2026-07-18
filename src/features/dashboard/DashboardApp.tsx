@@ -33,7 +33,6 @@ import {
   ShieldCheck,
   SignOut,
   SlidersHorizontal,
-  SteeringWheel,
   TrendUp,
   UserCircle,
   VideoCamera,
@@ -747,7 +746,10 @@ export function DashboardApp() {
   }
 
   return (
-    <div className="min-h-dvh bg-gray-50 font-sans text-gray-900 lg:h-dvh lg:overflow-hidden">
+    <div
+      className="min-h-dvh bg-transparent font-sans text-gray-900 lg:h-dvh lg:overflow-hidden"
+      data-testid="dashboard-app"
+    >
       <div className="mx-auto flex min-h-dvh w-full max-w-[88rem] gap-5 p-0 lg:h-full lg:min-h-0 lg:p-5">
         <DashboardSidebar
           activePath={path}
@@ -849,7 +851,7 @@ export function DashboardApp() {
 
 function MockLoginPage({ onLogin, reducedMotion }: { onLogin: () => void; reducedMotion: boolean }) {
   return (
-    <main className="grid min-h-screen place-items-center overflow-hidden bg-gray-50 px-5 py-10 text-gray-900">
+    <main className="grid min-h-screen place-items-center overflow-hidden bg-transparent px-5 py-10 text-gray-900">
       <motion.section
         className="relative w-full max-w-md overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm"
         initial={reducedMotion ? false : { opacity: 0, y: 16, scale: 0.98 }}
@@ -884,14 +886,19 @@ function MockLoginPage({ onLogin, reducedMotion }: { onLogin: () => void; reduce
 function DashboardBrand({ inverted = false }: { inverted?: boolean }) {
   return (
     <div className="flex items-center gap-3">
-      <div className={cn(
-        'grid size-11 place-items-center rounded-xl shadow-theme-xs',
-        inverted ? 'bg-white/10 text-white ring-1 ring-white/20' : 'bg-brand-500 text-white',
-      )}>
-        <SteeringWheel className="size-6" weight="fill" />
-      </div>
-      <div>
-        <div className={cn('text-base font-semibold tracking-normal', inverted ? 'text-white' : 'text-gray-900')}>ROADY</div>
+      <img
+        alt=""
+        className="size-11 shrink-0 object-contain"
+        draggable={false}
+        src="/roady_logo.webp"
+      />
+      <div className="min-w-0">
+        <img
+          alt="ROADY"
+          className={cn('h-7 w-auto max-w-[8rem] object-contain', inverted && 'brightness-0 invert')}
+          draggable={false}
+          src="/text_logo.webp"
+        />
         <div className={cn('text-xs font-medium', inverted ? 'text-white/60' : 'text-gray-500')}>운전자 대시보드</div>
       </div>
     </div>

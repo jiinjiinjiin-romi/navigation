@@ -59,7 +59,7 @@ export function ModelLabPage() {
   }
 
   return (
-    <main data-testid="model-lab-page" className="min-h-screen bg-[var(--nav-frame)] px-5 py-6 text-[var(--nav-ink)]">
+    <main data-testid="model-lab-page" className="min-h-screen bg-transparent px-5 py-6 text-[var(--nav-ink)]">
       <div className="mx-auto flex min-h-[calc(100vh-3rem)] max-w-6xl flex-col gap-5">
         <header className="flex flex-col gap-2">
           <p className="text-sm font-medium text-[var(--nav-muted)]">ROADY Model Lab</p>

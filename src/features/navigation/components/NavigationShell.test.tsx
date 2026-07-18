@@ -1238,6 +1238,35 @@ describe('NavigationShell', () => {
     expect(screen.queryByRole('button', { name: '내비게이션 이용하기' })).not.toBeInTheDocument()
   })
 
+  it('renders the root risk and demo-ready status in the left extension rail', () => {
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell />
+      </QueryClientProvider>,
+    )
+
+    const sideRail = screen.getByTestId('navigation-root-side-rail')
+    const riskStatus = screen.getByTestId('manual-risk-stack-status')
+    const demoReady = screen.getByTestId('navigation-demo-ready-status')
+
+    expect(sideRail).toContainElement(riskStatus)
+    expect(sideRail).toContainElement(demoReady)
+    expect(within(sideRail).getByText('위험 누적')).toBeInTheDocument()
+    expect(within(sideRail).getByText('데모 준비')).toBeInTheDocument()
+    expect(sideRail).toHaveClass('top-1/2')
+    expect(sideRail).toHaveClass('-translate-y-1/2')
+    expect(sideRail).toHaveClass('w-96')
+    expect(sideRail).toHaveClass('roadie-paper-sidebar')
+    expect(sideRail).not.toHaveClass('gap-3')
+    expect(riskStatus).not.toHaveClass('roadie-paper-sidebar')
+    expect(demoReady).not.toHaveClass('roadie-paper-sidebar')
+    expect(demoReady).toHaveClass('mt-5')
+    expect(demoReady).toHaveClass('pt-5')
+    expect(demoReady).not.toHaveClass('col-start-2')
+  })
+
   it('returns between demo selection screens with labeled back buttons', async () => {
     const queryClient = new QueryClient()
 
@@ -2365,7 +2394,7 @@ describe('NavigationShell', () => {
     expect(screen.getByTestId('navigation-stage')).toHaveAttribute('data-manual-risk-alert-flash', 'true')
   })
 
-  it('keeps the manual risk controls above the third-stage alert flash', async () => {
+  it('renders the third-stage alert flash across the full viewport', async () => {
     const queryClient = new QueryClient()
 
     render(
@@ -2379,13 +2408,18 @@ describe('NavigationShell', () => {
     fireEvent.click(screen.getByRole('button', { name: '핸드폰 위험 상황 선택' }))
 
     expect(await screen.findByText('휴대폰 사용을 즉시 중단하세요. 지금은 전방만 봐야 합니다.')).toBeInTheDocument()
-    expect(screen.getByTestId('manual-risk-alert-flash')).toHaveClass('z-0')
+    expect(screen.getByTestId('manual-risk-alert-flash')).toHaveClass('fixed')
+    expect(screen.getByTestId('manual-risk-alert-flash')).toHaveClass('inset-0')
+    expect(screen.getByTestId('manual-risk-alert-flash')).toHaveClass('z-[60]')
+    expect(screen.getByTestId('manual-risk-alert-flash')).toHaveStyle({
+      backgroundColor: 'rgba(124, 18, 31, 0)',
+    })
     expect(screen.getByTestId('manual-risk-map-alert-flash')).toHaveClass('z-20')
     expect(screen.getByTestId('manual-risk-map-alert-flash')).toHaveStyle({
       backgroundColor: 'rgba(124, 18, 31, 0)',
     })
     expect(screen.getByTestId('navigation-viewport')).toHaveClass('z-10')
-    expect(screen.getByTestId('manual-navigation-layout')).toHaveClass('z-10')
+    expect(screen.getByTestId('manual-navigation-layout')).toHaveClass('z-20')
     expect(screen.getByTestId('manual-risk-control-panel')).toBeInTheDocument()
     expect(screen.getByLabelText('로디 AI 에이전트')).toHaveClass('z-40')
   })
@@ -2718,7 +2752,15 @@ describe('NavigationShell', () => {
     fireEvent.click(await screen.findByRole('button', { name: /대표 시나리오 보기/ }))
     fireEvent.click(await screen.findByTestId('demo-scenario-card-drowsy_driver'))
 
-    expect(await screen.findByTestId('demo-scenario-presenter-panel')).toBeInTheDocument()
+    const presenterPanel = await screen.findByTestId('demo-scenario-presenter-panel')
+    expect(presenterPanel).toBeInTheDocument()
+    expect(presenterPanel).toHaveClass('absolute')
+    expect(presenterPanel).toHaveClass('left-0')
+    expect(presenterPanel).toHaveClass('top-1/2')
+    expect(presenterPanel).toHaveClass('-translate-y-1/2')
+    expect(presenterPanel).toHaveClass('w-96')
+    expect(presenterPanel).toHaveClass('roadie-paper-sidebar')
+    expect(presenterPanel).not.toHaveClass('col-start-2')
     expect(screen.getByTestId('demo-navigation-lock')).toBeInTheDocument()
     expect(screen.getByText('주행 화면 진입')).toBeInTheDocument()
 
@@ -3177,19 +3219,26 @@ describe('NavigationShell', () => {
     const manualRiskStackStatus = screen.getByTestId('manual-risk-stack-status')
 
     expect(stage).toHaveClass('grid')
-    expect(stage).toHaveClass('grid-cols-[minmax(0,1fr)_24rem]')
+    expect(stage).toHaveClass('grid-cols-[minmax(0,1fr)]')
     expect(stage).not.toHaveClass('grid-rows-[minmax(17rem,38vh)_minmax(0,1fr)]')
     expect(screen.queryByTestId('driver-video-panel')).not.toBeInTheDocument()
     expect(manualLayout).toHaveClass('flex')
     expect(manualLayout).toHaveClass('flex-col')
-    expect(manualLayout).toHaveClass('self-center')
+    expect(manualLayout).toHaveClass('absolute')
+    expect(manualLayout).toHaveClass('left-0')
+    expect(manualLayout).toHaveClass('top-1/2')
+    expect(manualLayout).toHaveClass('-translate-y-1/2')
+    expect(manualLayout).toHaveClass('w-96')
+    expect(manualLayout).not.toHaveClass('col-start-2')
     expect(viewport).toHaveClass('aspect-[16/10]')
     expect(viewport).toHaveClass('col-start-1')
     expect(viewport).toHaveClass('self-center')
     expect(manualLayout).toContainElement(manualControlPanel)
     expect(manualLayout).toContainElement(manualRiskStackStatus)
     expect(manualControlPanel).toHaveClass('w-full')
+    expect(manualControlPanel).toHaveClass('roadie-paper-sidebar')
     expect(manualRiskStackStatus).toHaveClass('w-full')
+    expect(manualRiskStackStatus).toHaveClass('roadie-paper-sidebar')
   })
 
   it('keeps the driver-video panel waiting during common route setup', async () => {

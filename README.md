@@ -1,10 +1,10 @@
-# ROADIE Navigation Frontend
+# Roady Navigation Frontend
 
-React, Vite, and Tailwind frontend for the ROADIE driver-assistance navigation project. The app is built as a practical in-car navigation surface for route search, guidance, simulated driving, road status, and traffic-aware route rendering. It is designed to work with the broader backend that will detect abnormal driver behavior and issue driver guidance/instructions.
+React, Vite, and Tailwind frontend for the Roady driver-assistance navigation project. The app is built as a practical in-car navigation surface for route search, guidance, simulated driving, road status, and traffic-aware route rendering. It is designed to work with the broader backend that will detect abnormal driver behavior and issue driver guidance/instructions.
 
 ## Naming
 
-The navigation product and assistant are named `로디`. Use `ROADIE` in English-facing copy and `roadie` for lowercase package, storage, and technical identifiers.
+The navigation product and assistant are named `로디`. Use `Roady` in English-facing product copy. Existing lowercase `roadie` package, storage, and technical identifiers are retained unless a separate migration explicitly changes them.
 
 ## What This App Does
 

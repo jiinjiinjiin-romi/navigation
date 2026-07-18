@@ -94,6 +94,13 @@
 
 :root {
   --radius: 0.625rem;
+  --roadie-paper-outer: #f7f9ff;
+  --roadie-paper-shell: #ffffff;
+  --roadie-paper-surface: #ffffff;
+  --roadie-paper-raised: #ffffff;
+  --roadie-paper-line: rgb(45 72 112 / 0.08);
+  --roadie-paper-shadow: 0 22px 48px rgb(45 72 112 / 0.10);
+  --roadie-paper-soft-shadow: 0 12px 28px rgb(45 72 112 / 0.08);
   --nav-frame: #f9fafb;
   --nav-surface: #ffffff;
   --nav-surface-raised: #ffffff;
@@ -313,40 +320,6 @@
   }
 }
 
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: var(--nav-primary-light);
-  --primary-foreground: #ffffff;
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: var(--nav-primary-light);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: var(--nav-primary-light);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: var(--nav-primary-light);
-}
-
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -358,6 +331,39 @@
 }
 
 @layer components {
+  .roadie-paper-app-shell,
+  .roadie-paper-content,
+  .roadie-navigation-root-stage {
+    background: transparent;
+  }
+
+  .roadie-paper-app-shell {
+    background:
+      radial-gradient(ellipse at 3% 5%, rgb(197 245 224 / 0.78), transparent 42rem),
+      radial-gradient(ellipse at 18% 72%, rgb(177 220 255 / 0.72), transparent 36rem),
+      radial-gradient(ellipse at 60% 14%, rgb(231 214 255 / 0.66), transparent 38rem),
+      radial-gradient(ellipse at 98% 88%, rgb(201 247 223 / 0.72), transparent 36rem),
+      linear-gradient(145deg, #ffffff 0%, #f7fbff 44%, #fffaf7 100%);
+  }
+
+  .roadie-paper-sidebar {
+    background:
+      linear-gradient(180deg, #ffffff, #ffffff),
+      var(--roadie-paper-shell);
+    box-shadow: 0 18px 42px rgb(45 72 112 / 0.11), 0 0 0 1px var(--roadie-paper-line);
+    word-break: keep-all;
+    overflow-wrap: normal;
+  }
+
+  .roadie-global-sidebar {
+    background:
+      radial-gradient(ellipse at 16% 94%, rgb(197 245 224 / 0.5), transparent 58%),
+      radial-gradient(ellipse at 88% 88%, rgb(177 220 255 / 0.42), transparent 54%),
+      radial-gradient(ellipse at 54% 106%, rgb(231 214 255 / 0.44), transparent 60%),
+      linear-gradient(180deg, #ffffff 0%, #ffffff 46%, #f8fbff 100%);
+    overflow: hidden;
+  }
+
   .roadie-glass {
     border: 1px solid var(--nav-border);
     background: rgb(255 255 255 / 78%);

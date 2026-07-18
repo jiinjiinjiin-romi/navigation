@@ -10,6 +10,7 @@ describe('ModelLabPage', () => {
     expect(screen.getAllByTestId('model-class-indicator')).toHaveLength(5)
     expect(screen.getAllByTestId('model-lab-class-video-button')).toHaveLength(5)
     expect(screen.getByRole('heading', { name: '운전자 행동 탐지 모델 테스트' })).toBeInTheDocument()
+    expect(screen.getByTestId('model-lab-page')).toHaveClass('bg-transparent')
     expect(screen.getByTestId('model-lab-video-frame')).toHaveClass('aspect-video')
     expect(screen.getByRole('button', { name: /분석 시작/ })).toBeDisabled()
     expect(screen.getByText('정상')).toBeInTheDocument()

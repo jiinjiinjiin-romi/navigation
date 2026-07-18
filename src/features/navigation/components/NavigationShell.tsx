@@ -2092,10 +2092,18 @@ export function NavigationShell({
   const manualRiskAlertFlashKey = manualRiskAlertFlash
     ? `${manualRiskConversation.riskId}-${manualRiskConversation.nodeId}`
     : undefined
-  const manualRiskAlertFlashInitial = shouldReduceMotion ? false : { backgroundColor: 'rgb(6 8 12)' }
+  const manualRiskAlertFlashInitial = shouldReduceMotion ? false : { backgroundColor: 'rgba(124, 18, 31, 0)' }
   const manualRiskAlertFlashAnimation = shouldReduceMotion
-    ? { backgroundColor: 'rgb(65 12 20)' }
-    : { backgroundColor: ['rgb(6 8 12)', 'rgb(65 12 20)', 'rgb(6 8 12)', 'rgb(65 12 20)', 'rgb(6 8 12)'] }
+    ? { backgroundColor: 'rgba(124, 18, 31, 0.28)' }
+    : {
+      backgroundColor: [
+        'rgba(124, 18, 31, 0)',
+        'rgba(124, 18, 31, 0.28)',
+        'rgba(124, 18, 31, 0)',
+        'rgba(124, 18, 31, 0.28)',
+        'rgba(124, 18, 31, 0)',
+      ],
+    }
   const manualRiskMapAlertFlashInitial = shouldReduceMotion ? false : { backgroundColor: 'rgba(124, 18, 31, 0)' }
   const manualRiskMapAlertFlashAnimation = shouldReduceMotion
     ? { backgroundColor: 'rgba(124, 18, 31, 0.32)' }
@@ -2113,11 +2121,19 @@ export function NavigationShell({
     : { duration: 1.1, times: [0, 0.18, 0.4, 0.58, 1] }
   const cockpitLayoutActive = !manualNavigationActive
   const demoDriverVideoSource = getDemoDriverVideoSource(demoScenarioState)
+  const rootSideRailActive = cockpitLayoutActive
+  const rootDemoReadyVisible = cockpitLayoutActive && !demoScenarioState && !demoCompleted
   const navigationViewportClassName = [
     'relative z-10 col-start-1 min-h-0 overflow-hidden rounded-[1.1rem] border border-white/70 bg-[var(--nav-frame)] shadow-[0_18px_46px_rgb(15_23_42/0.24)] ring-1 ring-[rgb(148_163_184/0.18)]',
     manualNavigationActive
       ? 'aspect-[16/10] w-full max-h-full self-center'
       : 'row-start-2 h-full',
+  ].join(' ')
+  const navigationStageClassName = [
+    'roadie-navigation-root-stage relative grid h-screen min-h-0 gap-3 p-3',
+    rootSideRailActive || manualNavigationActive || demoScenarioState || demoCompleted ? 'pl-[25rem]' : '',
+    'grid-cols-[minmax(0,1fr)]',
+    cockpitLayoutActive ? 'grid-rows-[minmax(17rem,38vh)_minmax(0,1fr)]' : 'items-center',
   ].join(' ')
 
   useEffect(() => () => {
@@ -3539,16 +3555,13 @@ export function NavigationShell({
       data-testid="navigation-stage"
       data-manual-risk-alert-flash={manualRiskAlertFlash ? 'true' : 'false'}
       data-manual-risk-alert-flash-key={manualRiskAlertFlashKey}
-      className={[
-        'relative grid h-screen min-h-0 grid-cols-[minmax(0,1fr)_24rem] gap-3 bg-[#06080c] p-3',
-        cockpitLayoutActive ? 'grid-rows-[minmax(17rem,38vh)_minmax(0,1fr)]' : 'items-center',
-      ].join(' ')}
+      className={navigationStageClassName}
     >
       {manualRiskAlertFlashKey ? (
         <motion.div
           key={manualRiskAlertFlashKey}
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 z-0"
+          className="pointer-events-none fixed inset-0 z-[60]"
           data-testid="manual-risk-alert-flash"
           initial={manualRiskAlertFlashInitial}
           animate={manualRiskAlertFlashAnimation}
@@ -3567,7 +3580,8 @@ export function NavigationShell({
             source={demoDriverVideoSource}
             onError={() => setDriverVideoError(true)}
           />
-          <ManualRiskStackStatus
+          <NavigationRootSideRail
+            demoReadyVisible={rootDemoReadyVisible}
             manualRiskStack={manualRiskStackInfo}
             motionTiming={motionTiming}
           />
@@ -3998,17 +4012,18 @@ export function NavigationShell({
       </section>
       {manualNavigationActive ? (
         <div
-          className="relative z-10 col-start-2 flex w-full flex-col justify-center gap-3 self-center"
+          className="absolute left-0 top-1/2 z-20 flex w-96 -translate-y-1/2 flex-col gap-3"
           data-testid="manual-navigation-layout"
         >
           <ManualRiskStackStatus
-            className="w-full"
+            className="roadie-paper-sidebar w-full rounded-[1.15rem] px-4 py-4"
             manualRiskStack={manualRiskStackInfo}
             motionTiming={motionTiming}
+            surface="embedded"
           />
           {isRoadieAssistantDebugPanelEnabled() ? (
             <RoadieAssistantDebugPanel
-              className="w-full"
+              className="roadie-paper-sidebar w-full rounded-[1.15rem]"
               motionTiming={motionTiming}
               scenario={assistantScenario}
               scenarioId={assistantScenarioId}
@@ -4024,7 +4039,7 @@ export function NavigationShell({
               agentVoiceId={selectedProfileVoiceId as TtsVoiceId}
               canAdvanceResponse={manualRiskConversation?.kind === 'user' && manualRiskVoiceStatus === 'idle'}
               canEndDrive={Object.values(manualRiskEvents).some((event) => event.clickCount > 0)}
-              className="w-full"
+              className="roadie-paper-sidebar w-full rounded-[1.15rem]"
               controlsLocked={manualRiskControlsLocked}
               emergencyWarningCountdown={manualEmergencyWarningCountdown}
               emergencyWarningPending={manualEmergencyWarningPending}
@@ -4086,14 +4101,7 @@ export function NavigationShell({
             setDemoCompleted(false)
           }}
         />
-      ) : (
-        <div className="col-start-2 row-start-2 self-start rounded-[1.1rem] border border-white/70 bg-white p-4 text-[var(--nav-ink)] shadow-[0_18px_46px_rgb(0_0_0/0.24)]">
-          <p className="text-sm font-bold">데모 준비</p>
-          <p className="mt-1 text-xs font-semibold leading-5 text-[var(--nav-muted)]">
-            프로필을 선택하면 대표 위험행동을 확인할 수 있어요.
-          </p>
-        </div>
-      )}
+      ) : null}
     </motion.main>
   )
 }
@@ -5256,21 +5264,65 @@ export function getDemoDriverVideoSource(
   return DROWSY_YAWN_VIDEO_SOURCE
 }
 
+function NavigationRootSideRail({
+  demoReadyVisible,
+  manualRiskStack,
+  motionTiming,
+}: {
+  demoReadyVisible: boolean
+  manualRiskStack: ManualRiskStackInfo | null
+  motionTiming: MotionTiming
+}) {
+  return (
+    <motion.div
+      aria-label="네비게이션 루트 상태"
+      className="roadie-paper-sidebar absolute left-0 top-1/2 z-20 flex w-96 -translate-y-1/2 flex-col rounded-[1.15rem] px-4 py-4 text-[var(--nav-ink)]"
+      data-testid="navigation-root-side-rail"
+      initial={{ opacity: 0, x: -8 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={motionTiming}
+    >
+      <ManualRiskStackStatus
+        className="w-full"
+        manualRiskStack={manualRiskStack}
+        motionTiming={motionTiming}
+        surface="embedded"
+      />
+      {demoReadyVisible ? (
+        <div
+          aria-label="데모 준비 상태"
+          className="mt-5 pt-5"
+          data-testid="navigation-demo-ready-status"
+        >
+          <p className="text-sm font-black text-[#191713]">데모 준비</p>
+          <p className="mt-2 text-sm font-bold leading-5 text-[#5f594f]">
+            프로필을 선택하면 대표 위험행동을 확인할 수 있어요.
+          </p>
+        </div>
+      ) : null}
+    </motion.div>
+  )
+}
+
 function ManualRiskStackStatus({
   className,
   manualRiskStack,
   motionTiming,
+  surface = 'card',
 }: {
   className?: string
   manualRiskStack: ManualRiskStackInfo | null
   motionTiming: MotionTiming
+  surface?: 'card' | 'embedded'
 }) {
   return (
     <motion.aside
       aria-label="위험 누적 상태"
       className={[
-        'rounded-xl border border-white/70 bg-white px-3 py-2 text-left text-[var(--nav-ink)] shadow-[0_12px_26px_rgb(15_23_42/0.18)]',
-        className ?? 'col-start-2 row-start-1 mb-0 w-[12.5rem] self-end justify-self-start',
+        surface === 'card'
+          ? 'rounded-xl border border-white/70 bg-white px-3 py-2 text-left text-[var(--nav-ink)] shadow-[0_12px_26px_rgb(15_23_42/0.18)]'
+          : 'text-left text-[var(--nav-ink)]',
+        className ?? (surface === 'card' ? 'w-[12.5rem]' : ''),
       ].join(' ')}
       data-testid="manual-risk-stack-status"
       initial={{ opacity: 0, y: 8 }}
@@ -6935,7 +6987,7 @@ function DemoScenarioPresenterPanel({
   return (
     <motion.section
       aria-label="데모 시나리오 진행 패널"
-      className="col-start-2 row-start-2 self-start rounded-[1.1rem] border border-white/70 bg-white p-4 text-[var(--nav-ink)] shadow-[0_18px_46px_rgb(0_0_0/0.24)] [&_button:disabled]:cursor-not-allowed [&_button:disabled]:opacity-50"
+      className="roadie-paper-sidebar absolute left-0 top-1/2 z-20 w-96 -translate-y-1/2 rounded-[1.15rem] p-4 text-[var(--nav-ink)] [&_button:disabled]:cursor-not-allowed [&_button:disabled]:opacity-50"
       data-testid="demo-scenario-presenter-panel"
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
@@ -7227,8 +7279,8 @@ function ManualRiskControlPanel({
     <motion.section
       aria-label="실시간 위험 상황 조작"
       className={[
-        'rounded-[1.1rem] border border-white/70 bg-white p-4 text-[var(--nav-ink)] shadow-[0_18px_46px_rgb(0_0_0/0.24)] [&_button:disabled]:cursor-not-allowed [&_button:disabled]:opacity-50',
-        className ?? 'col-start-2 row-start-2 self-start',
+        'p-4 text-[var(--nav-ink)] [&_button:disabled]:cursor-not-allowed [&_button:disabled]:opacity-50',
+        className ?? 'roadie-paper-sidebar rounded-[1.15rem]',
       ].join(' ')}
       data-testid="manual-risk-control-panel"
       initial={{ opacity: 0, y: 8 }}
@@ -7502,8 +7554,8 @@ function RoadieAssistantDebugPanel({
     <motion.section
       aria-label="로디 AI 시나리오 디버그"
       className={[
-        'rounded-[1.1rem] border border-white/70 bg-white p-4 text-[var(--nav-ink)] shadow-[0_18px_46px_rgb(0_0_0/0.24)]',
-        className ?? 'col-start-2 row-start-2 self-start',
+        'p-4 text-[var(--nav-ink)]',
+        className ?? 'roadie-paper-sidebar rounded-[1.15rem]',
       ].join(' ')}
       data-testid="roadie-assistant-debug-panel"
       initial={{ opacity: 0, y: 8 }}
@@ -7592,7 +7644,7 @@ function DemoScenarioCompletedPanel({
   return (
     <motion.section
       aria-label="데모 완료 패널"
-      className="col-start-2 row-start-2 self-start rounded-[1.1rem] border border-white/70 bg-white p-4 text-[var(--nav-ink)] shadow-[0_18px_46px_rgb(0_0_0/0.24)]"
+      className="roadie-paper-sidebar absolute left-0 top-1/2 z-20 w-96 -translate-y-1/2 rounded-[1.15rem] p-4 text-[var(--nav-ink)]"
       data-testid="demo-scenario-completed-panel"
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
