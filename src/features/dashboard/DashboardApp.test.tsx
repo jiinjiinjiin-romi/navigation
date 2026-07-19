@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { DashboardApp } from './DashboardApp'
 import { getBootstrap } from '../navigation/api/bootstrapApi'
@@ -173,28 +173,24 @@ describe('DashboardApp', () => {
     fireEvent.click(screen.getByRole('link', { name: '분석' }))
     expect(await screen.findByRole('heading', { name: '분석' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: '보고서' })).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: '주행 영상' })).toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: '주행 영상' })).not.toBeInTheDocument()
     expect(screen.getByRole('tab', { name: '운전 행동' })).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('link', { name: '내비게이션 설정' }))
     expect(await screen.findByRole('heading', { name: '내비게이션 설정' })).toBeInTheDocument()
   })
 
-  test('updates driving video event detail when an event marker is selected', () => {
+  test('opens behavior analysis when a report event is selected', () => {
     localStorage.setItem('roadie-dashboard-session', 'active')
     window.history.replaceState({}, '', '/dashboard/analysis')
     render(<DashboardApp />)
 
-    activateTab('주행 영상')
     const drowsyEventButtons = screen.getAllByRole('button', { name: /졸음 징후 감지/ })
-    fireEvent.click(drowsyEventButtons[drowsyEventButtons.length - 1])
+    fireEvent.click(drowsyEventButtons[0])
 
-    expect(screen.getByTestId('driver-video-panel')).toHaveClass('driver-video-player-surface')
-    expect(screen.queryByLabelText('운전자 영상 파일 선택')).not.toBeInTheDocument()
-    expect(screen.queryByText('영상 선택')).not.toBeInTheDocument()
-    const detailPanel = screen.getByTestId('dashboard-video-event-detail')
-    expect(within(detailPanel).getByText('졸음 징후 감지')).toBeInTheDocument()
-    expect(within(detailPanel).getByText('위험도 3')).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: '운전 행동' })).toHaveAttribute('data-state', 'active')
+    expect(screen.getByTestId('dashboard-behavior-focus')).toHaveTextContent('졸음')
+    expect(screen.queryByTestId('driver-video-panel')).not.toBeInTheDocument()
   })
 
   test('filters behavior analytics by selected behavior type', () => {
@@ -310,10 +306,12 @@ describe('DashboardApp', () => {
     window.history.replaceState({}, '', '/dashboard/analysis')
     render(<DashboardApp />)
 
-    activateTab('주행 영상')
+    activateTab('운전 행동')
 
     expect(await screen.findByRole('heading', { name: '분석' })).toBeInTheDocument()
-    expect(screen.getByTestId('driver-video-panel')).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: '운전 행동' })).toHaveAttribute('data-state', 'active')
+    expect(screen.getByTestId('dashboard-behavior-focus')).toBeInTheDocument()
+    expect(screen.queryByTestId('driver-video-panel')).not.toBeInTheDocument()
   })
 
   test('recalculates overview metrics when the global period changes', async () => {

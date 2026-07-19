@@ -35,7 +35,6 @@ import {
   SlidersHorizontal,
   TrendUp,
   UserCircle,
-  VideoCamera,
   Warning,
   X,
 } from '@phosphor-icons/react'
@@ -52,7 +51,6 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { Slider } from '@/components/ui/slider'
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { DriverVideoPanel } from '@/features/navigation/components/NavigationShell'
 import { cn } from '@/lib/utils'
 import { getBootstrap, type BootstrapAccount } from '../navigation/api/bootstrapApi'
 import {
@@ -107,12 +105,11 @@ type Trip = {
   distanceKm: number
   score: number
   events: number
-  hasVideo: boolean
   averageSpeedKph: number
   routeSummary: string
 }
 
-type VideoEvent = {
+type BehaviorEvent = {
   id: string
   tripId: string
   label: string
@@ -135,11 +132,10 @@ type PreferenceState = {
 }
 
 type DateRangePreset = 'today' | 'yesterday' | '7d' | '30d' | 'custom'
-type AnalysisTab = 'report' | 'video' | 'behavior'
+type AnalysisTab = 'report' | 'behavior'
 type ReportType = 'daily' | 'weekly' | 'monthly' | 'custom'
 type SortMode = 'latest' | 'score-low' | 'events-high' | 'distance-high'
 type CorrectionFilter = 'all' | 'corrected' | 'uncorrected'
-type VideoFilter = 'all' | 'uncorrected' | 'risk-high' | BehaviorType
 type ToastTone = 'success' | 'info' | 'warning' | 'error'
 
 type DateRangeState = {
@@ -201,7 +197,7 @@ type ToastMessage = {
 type DashboardMockData = {
   safetyTrend: Array<{ day: string; score: number }>
   trips: Trip[]
-  videoEvents: VideoEvent[]
+  behaviorEvents: BehaviorEvent[]
 }
 
 const dashboardRoutes: Array<{
@@ -231,12 +227,12 @@ const behaviorMetrics: BehaviorMetric[] = [
 ]
 
 const BASE_DASHBOARD_TRIPS: Trip[] = [
-  { id: 'trip-01', destination: '오씨칼국수 본점', origin: '세종대학교', date: '2026.07.06 08:12', startedAt: '2026-07-06T08:12:00', duration: '2시간 18분', distance: '166.8km', distanceKm: 166.8, score: 82, events: 3, hasVideo: true, averageSpeedKph: 72, routeSummary: '세종대학교 -> 오씨칼국수 본점 · 경부고속도로/대전IC' },
-  { id: 'trip-02', destination: '오씨칼국수 본점', origin: '세종대학교', date: '2026.07.06 17:42', startedAt: '2026-07-06T17:42:00', duration: '2시간 18분', distance: '166.8km', distanceKm: 166.8, score: 78, events: 3, hasVideo: true, averageSpeedKph: 72, routeSummary: '세종대학교 -> 오씨칼국수 본점 · 휴대폰 사용 감지 데모' },
-  { id: 'trip-03', destination: '오씨칼국수 본점', origin: '세종대학교', date: '2026.07.06 19:10', startedAt: '2026-07-06T19:10:00', duration: '2시간 18분', distance: '166.8km', distanceKm: 166.8, score: 85, events: 3, hasVideo: true, averageSpeedKph: 72, routeSummary: '세종대학교 -> 오씨칼국수 본점 · 기기조작 감지 데모' },
+  { id: 'trip-01', destination: '오씨칼국수 본점', origin: '세종대학교', date: '2026.07.06 08:12', startedAt: '2026-07-06T08:12:00', duration: '2시간 18분', distance: '166.8km', distanceKm: 166.8, score: 82, events: 3, averageSpeedKph: 72, routeSummary: '세종대학교 -> 오씨칼국수 본점 · 경부고속도로/대전IC' },
+  { id: 'trip-02', destination: '오씨칼국수 본점', origin: '세종대학교', date: '2026.07.06 17:42', startedAt: '2026-07-06T17:42:00', duration: '2시간 18분', distance: '166.8km', distanceKm: 166.8, score: 78, events: 3, averageSpeedKph: 72, routeSummary: '세종대학교 -> 오씨칼국수 본점 · 휴대폰 사용 감지 데모' },
+  { id: 'trip-03', destination: '오씨칼국수 본점', origin: '세종대학교', date: '2026.07.06 19:10', startedAt: '2026-07-06T19:10:00', duration: '2시간 18분', distance: '166.8km', distanceKm: 166.8, score: 85, events: 3, averageSpeedKph: 72, routeSummary: '세종대학교 -> 오씨칼국수 본점 · 기기조작 감지 데모' },
 ]
 
-const BASE_DASHBOARD_VIDEO_EVENTS: VideoEvent[] = [
+const BASE_DASHBOARD_BEHAVIOR_EVENTS: BehaviorEvent[] = [
   { id: 'event-01', tripId: 'trip-01', label: '졸음 징후 감지', time: '00:00:12', seconds: 12, type: 'DROWSINESS', riskLevel: 3, confidence: 87, corrected: true, durationSeconds: 10, speedKph: 34, road: '경부고속도로' },
   { id: 'event-02', tripId: 'trip-01', label: '반복 졸음 징후', time: '00:00:31', seconds: 31, type: 'DROWSINESS', riskLevel: 5, confidence: 91, corrected: true, durationSeconds: 14, speedKph: 32, road: '대전IC' },
   { id: 'event-03', tripId: 'trip-01', label: '집중 운전 모드', time: '00:00:58', seconds: 58, type: 'GAZE_AWAY', riskLevel: 1, confidence: 82, corrected: true, durationSeconds: 6, speedKph: 30, road: '옛신탄진로' },
@@ -267,7 +263,6 @@ function createProfileTrip(overrides: Partial<Trip> & Pick<Trip, 'id' | 'date' |
     distanceKm: 166.8,
     score: 82,
     events: 3,
-    hasVideo: true,
     averageSpeedKph: 72,
     routeSummary: '세종대학교 -> 오씨칼국수 본점 · 경부고속도로/대전IC',
     ...overrides,
@@ -305,8 +300,8 @@ function createDashboardDataForProfile(profile?: Profile, settings?: ProfileSett
         { day: '토', score: 83 },
         { day: '일', score: 77 },
       ],
-      videoEvents: [
-        ...BASE_DASHBOARD_VIDEO_EVENTS.map((event) => ({
+      behaviorEvents: [
+        ...BASE_DASHBOARD_BEHAVIOR_EVENTS.map((event) => ({
           ...event,
           confidence: Math.min(99, event.confidence + 3),
           riskLevel: event.riskLevel >= 3 ? Math.min(5, event.riskLevel + 1) : event.riskLevel,
@@ -334,7 +329,7 @@ function createDashboardDataForProfile(profile?: Profile, settings?: ProfileSett
         { day: '토', score: 91 },
         { day: '일', score: 88 },
       ],
-      videoEvents: BASE_DASHBOARD_VIDEO_EVENTS.filter((event) => !['event-03', 'event-06', 'event-09'].includes(event.id)).map((event) => ({
+      behaviorEvents: BASE_DASHBOARD_BEHAVIOR_EVENTS.filter((event) => !['event-03', 'event-06', 'event-09'].includes(event.id)).map((event) => ({
         ...event,
         confidence: Math.max(78, event.confidence - 2),
         corrected: true,
@@ -346,7 +341,7 @@ function createDashboardDataForProfile(profile?: Profile, settings?: ProfileSett
   return {
     trips: BASE_DASHBOARD_TRIPS,
     safetyTrend: BASE_DASHBOARD_SAFETY_TREND,
-    videoEvents: BASE_DASHBOARD_VIDEO_EVENTS,
+    behaviorEvents: BASE_DASHBOARD_BEHAVIOR_EVENTS,
   }
 }
 
@@ -364,7 +359,7 @@ const DEFAULT_DASHBOARD_STATE: DashboardState = {
   selectedAnalysisDate: MOCK_TODAY,
   analysisTab: 'report',
   selectedTripId: BASE_DASHBOARD_TRIPS[0].id,
-  selectedEventId: BASE_DASHBOARD_VIDEO_EVENTS[0].id,
+  selectedEventId: BASE_DASHBOARD_BEHAVIOR_EVENTS[0].id,
   selectedBehaviorType: 'DROWSINESS',
 }
 
@@ -401,7 +396,7 @@ const DEFAULT_FAVORITE_PLACES: FavoritePlace[] = [
 ]
 
 const DEFAULT_NOTIFICATIONS: NotificationSettings = {
-  enabled: { weekly: true, risk: true, trip: false, video: true, score: true },
+  enabled: { weekly: true, risk: true, trip: false, score: true },
   channels: { app: true, email: true, push: true, sms: false },
   frequency: 'weekly',
   quietStart: '22:00',
@@ -459,16 +454,16 @@ function sortTrips(items: Trip[], mode: SortMode) {
   })
 }
 
-function getEventsForTrips(filteredTrips: Trip[], videoEvents: VideoEvent[]) {
+function getEventsForTrips(filteredTrips: Trip[], behaviorEvents: BehaviorEvent[]) {
   const ids = new Set(filteredTrips.map((trip) => trip.id))
-  return videoEvents.filter((event) => ids.has(event.tripId))
+  return behaviorEvents.filter((event) => ids.has(event.tripId))
 }
 
-function getTripEvents(tripId: string, videoEvents: VideoEvent[]) {
-  return videoEvents.filter((event) => event.tripId === tripId)
+function getTripEvents(tripId: string, behaviorEvents: BehaviorEvent[]) {
+  return behaviorEvents.filter((event) => event.tripId === tripId)
 }
 
-function getSummary(filteredTrips: Trip[], events: VideoEvent[]) {
+function getSummary(filteredTrips: Trip[], events: BehaviorEvent[]) {
   const tripCount = filteredTrips.length
   const totalDistance = filteredTrips.reduce((sum, trip) => sum + trip.distanceKm, 0)
   const averageScore = tripCount ? Math.round(filteredTrips.reduce((sum, trip) => sum + trip.score, 0) / tripCount) : 0
@@ -477,7 +472,7 @@ function getSummary(filteredTrips: Trip[], events: VideoEvent[]) {
   return { averageScore, correctionRate, eventCount: events.length, totalDistance, tripCount }
 }
 
-function getBehaviorMetrics(events: VideoEvent[]) {
+function getBehaviorMetrics(events: BehaviorEvent[]) {
   return behaviorMetrics.map((metric) => {
     const items = events.filter((event) => event.type === metric.type)
     const corrected = items.filter((event) => event.corrected).length
@@ -491,7 +486,7 @@ function getBehaviorMetrics(events: VideoEvent[]) {
   })
 }
 
-function getHourlyData(events: VideoEvent[], trips: Trip[]) {
+function getHourlyData(events: BehaviorEvent[], trips: Trip[]) {
   const buckets = ['06', '09', '12', '15', '18', '21', '24'].map((hour) => ({ hour, count: 0 }))
   events.forEach((event) => {
     const trip = trips.find((item) => item.id === event.tripId)
@@ -600,21 +595,21 @@ export function DashboardApp() {
     [dashboardData.trips, dashboardState.dateRange],
   )
   const filteredEvents = useMemo(
-    () => getEventsForTrips(filteredTrips, dashboardData.videoEvents),
-    [dashboardData.videoEvents, filteredTrips],
+    () => getEventsForTrips(filteredTrips, dashboardData.behaviorEvents),
+    [dashboardData.behaviorEvents, filteredTrips],
   )
   const analysisTrips = useMemo(
     () => sortTrips(dashboardData.trips.filter((trip) => getTripDate(trip) === dashboardState.selectedAnalysisDate), 'latest'),
     [dashboardData.trips, dashboardState.selectedAnalysisDate],
   )
   const analysisEvents = useMemo(
-    () => getEventsForTrips(analysisTrips, dashboardData.videoEvents),
-    [analysisTrips, dashboardData.videoEvents],
+    () => getEventsForTrips(analysisTrips, dashboardData.behaviorEvents),
+    [analysisTrips, dashboardData.behaviorEvents],
   )
   const summary = useMemo(() => getSummary(filteredTrips, filteredEvents), [filteredTrips, filteredEvents])
   const behaviorMetricsForRange = useMemo(() => getBehaviorMetrics(filteredEvents), [filteredEvents])
   const selectedTrip = analysisTrips.find((trip) => trip.id === dashboardState.selectedTripId) ?? analysisTrips[0]
-  const selectedTripEvents = selectedTrip ? getTripEvents(selectedTrip.id, dashboardData.videoEvents) : []
+  const selectedTripEvents = selectedTrip ? getTripEvents(selectedTrip.id, dashboardData.behaviorEvents) : []
   const selectedEvent = selectedTripEvents.find((event) => event.id === dashboardState.selectedEventId) ?? selectedTripEvents[0] ?? analysisEvents[0]
 
   const notify = (message: string, tone: ToastTone = 'success') => {
@@ -647,14 +642,14 @@ export function DashboardApp() {
     const hasSelectedTrip = analysisTrips.some((trip) => trip.id === dashboardState.selectedTripId)
     if (!hasSelectedTrip) {
       const nextTrip = analysisTrips[0]
-      const nextEvent = getTripEvents(nextTrip.id, dashboardData.videoEvents)[0]
+      const nextEvent = getTripEvents(nextTrip.id, dashboardData.behaviorEvents)[0]
       setDashboardState((current) => ({
         ...current,
         selectedTripId: nextTrip.id,
         selectedEventId: nextEvent?.id ?? current.selectedEventId,
       }))
     }
-  }, [analysisTrips, dashboardData.videoEvents, dashboardState.selectedTripId])
+  }, [analysisTrips, dashboardData.behaviorEvents, dashboardState.selectedTripId])
 
   useEffect(() => {
     if (!authenticated) {
@@ -1146,13 +1141,13 @@ function DashboardMobileNav({ activePath, onNavigate }: { activePath: DashboardP
 }
 
 type DashboardPageProps = {
-  analysisEvents: VideoEvent[]
+  analysisEvents: BehaviorEvent[]
   analysisTrips: Trip[]
   behaviorMetrics: BehaviorMetric[]
   dashboardData: DashboardMockData
   dashboardState: DashboardState
   favoritePlaces: FavoritePlace[]
-  filteredEvents: VideoEvent[]
+  filteredEvents: BehaviorEvent[]
   filteredTrips: Trip[]
   navigate: (path: DashboardPath) => void
   notificationSettings: NotificationSettings
@@ -1161,7 +1156,7 @@ type DashboardPageProps = {
   path: DashboardPath
   profileSettings: ProfileSettings
   selectedDashboardProfile?: Profile
-  selectedEvent?: VideoEvent
+  selectedEvent?: BehaviorEvent
   selectedTrip?: Trip
   setDashboardState: Dispatch<SetStateAction<DashboardState>>
   setFavoritePlaces: Dispatch<SetStateAction<FavoritePlace[]>>
@@ -1240,7 +1235,7 @@ function OverviewPage({ behaviorMetrics, dashboardData, dashboardState, filtered
     <section>
       <PageHeader
         title="운전 리포트 개요"
-        description="선택한 기간의 주행, 행동, 주행 영상과 교정 상태를 확인합니다."
+        description="선택한 기간의 주행, 행동과 교정 상태를 확인합니다."
         action={<DateRangeControl dateRange={dashboardState.dateRange} onCustomDateRangeChange={updateCustomDateRange} onDateRangeChange={updateDateRange} />}
       />
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -1277,7 +1272,7 @@ function OverviewPage({ behaviorMetrics, dashboardData, dashboardState, filtered
               const trip = dashboardData.trips.find((item) => item.id === event.tripId)
               setDashboardState((current) => ({
                 ...current,
-                analysisTab: 'video',
+                analysisTab: 'behavior',
                 selectedAnalysisDate: trip ? getTripDate(trip) : current.selectedAnalysisDate,
                 selectedTripId: event.tripId,
                 selectedEventId: event.id,
@@ -1310,7 +1305,7 @@ function RecentTrips({ dashboardData, filteredTrips, navigate, setDashboardState
                 analysisTab: 'report',
                 selectedAnalysisDate: getTripDate(trip),
                 selectedTripId: trip.id,
-                selectedEventId: getTripEvents(trip.id, dashboardData.videoEvents)[0]?.id ?? current.selectedEventId,
+                selectedEventId: getTripEvents(trip.id, dashboardData.behaviorEvents)[0]?.id ?? current.selectedEventId,
               }))
               navigate('/dashboard/analysis')
             }}
@@ -1384,7 +1379,7 @@ function AnalysisPage(props: DashboardPageProps) {
   const selectDate = (value: string) => {
     const nextTrips = sortTrips(dashboardData.trips.filter((trip) => getTripDate(trip) === value), 'latest')
     const nextTrip = nextTrips[0]
-    const nextEvent = nextTrip ? getTripEvents(nextTrip.id, dashboardData.videoEvents)[0] : undefined
+    const nextEvent = nextTrip ? getTripEvents(nextTrip.id, dashboardData.behaviorEvents)[0] : undefined
     setDashboardState((current) => ({
       ...current,
       selectedAnalysisDate: value,
@@ -1394,7 +1389,7 @@ function AnalysisPage(props: DashboardPageProps) {
   }
 
   const selectTrip = (tripId: string) => {
-    const nextEvent = getTripEvents(tripId, dashboardData.videoEvents)[0]
+    const nextEvent = getTripEvents(tripId, dashboardData.behaviorEvents)[0]
     setDashboardState((current) => ({
       ...current,
       selectedTripId: tripId,
@@ -1404,7 +1399,7 @@ function AnalysisPage(props: DashboardPageProps) {
 
   return (
     <section>
-      <PageHeader title="분석" description="날짜와 주행 기록을 선택한 뒤 보고서, 영상, 행동을 한 화면에서 전환합니다." />
+      <PageHeader title="분석" description="날짜와 주행 기록을 선택한 뒤 보고서와 행동 분석을 전환합니다." />
       <Card className="mb-4 gap-0 rounded-2xl py-4 shadow-theme-xs">
         <CardContent className="px-4">
         <div className="grid gap-3 lg:grid-cols-[14rem_minmax(0,1fr)]">
@@ -1438,14 +1433,12 @@ function AnalysisPage(props: DashboardPageProps) {
       <Tabs className="mb-4" value={dashboardState.analysisTab} onValueChange={(value) => setDashboardState((current) => ({ ...current, analysisTab: value as AnalysisTab }))}>
         <TabsList variant="line">
           <TabsTrigger value="report" onClick={() => setDashboardState((current) => ({ ...current, analysisTab: 'report' }))}>보고서</TabsTrigger>
-          <TabsTrigger value="video" onClick={() => setDashboardState((current) => ({ ...current, analysisTab: 'video' }))}>주행 영상</TabsTrigger>
           <TabsTrigger value="behavior" onClick={() => setDashboardState((current) => ({ ...current, analysisTab: 'behavior' }))}>운전 행동</TabsTrigger>
         </TabsList>
       </Tabs>
       {analysisTrips.length === 0 ? null : (
         <>
           {dashboardState.analysisTab === 'report' ? <ReportsPage {...analysisProps} embedded /> : null}
-          {dashboardState.analysisTab === 'video' ? <VideosPage {...analysisProps} embedded /> : null}
           {dashboardState.analysisTab === 'behavior' ? <BehaviorPage {...analysisProps} embedded /> : null}
         </>
       )}
@@ -1461,7 +1454,7 @@ function ReportsPage({ dashboardData, embedded = false, filteredEvents, filtered
   const [sortMode, setSortMode] = useState<SortMode>('latest')
   const sessionList = sortTrips(filteredTrips, sortMode)
   const activeTrip = selectedTrip ?? sessionList[0]
-  const activeEvents = activeTrip ? getTripEvents(activeTrip.id, dashboardData.videoEvents) : []
+  const activeEvents = activeTrip ? getTripEvents(activeTrip.id, dashboardData.behaviorEvents) : []
   const exportReport = (type: 'PDF' | 'CSV') => notify(`${type} 다운로드가 준비되었습니다.`)
   return (
     <section>
@@ -1507,7 +1500,7 @@ function ReportsPage({ dashboardData, embedded = false, filteredEvents, filtered
               <ShadcnButton
                 className={cn('h-auto w-full rounded-lg p-3 text-left', activeTrip?.id === trip.id ? 'bg-brand-50 ring-1 ring-brand-100 hover:bg-brand-50' : 'bg-muted hover:bg-muted/80')}
                 key={trip.id}
-                onClick={() => setDashboardState((current) => ({ ...current, selectedTripId: trip.id, selectedEventId: getTripEvents(trip.id, dashboardData.videoEvents)[0]?.id ?? current.selectedEventId }))}
+                onClick={() => setDashboardState((current) => ({ ...current, selectedTripId: trip.id, selectedEventId: getTripEvents(trip.id, dashboardData.behaviorEvents)[0]?.id ?? current.selectedEventId }))}
                 type="button"
                 variant="ghost"
               >
@@ -1530,140 +1523,12 @@ function ReportsPage({ dashboardData, embedded = false, filteredEvents, filtered
           <EventList
             events={activeEvents}
             onEventClick={(event) => {
-              setDashboardState((current) => ({ ...current, analysisTab: 'video', selectedTripId: event.tripId, selectedEventId: event.id, selectedBehaviorType: event.type }))
+              setDashboardState((current) => ({ ...current, analysisTab: 'behavior', selectedTripId: event.tripId, selectedEventId: event.id, selectedBehaviorType: event.type }))
               navigate('/dashboard/analysis')
             }}
           />
         </Panel>
       </div>
-    </section>
-  )
-}
-
-function VideosPage({ dashboardData, dashboardState, embedded = false, filteredTrips, selectedEvent, selectedTrip, setDashboardState }: DashboardPageProps & { embedded?: boolean }) {
-  const [videoFilter, setVideoFilter] = useState<VideoFilter>('all')
-  const [currentTime, setCurrentTime] = useState(selectedEvent?.seconds ?? 0)
-  const videoTrips = filteredTrips.filter((trip) => trip.hasVideo)
-  const activeTrip = embedded ? selectedTrip : selectedTrip?.hasVideo ? selectedTrip : videoTrips[0]
-  const tripEvents = activeTrip ? getTripEvents(activeTrip.id, dashboardData.videoEvents) : []
-  const videoFilterOptions: Array<[VideoFilter, string]> = [
-    ['all', '전체'],
-    ['uncorrected', '미교정'],
-    ['risk-high', '고위험'],
-    ...behaviorMetrics.map((metric) => [metric.type, metric.label] as [VideoFilter, string]),
-  ]
-  const visibleEvents = tripEvents.filter((event) => {
-    if (videoFilter === 'uncorrected') return !event.corrected
-    if (videoFilter === 'risk-high') return event.riskLevel >= 4
-    if (videoFilter === 'all') return true
-    return event.type === videoFilter
-  })
-
-  useEffect(() => {
-    if (selectedEvent) setCurrentTime(selectedEvent.seconds)
-  }, [selectedEvent])
-
-  return (
-    <section>
-      {!embedded ? <PageHeader title="주행 영상" /> : null}
-      <Toolbar>
-        {!embedded ? (
-          <SelectControl
-            label="주행 선택"
-            value={activeTrip?.id ?? ''}
-            onChange={(value) => {
-              const nextEvent = getTripEvents(value, dashboardData.videoEvents)[0]
-              setDashboardState((current) => ({ ...current, selectedTripId: value, selectedEventId: nextEvent?.id ?? current.selectedEventId }))
-            }}
-            options={videoTrips.map((trip) => [trip.id, `${trip.origin} -> ${trip.destination}`])}
-          />
-        ) : null}
-        <div aria-label="이벤트 필터" className="flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1" role="group">
-          {videoFilterOptions.map(([value, label]) => (
-            <ShadcnButton
-              className={cn(
-                'h-10 shrink-0 rounded-lg px-4 shadow-theme-xs',
-                videoFilter === value && 'bg-brand-500 text-white hover:bg-brand-500'
-              )}
-              key={value}
-              onClick={() => setVideoFilter(value)}
-              type="button"
-              variant={videoFilter === value ? 'default' : 'outline'}
-            >
-              {label}
-            </ShadcnButton>
-          ))}
-        </div>
-      </Toolbar>
-      {!activeTrip?.hasVideo ? <Panel title="영상 없음" icon={<VideoCamera className="size-5" weight="bold" />}><EmptyState text="선택한 주행에는 영상이 없습니다." /></Panel> : (
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_24rem]">
-        <Panel title="주행 영상" icon={<VideoCamera className="size-5" weight="bold" />}>
-          <div className="relative aspect-video overflow-hidden rounded-lg bg-black">
-            <DriverVideoPanel
-              emptyDescription="선택한 주행의 이벤트 타임라인을 확인합니다."
-              emptyTitle="주행 영상"
-              error={false}
-              fileName={`${activeTrip.origin} → ${activeTrip.destination}`}
-              motionTiming={{ duration: 0.16 }}
-              onError={() => undefined}
-            />
-            <div className="pointer-events-none absolute bottom-5 left-5 right-5">
-              <div className="mb-3 flex items-center justify-between text-xs font-medium text-white/74">
-                <span>{formatSeconds(currentTime)}</span>
-                <span>42:18</span>
-              </div>
-              <div className="relative h-2 rounded-full bg-white/16">
-                <div className="absolute inset-y-0 left-0 rounded-full bg-white" style={{ width: `${Math.min(100, (currentTime / 2538) * 100)}%` }} />
-                {tripEvents.map((event) => (
-                  <ShadcnButton
-                    aria-label={`${event.label} 이벤트 보기`}
-                    className={cn('pointer-events-auto absolute top-1/2 size-5 -translate-y-1/2 rounded-full border-2 border-white p-0 transition', dashboardState.selectedEventId === event.id ? 'scale-125 bg-red-500 hover:bg-red-500' : 'bg-orange-500 hover:bg-orange-500')}
-                    key={event.id}
-                    onClick={() => {
-                      setCurrentTime(event.seconds)
-                      setDashboardState((current) => ({ ...current, selectedEventId: event.id, selectedBehaviorType: event.type }))
-                    }}
-                    style={{ left: `${Math.min(96, Math.max(4, (event.seconds / 2538) * 100))}%` }}
-                    type="button"
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
-          <div className="mt-4 grid gap-2 sm:grid-cols-3">
-            {visibleEvents.map((event) => (
-              <ShadcnButton
-                className={cn('h-auto rounded-lg p-3 text-left', dashboardState.selectedEventId === event.id ? 'bg-brand-50 text-brand-500 hover:bg-brand-50' : 'bg-muted text-muted-foreground hover:bg-muted/80')}
-                key={event.id}
-                onClick={() => {
-                  setCurrentTime(event.seconds)
-                  setDashboardState((current) => ({ ...current, selectedEventId: event.id, selectedBehaviorType: event.type }))
-                }}
-                type="button"
-                variant="ghost"
-              >
-                <div className="text-xs font-semibold">{event.time}</div>
-                <div className="mt-1 text-sm font-semibold">{event.label}</div>
-              </ShadcnButton>
-            ))}
-            {visibleEvents.length === 0 ? <EmptyState text="필터에 맞는 이벤트가 없습니다." /> : null}
-          </div>
-        </Panel>
-        <Panel title="선택 이벤트" icon={<Eye className="size-5" weight="bold" />}>
-          {selectedEvent ? <div data-testid="dashboard-video-event-detail" className="rounded-lg bg-gray-50 p-4">
-            <div className="text-2xl font-semibold text-gray-900">{selectedEvent.label}</div>
-            <div className="mt-2 text-sm font-medium text-gray-500">{`${selectedEvent.time} · 위험도 ${selectedEvent.riskLevel}`}</div>
-            <Badge className="mt-3 rounded-lg px-3 py-1.5" variant="destructive">{`위험도 ${selectedEvent.riskLevel}`}</Badge>
-            <div className="mt-4 grid gap-2">
-              <StatusRow label="신뢰도" value={`${selectedEvent.confidence}%`} />
-              <StatusRow label="교정 여부" value={selectedEvent.corrected ? '교정됨' : '미교정'} />
-              <StatusRow label="속도" value={`${selectedEvent.speedKph}km/h`} />
-              <StatusRow label="도로" value={selectedEvent.road} />
-            </div>
-          </div> : <EmptyState text="선택된 이벤트가 없습니다." />}
-        </Panel>
-      </div>
-      )}
     </section>
   )
 }
@@ -1741,7 +1606,7 @@ function BehaviorPage({ behaviorMetrics, dashboardData, dashboardState, embedded
           <EventList
             events={selectedEvents}
             onEventClick={(event) => {
-              setDashboardState((current) => ({ ...current, analysisTab: 'video', selectedTripId: event.tripId, selectedEventId: event.id }))
+              setDashboardState((current) => ({ ...current, analysisTab: 'behavior', selectedTripId: event.tripId, selectedEventId: event.id, selectedBehaviorType: event.type }))
               navigate('/dashboard/analysis')
             }}
           />
@@ -1924,7 +1789,6 @@ function NotificationsPage({ notificationSettings, notify, setNotificationSettin
             ['weekly', '주간 리포트'],
             ['risk', '고위험 행동'],
             ['trip', '주행 완료'],
-            ['video', '영상 준비'],
             ['score', '안전 점수 하락'],
           ].map(([id, title]) => (
             <ToggleRow
@@ -1963,12 +1827,6 @@ function NotificationsPage({ notificationSettings, notify, setNotificationSettin
       </div>
     </section>
   )
-}
-
-function formatSeconds(seconds: number) {
-  const minutes = Math.floor(seconds / 60).toString().padStart(2, '0')
-  const rest = Math.floor(seconds % 60).toString().padStart(2, '0')
-  return `${minutes}:${rest}`
 }
 
 function Toolbar({ children }: { children: ReactNode }) {
@@ -2146,7 +2004,7 @@ function TripDetail({ trip }: { trip: Trip }) {
   )
 }
 
-function EventList({ emptyText = '이벤트가 없습니다.', events, onEventClick }: { emptyText?: string; events: VideoEvent[]; onEventClick: (event: VideoEvent) => void }) {
+function EventList({ emptyText = '이벤트가 없습니다.', events, onEventClick }: { emptyText?: string; events: BehaviorEvent[]; onEventClick: (event: BehaviorEvent) => void }) {
   if (events.length === 0) return <EmptyState text={emptyText} />
   return (
     <div className="space-y-2">
@@ -2215,15 +2073,6 @@ function DashboardActionButton({ children, disabled, onClick, variant = 'primary
     >
       {children}
     </ShadcnButton>
-  )
-}
-
-function StatusRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between rounded-lg bg-white px-3 py-2 text-sm">
-      <span className="font-medium text-gray-500">{label}</span>
-      <span className="font-medium text-gray-800">{value}</span>
-    </div>
   )
 }
 
