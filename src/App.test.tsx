@@ -117,9 +117,11 @@ describe('App', () => {
 
       const activeNavigationLink = screen.getByRole('link', { name: '네비게이션' })
       const activeNavigationIcon = screen.getByTestId('sidebar-link-icon-sidebar-tooltip-navigation')
+      const expandButton = screen.getByRole('button', { name: '사이드바 펼치기' })
 
       expect(screen.getByTestId('global-sidebar')).toHaveAttribute('data-collapsed', 'true')
-      expect(screen.getByRole('button', { name: '사이드바 펼치기' })).toBeInTheDocument()
+      expect(expandButton).toBeInTheDocument()
+      expect(expandButton).toHaveClass('self-center')
       expect(activeNavigationLink).toHaveAttribute('data-active', 'true')
       expect(activeNavigationLink).not.toHaveClass('bg-white')
       expect(activeNavigationIcon).toHaveClass('bg-[#fbfcff]')

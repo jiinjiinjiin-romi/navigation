@@ -360,7 +360,7 @@ function AppShell({
         {collapsed ? (
           <button
             aria-label="사이드바 펼치기"
-            className="group relative mt-5 grid size-11 place-items-center rounded-xl bg-white text-[#667085] shadow-[0_10px_22px_rgb(45_72_112/0.08)] transition hover:bg-[#f2f7ff] hover:text-[#111827] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
+            className="group relative mt-5 grid size-11 self-center place-items-center rounded-xl bg-white text-[#667085] shadow-[0_10px_22px_rgb(45_72_112/0.08)] transition hover:bg-[#f2f7ff] hover:text-[#111827] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
             data-tooltip-id="sidebar-tooltip-expand"
             onBlur={() => hideTooltip('sidebar-tooltip-expand')}
             onClick={onToggleSidebar}
