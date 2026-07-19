@@ -1046,6 +1046,8 @@ describe('NavigationShell', () => {
     const introVideo = screen.getByTestId('navigation-intro-video') as HTMLVideoElement
 
     expect(introLayer).toHaveClass('pointer-events-auto')
+    expect(introLayer).toHaveClass('inset-0')
+    expect(introLayer).not.toHaveClass('right-4')
     expect(introLayer).toHaveClass('opacity-100')
     expect(introLayer).toHaveClass('duration-1000')
     expect(screen.getByRole('button', { name: '인트로 영상 건너뛰기' })).toHaveTextContent('Skip')
@@ -1178,6 +1180,7 @@ describe('NavigationShell', () => {
     const driverVideoPanel = screen.getByTestId('driver-video-panel')
     expect(driverVideoPanel).toBeInTheDocument()
     expect(driverVideoPanel).toHaveClass('min-w-[900px]')
+    expect(screen.getByTestId('navigation-scroll-end-spacer')).toHaveClass('row-span-full')
     expect(within(driverVideoPanel).getAllByText('대표 시나리오 영상 대기')).toHaveLength(2)
     expect(
       within(driverVideoPanel).getAllByText('대표 시나리오 영상 대기')[0].closest('.roadie-navigation-density-surface'),
@@ -3372,12 +3375,14 @@ describe('NavigationShell', () => {
     expect(stage).toHaveClass('grid')
     expect(stage).toHaveClass('roadie-navigation-density-scope')
     expect(stage).toHaveClass('roadie-navigation-word-boundary')
-    expect(stage).toHaveClass('gap-[var(--roadie-nav-stage-gap)]')
+    expect(stage).toHaveClass('gap-y-[var(--roadie-nav-stage-gap)]')
     expect(stage).toHaveClass('p-[var(--roadie-nav-stage-padding)]')
     expect(stage).toHaveClass('min-h-[calc(562.5px+(var(--roadie-nav-stage-padding)*2))]')
     expect(stage).toHaveClass('pl-[var(--roadie-nav-side-offset)]')
-    expect(stage).toHaveClass('grid-cols-[minmax(0,1fr)]')
+    expect(stage).toHaveClass('grid-cols-[minmax(900px,1fr)_var(--roadie-nav-scroll-end-gap)]')
     expect(stage).not.toHaveClass('grid-rows-[minmax(17rem,38vh)_minmax(0,1fr)]')
+    expect(screen.getByTestId('navigation-scroll-end-spacer')).toHaveClass('col-start-2')
+    expect(screen.getByTestId('navigation-scroll-end-spacer')).toHaveClass('w-[var(--roadie-nav-scroll-end-gap)]')
     expect(screen.queryByTestId('driver-video-panel')).not.toBeInTheDocument()
     expect(manualLayout).toHaveClass('flex')
     expect(manualLayout).toHaveClass('flex-col')

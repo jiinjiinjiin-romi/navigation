@@ -28,7 +28,6 @@ import {
   Gauge,
   GearSix,
   HouseLine,
-  List,
   NavigationArrow,
   ShieldCheck,
   SignOut,
@@ -36,7 +35,6 @@ import {
   TrendUp,
   UserCircle,
   Warning,
-  X,
 } from '@phosphor-icons/react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { Badge } from '@/components/ui/badge'
@@ -565,7 +563,6 @@ function formatBehaviorDuration(seconds: number) {
 export function DashboardApp() {
   const [path, setPath] = useState<DashboardPath>(getInitialPath)
   const [authenticated, setAuthenticated] = useState(() => localStorage.getItem(SESSION_KEY) === 'active')
-  const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [dashboardState, setDashboardState] = useState<DashboardState>(DEFAULT_DASHBOARD_STATE)
   const [profileSettings, setProfileSettings] = useState<ProfileSettings>(DEFAULT_PROFILE_SETTINGS)
   const [profileState, setProfileState] = useState<DashboardProfileState>(DEFAULT_PROFILE_STATE)
@@ -577,7 +574,6 @@ export function DashboardApp() {
   const navigate = (nextPath: DashboardPath) => {
     window.history.pushState({}, '', nextPath)
     setPath(nextPath)
-    setMobileNavOpen(false)
   }
 
   const selectedDashboardProfile = profileState.profiles.find((profile) => profile.id === profileState.selectedProfileId) ?? profileState.profiles[0]
@@ -742,11 +738,11 @@ export function DashboardApp() {
 
   return (
     <div
-      className="min-h-dvh bg-transparent font-sans text-gray-900 lg:h-dvh lg:overflow-hidden lg:p-4"
+      className="h-full min-h-0 bg-transparent font-sans text-gray-900 lg:overflow-hidden lg:p-4"
       data-testid="dashboard-app"
     >
       <div
-        className="mx-auto flex min-h-dvh w-full max-w-[88rem] gap-0 bg-white p-0 lg:h-full lg:min-h-0 lg:overflow-hidden lg:rounded-[1.5rem] lg:p-4 lg:shadow-[0_18px_42px_rgb(45_72_112/0.08)] lg:ring-1 lg:ring-[var(--roadie-paper-line)]"
+        className="mx-auto flex h-full min-h-0 w-full max-w-[88rem] gap-0 bg-white p-0 lg:overflow-hidden lg:rounded-[1.5rem] lg:p-4 lg:shadow-[0_18px_42px_rgb(45_72_112/0.08)] lg:ring-1 lg:ring-[var(--roadie-paper-line)]"
         data-testid="dashboard-shell"
       >
         <DashboardSidebar
@@ -757,11 +753,8 @@ export function DashboardApp() {
           profileState={profileState}
           selectedProfile={selectedDashboardProfile}
         />
-        <div className="flex min-h-dvh min-w-0 flex-1 flex-col lg:min-h-0">
-          <ShadcnButton className="fixed left-4 top-4 z-40 rounded-lg shadow-theme-xs lg:hidden" onClick={() => setMobileNavOpen(true)} type="button" aria-label="모바일 메뉴 열기" size="icon" variant="outline">
-            <List className="size-5" weight="bold" />
-          </ShadcnButton>
-          <main className="min-h-0 flex-1 overflow-x-hidden px-4 pb-24 pt-16 sm:px-6 lg:overflow-y-auto lg:px-0 lg:pb-0 lg:pt-0">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <main className="min-h-0 flex-1 overflow-x-hidden px-4 pb-24 pt-6 sm:px-6 lg:overflow-y-auto lg:px-0 lg:pb-0 lg:pt-0">
             <AnimatePresence mode="wait">
               <motion.div
                 key={path}
@@ -802,46 +795,6 @@ export function DashboardApp() {
       </div>
 
       <DashboardMobileNav activePath={path} onNavigate={navigate} />
-
-      <AnimatePresence>
-        {mobileNavOpen ? (
-          <motion.div
-            className="fixed inset-0 z-50 bg-gray-900/30 lg:hidden"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
-            <motion.aside
-              className="absolute inset-y-0 left-0 w-[18rem] border-r border-gray-200 bg-white p-4 shadow-theme-md"
-              initial={{ x: '-100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '-100%' }}
-              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-            >
-              <div className="mb-4 flex items-center justify-between">
-                <DashboardBrand />
-                <ShadcnButton
-                  className="rounded-lg shadow-sm"
-                  onClick={() => setMobileNavOpen(false)}
-                  type="button"
-                  aria-label="모바일 메뉴 닫기"
-                  size="icon"
-                  variant="outline"
-                >
-                  <X className="size-5" weight="bold" />
-                </ShadcnButton>
-              </div>
-              <DashboardProfilePicker
-                className="mb-4"
-                onSelectProfile={handleSelectDashboardProfile}
-                profileState={profileState}
-                selectedProfile={selectedDashboardProfile}
-              />
-              <DashboardNavList activePath={path} onNavigate={navigate} />
-            </motion.aside>
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
       <ToastStack toasts={toasts} />
     </div>
   )
@@ -1116,7 +1069,7 @@ function DashboardNavList({ activePath, onNavigate }: { activePath: DashboardPat
 
 function DashboardMobileNav({ activePath, onNavigate }: { activePath: DashboardPath; onNavigate: (path: DashboardPath) => void }) {
   return (
-    <nav className="fixed inset-x-3 bottom-3 z-40 grid grid-cols-4 rounded-2xl border border-gray-200 bg-white p-1 shadow-theme-md lg:hidden" aria-label="모바일 대시보드 메뉴">
+    <nav className="fixed bottom-3 left-[calc(var(--roadie-dashboard-safe-left,0px)+0.75rem)] right-3 z-40 grid grid-cols-4 rounded-2xl border border-gray-200 bg-white p-1 shadow-theme-md lg:hidden" aria-label="모바일 대시보드 메뉴" data-testid="dashboard-mobile-nav">
       {dashboardRoutes.slice(0, 5).map((route) => {
         const Icon = route.icon
         const active = activePath === route.path

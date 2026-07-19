@@ -2136,9 +2136,9 @@ export function NavigationShell({
       : driverVideoPanelVisible ? 'row-start-2 h-full' : 'aspect-[16/10] w-full max-h-full self-center',
   ].join(' ')
   const navigationStageClassName = [
-    'roadie-navigation-root-stage roadie-navigation-density-scope roadie-navigation-word-boundary relative grid h-screen min-h-[calc(562.5px+(var(--roadie-nav-stage-padding)*2))] gap-[var(--roadie-nav-stage-gap)] p-[var(--roadie-nav-stage-padding)]',
+    'roadie-navigation-root-stage roadie-navigation-density-scope roadie-navigation-word-boundary relative grid h-screen min-h-[calc(562.5px+(var(--roadie-nav-stage-padding)*2))] gap-y-[var(--roadie-nav-stage-gap)] p-[var(--roadie-nav-stage-padding)]',
     rootSideRailActive || manualNavigationActive || demoScenarioState || demoCompleted ? 'pl-[var(--roadie-nav-side-offset)]' : '',
-    'grid-cols-[minmax(0,1fr)]',
+    'grid-cols-[minmax(900px,1fr)_var(--roadie-nav-scroll-end-gap)]',
     driverVideoPanelVisible ? 'grid-rows-[minmax(17rem,38vh)_minmax(0,1fr)]' : 'items-center',
   ].join(' ')
 
@@ -3563,6 +3563,11 @@ export function NavigationShell({
       data-manual-risk-alert-flash-key={manualRiskAlertFlashKey}
       className={navigationStageClassName}
     >
+      <div
+        aria-hidden="true"
+        className="pointer-events-none col-start-2 row-start-1 row-span-full h-full w-[var(--roadie-nav-scroll-end-gap)]"
+        data-testid="navigation-scroll-end-spacer"
+      />
       {manualRiskAlertFlashKey ? (
         <motion.div
           key={manualRiskAlertFlashKey}

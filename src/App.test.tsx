@@ -91,8 +91,8 @@ describe('App', () => {
     expect(screen.getByTestId('app-shell')).toHaveClass('h-screen')
     expect(screen.getByTestId('app-shell')).toHaveClass('overflow-hidden')
     expect(screen.getByTestId('global-sidebar')).toBeInTheDocument()
-    expect(screen.getByTestId('app-content')).toHaveClass('overflow-x-auto')
-    expect(screen.getByTestId('app-content')).toHaveClass('overflow-y-auto')
+    expect(screen.getByTestId('app-content')).toHaveClass('roadie-navigation-scroll-host')
+    expect(screen.getByTestId('app-content')).not.toHaveClass('overflow-y-auto')
     expect(screen.getByTestId('navigation-shell')).toBeInTheDocument()
     expect(screen.getByTestId('navigation-shell')).toHaveAttribute('data-intro-video-enabled', 'false')
   })
@@ -107,7 +107,7 @@ describe('App', () => {
     expect(screen.getByTestId('global-sidebar')).toHaveClass('h-[calc(100vh-2rem)]')
     expect(screen.getByTestId('global-sidebar')).not.toHaveClass('h-screen')
     expect(screen.getByTestId('app-content')).toHaveClass('roadie-navigation-container')
-    expect(screen.getByTestId('app-content')).toHaveClass('ml-[7.75rem]')
+    expect(screen.getByTestId('app-content')).toHaveClass('pl-[7.75rem]')
   })
 
   it('defaults the sidebar to the collapsed state when no preference is saved', () => {
@@ -245,14 +245,18 @@ describe('App', () => {
 
     fireEvent.mouseLeave(screen.getByRole('link', { name: '네비게이션' }))
 
-    expect(screen.getByRole('tooltip', { name: /네비게이션/ })).toHaveClass('react-tooltip__closing')
+    await waitFor(() => {
+      expect(screen.getByRole('tooltip', { name: /네비게이션/ })).toHaveClass('react-tooltip__closing')
+    })
 
     fireEvent.mouseEnter(screen.getByRole('link', { name: '대시보드' }))
 
     expect(await screen.findByTestId('sidebar-tooltip-dashboard-content')).toBeInTheDocument()
     expect(screen.getByTestId('sidebar-tooltip-dashboard-content')).toHaveTextContent('대시보드')
     expect(screen.getByTestId('sidebar-tooltip-dashboard-content')).toHaveTextContent('운전자가 본인 운전 기록, 주행 데이터, 위험 행동 분석을 확인하고, 개인화 설정을 관리합니다.')
-    expect(screen.getByRole('tooltip', { name: /네비게이션/ })).toHaveClass('react-tooltip__closing')
+    await waitFor(() => {
+      expect(screen.getByRole('tooltip', { name: /네비게이션/ })).toHaveClass('react-tooltip__closing')
+    })
 
     fireEvent.transitionEnd(screen.getByRole('tooltip', { name: /네비게이션/ }), { propertyName: 'opacity' })
 
@@ -273,6 +277,7 @@ describe('App', () => {
     expect(screen.getByTestId('app-content')).toHaveClass('h-screen')
     expect(screen.getByTestId('app-content')).toHaveClass('overflow-auto')
     expect(screen.getByTestId('app-content')).toHaveClass('lg:overflow-hidden')
+    expect(screen.getByTestId('app-content')).toHaveClass('[--roadie-dashboard-safe-left:7.75rem]')
     expect(screen.getByTestId('dashboard-page')).toBeInTheDocument()
   })
 
@@ -313,8 +318,8 @@ describe('App', () => {
 
     expect(screen.getByTestId('global-sidebar')).toHaveAttribute('data-collapsed', 'false')
     expect(screen.getByTestId('global-sidebar')).toHaveClass('max-xl:w-20')
-    expect(screen.getByTestId('app-content')).toHaveClass('ml-[18.25rem]')
-    expect(screen.getByTestId('app-content')).toHaveClass('max-xl:ml-[7.75rem]')
+    expect(screen.getByTestId('app-content')).toHaveClass('pl-[18.25rem]')
+    expect(screen.getByTestId('app-content')).toHaveClass('max-xl:pl-[7.75rem]')
     expect(screen.getByRole('img', { name: 'ROADY' })).toHaveAttribute('src', '/text_logo.webp')
     expect(screen.getByRole('link', { name: '네비게이션' })).toHaveAttribute('data-collapsed', 'false')
     expect(screen.getByRole('link', { name: '네비게이션' })).toHaveClass('bg-white/88')

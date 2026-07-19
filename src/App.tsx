@@ -436,11 +436,14 @@ function AppShell({
       ) : null}
       <main
         className={[
-          'roadie-paper-content roadie-navigation-container h-screen min-h-0 min-w-0 transition-[margin-left] duration-200 ease-out',
+          'roadie-paper-content roadie-navigation-container h-screen min-h-0 min-w-0 transition-[padding-left] duration-200 ease-out',
           activeSection === 'dashboard'
             ? 'overflow-auto lg:overflow-hidden'
-            : activeSection === 'model-lab' ? 'overflow-auto' : 'overflow-x-auto overflow-y-auto',
-          collapsed ? 'ml-[7.75rem]' : 'ml-[18.25rem] max-xl:ml-[7.75rem]',
+            : activeSection === 'model-lab' ? 'overflow-auto' : 'roadie-navigation-scroll-host',
+          activeSection === 'dashboard'
+            ? collapsed ? '[--roadie-dashboard-safe-left:7.75rem]' : '[--roadie-dashboard-safe-left:18.25rem] max-xl:[--roadie-dashboard-safe-left:7.75rem]'
+            : '',
+          collapsed ? 'pl-[7.75rem]' : 'pl-[18.25rem] max-xl:pl-[7.75rem]',
         ].join(' ')}
         data-testid="app-content"
       >

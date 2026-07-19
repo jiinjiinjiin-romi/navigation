@@ -341,12 +341,18 @@
     container: roadie-navigation-content / inline-size;
   }
 
+  .roadie-navigation-scroll-host {
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
   .roadie-navigation-density-scope {
     --roadie-nav-ui-scale: 1;
     --roadie-nav-stage-gap: 0.75rem;
     --roadie-nav-stage-padding: 0.75rem;
     --roadie-nav-side-offset: 25rem;
     --roadie-nav-side-rail-width: 24rem;
+    --roadie-nav-scroll-end-gap: 1rem;
     --roadie-nav-scenario-scale: 0.9;
   }
 
@@ -427,6 +433,12 @@
     backdrop-filter: blur(20px);
   }
 
+}
+
+@media (max-height: 36.75rem) {
+  .roadie-navigation-scroll-host {
+    overflow-y: auto;
+  }
 }
 
 @container roadie-navigation-content (max-width: 96rem) {
