@@ -229,14 +229,26 @@ describe('App', () => {
     expect(screen.getByTestId('sidebar-tooltip-navigation-content').querySelector('strong')).toHaveClass('font-bold')
     expect(screen.getByRole('tooltip', { name: /네비게이션/ })).toHaveClass('!px-3')
     expect(screen.getByRole('tooltip', { name: /네비게이션/ })).toHaveClass('!py-2')
+    expect(screen.getByRole('tooltip', { name: /네비게이션/ })).toHaveClass('roadie-sidebar-tooltip')
+    expect(screen.getByRole('tooltip', { name: /네비게이션/ })).not.toHaveClass('!transition-none')
     expect(document.querySelector('.react-tooltip-arrow')).toBeInTheDocument()
+
+    fireEvent.mouseLeave(screen.getByRole('link', { name: '네비게이션' }))
+
+    expect(screen.getByRole('tooltip', { name: /네비게이션/ })).toHaveClass('react-tooltip__closing')
 
     fireEvent.mouseEnter(screen.getByRole('link', { name: '대시보드' }))
 
     expect(await screen.findByTestId('sidebar-tooltip-dashboard-content')).toBeInTheDocument()
     expect(screen.getByTestId('sidebar-tooltip-dashboard-content')).toHaveTextContent('대시보드')
     expect(screen.getByTestId('sidebar-tooltip-dashboard-content')).toHaveTextContent('운전자가 본인 운전 기록, 주행 데이터, 위험 행동 분석을 확인하고, 개인화 설정을 관리합니다.')
-    expect(screen.queryByTestId('sidebar-tooltip-navigation-content')).not.toBeInTheDocument()
+    expect(screen.getByRole('tooltip', { name: /네비게이션/ })).toHaveClass('react-tooltip__closing')
+
+    fireEvent.transitionEnd(screen.getByRole('tooltip', { name: /네비게이션/ }), { propertyName: 'opacity' })
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('sidebar-tooltip-navigation-content')).not.toBeInTheDocument()
+    })
   })
 
   it('renders the dashboard page inside the persistent app shell', () => {

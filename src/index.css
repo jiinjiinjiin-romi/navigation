@@ -393,6 +393,33 @@
     overflow: visible;
   }
 
+  .roadie-sidebar-tooltip {
+    --rt-transition-closing-delay: 0.11s;
+    --rt-transition-show-delay: 0.14s;
+    transform: translateX(-0.375rem);
+    transition: opacity 140ms ease-out, transform 140ms ease-out !important;
+    will-change: opacity, transform;
+  }
+
+  .roadie-sidebar-tooltip.react-tooltip__show {
+    opacity: 1 !important;
+    transform: translateX(0);
+  }
+
+  .roadie-sidebar-tooltip.react-tooltip__closing {
+    opacity: 0 !important;
+    transform: translateX(-0.375rem);
+  }
+
+  .react-tooltip__place-left.roadie-sidebar-tooltip,
+  .react-tooltip__place-left.roadie-sidebar-tooltip.react-tooltip__closing {
+    transform: translateX(0.375rem);
+  }
+
+  .react-tooltip__place-left.roadie-sidebar-tooltip.react-tooltip__show {
+    transform: translateX(0);
+  }
+
   .roadie-glass {
     border: 1px solid var(--nav-border);
     background: rgb(255 255 255 / 78%);
@@ -452,5 +479,12 @@
 @media (prefers-reduced-motion: reduce) {
   .roadie-paper-app-shell {
     animation: none;
+  }
+
+  .roadie-sidebar-tooltip,
+  .roadie-sidebar-tooltip.react-tooltip__show,
+  .roadie-sidebar-tooltip.react-tooltip__closing {
+    transform: none;
+    transition: none !important;
   }
 }

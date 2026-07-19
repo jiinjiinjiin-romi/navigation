@@ -631,9 +631,9 @@ function SidebarTooltip({
       arrowColor="rgb(255 255 255 / 0.96)"
       arrowSize={10}
       id={id}
-      className="!z-[70] !w-max !rounded-lg !bg-white/96 !px-3 !py-2 !text-left !text-sm !font-medium !leading-5 !text-[#344054] !opacity-100 !shadow-[0_12px_26px_rgb(45_72_112/0.14)] !ring-1 !ring-[rgb(45_72_112/0.10)] !backdrop-blur-xl !transition-none"
+      className="roadie-sidebar-tooltip !z-[70] !w-max !rounded-lg !bg-white/96 !px-3 !py-2 !text-left !text-sm !font-medium !leading-5 !text-[#344054] !shadow-[0_12px_26px_rgb(45_72_112/0.14)] !ring-1 !ring-[rgb(45_72_112/0.10)] !backdrop-blur-xl"
       closeEvents={{ blur: true, mouseleave: true }}
-      delayHide={0}
+      delayHide={110}
       delayShow={0}
       isOpen={active}
       offset={12}
@@ -641,9 +641,7 @@ function SidebarTooltip({
       opacity={1}
       place="right"
     >
-      {active ? (
-        <span data-testid={testId}>{children}</span>
-      ) : null}
+      <span data-testid={testId}>{children}</span>
     </Tooltip>
   )
 }
