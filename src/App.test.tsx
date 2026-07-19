@@ -213,15 +213,29 @@ describe('App', () => {
     sessionStorage.setItem('roadie-app-sidebar-guide-closed', 'true')
     render(<App />)
 
+    fireEvent.mouseEnter(screen.getByRole('button', { name: '사이드바 펼치기' }))
+
+    expect(await screen.findByTestId('sidebar-tooltip-expand-content')).toHaveTextContent('사이드바 펼치기')
+    expect(screen.getByTestId('sidebar-tooltip-expand-content')).not.toHaveTextContent('데모 시나리오')
+
     fireEvent.mouseEnter(screen.getByRole('link', { name: '네비게이션' }))
 
     expect(await screen.findByTestId('sidebar-tooltip-navigation-content')).toBeInTheDocument()
     expect(screen.getByTestId('sidebar-tooltip-navigation-content')).toHaveTextContent('네비게이션')
+    expect(screen.getByTestId('sidebar-tooltip-navigation-content')).toHaveTextContent('데모 시나리오 흐름과 실제 내비게이션을 자유롭게 조작하고, 단계별 경고를 확인합니다.')
+    expect(screen.getByTestId('sidebar-tooltip-navigation-content').querySelector('span:first-child')).toHaveClass('text-[0.95rem]')
+    expect(screen.getByTestId('sidebar-tooltip-navigation-content').querySelector('span:last-child')).toHaveClass('text-sm')
+    expect(screen.getByTestId('sidebar-tooltip-navigation-content').querySelector('span:last-child')).toHaveClass('[&_strong]:font-extrabold')
+    expect(screen.getByTestId('sidebar-tooltip-navigation-content').querySelector('strong')).toHaveClass('font-bold')
+    expect(screen.getByRole('tooltip', { name: /네비게이션/ })).toHaveClass('!px-3')
+    expect(screen.getByRole('tooltip', { name: /네비게이션/ })).toHaveClass('!py-2')
+    expect(document.querySelector('.react-tooltip-arrow')).toBeInTheDocument()
 
     fireEvent.mouseEnter(screen.getByRole('link', { name: '대시보드' }))
 
     expect(await screen.findByTestId('sidebar-tooltip-dashboard-content')).toBeInTheDocument()
     expect(screen.getByTestId('sidebar-tooltip-dashboard-content')).toHaveTextContent('대시보드')
+    expect(screen.getByTestId('sidebar-tooltip-dashboard-content')).toHaveTextContent('운전자가 본인 운전 기록, 주행 데이터, 위험 행동 분석을 확인하고, 개인화 설정을 관리합니다.')
     expect(screen.queryByTestId('sidebar-tooltip-navigation-content')).not.toBeInTheDocument()
   })
 

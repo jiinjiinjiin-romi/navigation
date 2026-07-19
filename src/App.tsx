@@ -32,6 +32,67 @@ type SidebarGuideLayout = Partial<Record<AppSection, {
   cardX: number
   cardY: number
 }>>
+type SidebarGuideItem = {
+  section: AppSection
+  testId: string
+  title: string
+  content: ReactNode
+}
+
+const SIDEBAR_GUIDE_ITEMS: SidebarGuideItem[] = [
+  {
+    section: 'navigation',
+    testId: 'sidebar-tooltip-navigation-content',
+    title: '네비게이션',
+    content: (
+      <>
+        <span className="block">
+          <strong className="font-bold">데모 시나리오</strong>
+          {' 흐름과 '}
+          <strong className="font-bold">실제 내비게이션</strong>
+          을{' '}
+        </span>
+        <span className="mt-0.5 block">
+          자유롭게 조작하고,{' '}
+          <strong className="font-bold">단계별 경고</strong>
+          를 확인합니다.
+        </span>
+      </>
+    ),
+  },
+  {
+    section: 'dashboard',
+    testId: 'sidebar-tooltip-dashboard-content',
+    title: '대시보드',
+    content: (
+      <>
+        <span className="block">
+          운전자가 본인 <strong className="font-bold">운전 기록</strong>
+          {', '}
+          <strong className="font-bold">주행 데이터</strong>
+          {', '}
+        </span>
+        <span className="mt-0.5 block">
+          <strong className="font-bold">위험 행동 분석</strong>
+          을 확인하고,{' '}
+          <strong className="font-bold">개인화 설정</strong>
+          을 관리합니다.
+        </span>
+      </>
+    ),
+  },
+  {
+    section: 'model-lab',
+    testId: 'sidebar-tooltip-model-lab-content',
+    title: '모델 확인',
+    content: (
+      <span className="block">
+        <strong className="font-bold">운전자 행동 탐지 모델</strong>
+        을 테스트합니다.
+      </span>
+    ),
+  },
+]
 
 function App() {
   const [pathname, setPathname] = useState(() => window.location.pathname)
@@ -319,6 +380,7 @@ function AppShell({
             onTooltipHide={hideTooltip}
             onTooltipShow={showTooltip}
             tooltipActive={activeTooltipId === 'sidebar-tooltip-navigation'}
+            tooltipDescription={SIDEBAR_GUIDE_ITEMS[0].content}
             tooltipId="sidebar-tooltip-navigation"
             tooltipTestId="sidebar-tooltip-navigation-content"
           />
@@ -333,6 +395,7 @@ function AppShell({
             onTooltipHide={hideTooltip}
             onTooltipShow={showTooltip}
             tooltipActive={activeTooltipId === 'sidebar-tooltip-dashboard'}
+            tooltipDescription={SIDEBAR_GUIDE_ITEMS[1].content}
             tooltipId="sidebar-tooltip-dashboard"
             tooltipTestId="sidebar-tooltip-dashboard-content"
           />
@@ -347,6 +410,7 @@ function AppShell({
             onTooltipHide={hideTooltip}
             onTooltipShow={showTooltip}
             tooltipActive={activeTooltipId === 'sidebar-tooltip-model-lab'}
+            tooltipDescription={SIDEBAR_GUIDE_ITEMS[2].content}
             tooltipId="sidebar-tooltip-model-lab"
             tooltipTestId="sidebar-tooltip-model-lab-content"
           />
@@ -386,6 +450,7 @@ function SidebarLink({
   onTooltipHide,
   onTooltipShow,
   tooltipActive = false,
+  tooltipDescription,
   tooltipId,
   tooltipTestId,
 }: {
@@ -399,6 +464,7 @@ function SidebarLink({
   onTooltipHide: (id: string) => void
   onTooltipShow: (id: string) => void
   tooltipActive?: boolean
+  tooltipDescription: ReactNode
   tooltipId: string
   tooltipTestId: string
 }) {
@@ -452,7 +518,10 @@ function SidebarLink({
         id={tooltipId}
         testId={tooltipTestId}
       >
-        {label}
+        <span className="block text-[0.95rem] font-extrabold leading-5 text-[#111827]">{label}</span>
+        <span className="mt-1 block max-w-80 whitespace-normal text-sm font-medium leading-5 text-[#475467] [word-break:keep-all] [&_strong]:font-extrabold [&_strong]:text-[#111827]">
+          {tooltipDescription}
+        </span>
       </SidebarTooltip>
     </a>
   )
@@ -467,66 +536,6 @@ function SidebarGuideOverlay({
   onClose: () => void
   onHideForDay: () => void
 }) {
-  const guideItems: Array<{
-    section: AppSection
-    testId: string
-    title: string
-    content: ReactNode
-  }> = [
-    {
-      section: 'navigation',
-      testId: 'sidebar-tooltip-navigation-content',
-      title: '네비게이션',
-      content: (
-        <>
-          <span className="block">
-            <strong className="font-bold">데모 시나리오</strong>
-            {' 흐름과 '}
-            <strong className="font-bold">실제 내비게이션</strong>
-            을{' '}
-          </span>
-          <span className="mt-0.5 block">
-            자유롭게 조작하고,{' '}
-            <strong className="font-bold">단계별 경고</strong>
-            를 확인합니다.
-          </span>
-        </>
-      ),
-    },
-    {
-      section: 'dashboard',
-      testId: 'sidebar-tooltip-dashboard-content',
-      title: '대시보드',
-      content: (
-        <>
-          <span className="block">
-            운전자가 본인 <strong className="font-bold">운전 기록</strong>
-            {', '}
-            <strong className="font-bold">주행 데이터</strong>
-            {', '}
-          </span>
-          <span className="mt-0.5 block">
-            <strong className="font-bold">위험 행동 분석</strong>
-            을 확인하고,{' '}
-            <strong className="font-bold">개인화 설정</strong>
-            을 관리합니다.
-          </span>
-        </>
-      ),
-    },
-    {
-      section: 'model-lab',
-      testId: 'sidebar-tooltip-model-lab-content',
-      title: '모델 확인',
-      content: (
-        <span className="block">
-          <strong className="font-bold">운전자 행동 탐지 모델</strong>
-          을 테스트합니다.
-        </span>
-      ),
-    },
-  ]
-
   return (
     <div
       aria-label="사이드바 안내"
@@ -538,7 +547,7 @@ function SidebarGuideOverlay({
         className="pointer-events-none fixed inset-0 z-[1] size-full"
         data-testid="sidebar-guide-connectors"
       >
-        {guideItems.map(({ section }) => {
+        {SIDEBAR_GUIDE_ITEMS.map(({ section }) => {
           const layout = guideLayout[section]
           if (!layout) return null
           const targetX = layout.cardX + 1
@@ -581,7 +590,7 @@ function SidebarGuideOverlay({
           24시간동안 보지 않기
         </button>
       </div>
-      {guideItems.map(({ content, section, testId, title }) => {
+      {SIDEBAR_GUIDE_ITEMS.map(({ content, section, testId, title }) => {
         const layout = guideLayout[section]
         if (!layout) return null
 
@@ -619,9 +628,10 @@ function SidebarTooltip({
 }) {
   return (
     <Tooltip
+      arrowColor="rgb(255 255 255 / 0.96)"
+      arrowSize={10}
       id={id}
-      className="!z-[70] !w-max !rounded-xl !bg-white/96 !px-4 !py-3 !text-left !text-sm !font-medium !leading-5 !text-[#344054] !opacity-100 !shadow-[0_16px_34px_rgb(45_72_112/0.14)] !ring-1 !ring-[rgb(45_72_112/0.10)] !backdrop-blur-xl !transition-none"
-      classNameArrow="!bg-white/96"
+      className="!z-[70] !w-max !rounded-lg !bg-white/96 !px-3 !py-2 !text-left !text-sm !font-medium !leading-5 !text-[#344054] !opacity-100 !shadow-[0_12px_26px_rgb(45_72_112/0.14)] !ring-1 !ring-[rgb(45_72_112/0.10)] !backdrop-blur-xl !transition-none"
       closeEvents={{ blur: true, mouseleave: true }}
       delayHide={0}
       delayShow={0}
