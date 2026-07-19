@@ -17,6 +17,17 @@ describe('musicApi', () => {
           sourceUrl: 'https://music.apple.com/track/123',
           provider: 'itunes',
         },
+        {
+          id: 'demo-fallback-drive-neon',
+          title: 'Drive Neon',
+          artist: 'Roady Session',
+          album: 'City Pulse',
+          duration: '3:24',
+          durationSeconds: 204,
+          coverUrl: null,
+          sourceUrl: '',
+          provider: 'demo-fallback',
+        },
       ],
     }
     const get = vi.fn().mockResolvedValue({ data: response })

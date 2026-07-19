@@ -870,43 +870,10 @@ type UiMusicTrack = MusicRecommendationTrack & {
   coverTone: string
 }
 
-const FALLBACK_MUSIC_LIBRARY: UiMusicTrack[] = [
-  {
-    id: 'drive-neon',
-    title: 'Drive Neon',
-    artist: 'ROADY Session',
-    album: 'City Pulse',
-    duration: '3:24',
-    durationSeconds: 204,
-    coverUrl: null,
-    sourceUrl: '',
-    provider: 'itunes',
-    coverTone: 'from-[#1746a2] via-[#00a8ff] to-[#6d5df6]',
-  },
-  {
-    id: 'soft-focus',
-    title: 'Soft Focus',
-    artist: 'Evening Route',
-    album: 'Bright Pop Drive',
-    duration: '3:08',
-    durationSeconds: 188,
-    coverUrl: null,
-    sourceUrl: '',
-    provider: 'itunes',
-    coverTone: 'from-[#16a34a] via-[#22c55e] to-[#bae6fd]',
-  },
-  {
-    id: 'night-line',
-    title: 'Night Line',
-    artist: 'Low Tide',
-    album: 'Midnight Lane',
-    duration: '4:02',
-    durationSeconds: 242,
-    coverUrl: null,
-    sourceUrl: '',
-    provider: 'itunes',
-    coverTone: 'from-[#101828] via-[#475467] to-[#6d5df6]',
-  },
+const MUSIC_COVER_TONES = [
+  'from-[#1746a2] via-[#00a8ff] to-[#6d5df6]',
+  'from-[#16a34a] via-[#22c55e] to-[#bae6fd]',
+  'from-[#101828] via-[#475467] to-[#6d5df6]',
 ]
 type RoadieAssistantScenarioId = AiaiScenarioId
 const ROADIE_ASSISTANT_SCENARIOS: RoadieAssistantScenario[] = createRoadieAssistantScenarios()
@@ -1374,7 +1341,7 @@ export function NavigationShell({
   const [reportFullscreenOpen, setReportFullscreenOpen] = useState(false)
   const [musicModalOpen, setMusicModalOpen] = useState(false)
   const [musicPlaying, setMusicPlaying] = useState(false)
-  const [musicTrackId, setMusicTrackId] = useState(FALLBACK_MUSIC_LIBRARY[0].id)
+  const [musicTrackId, setMusicTrackId] = useState('')
   const [musicProgressSeconds, setMusicProgressSeconds] = useState(0)
   const [musicSearchKeyword, setMusicSearchKeyword] = useState('')
   const [manualRiskAgentPersonalityOverride, setManualRiskAgentPersonalityOverride] = useState<AgentPersonality>()
@@ -1517,17 +1484,25 @@ export function NavigationShell({
     musicRecommendationsQuery.data?.length
       ? musicRecommendationsQuery.data.map((track, index) => ({
         ...track,
-        coverTone: FALLBACK_MUSIC_LIBRARY[index % FALLBACK_MUSIC_LIBRARY.length].coverTone,
+        coverTone: MUSIC_COVER_TONES[index % MUSIC_COVER_TONES.length],
       }))
-      : FALLBACK_MUSIC_LIBRARY
+      : []
   ), [musicRecommendationsQuery.data])
   const musicRecommendationsLoading = musicRecommendationsQuery.isFetching && !musicRecommendationsQuery.data?.length
   const selectedMusicTrack = useMemo(
-    () => musicTracks.find((track) => track.id === musicTrackId) ?? musicTracks[0] ?? FALLBACK_MUSIC_LIBRARY[0],
+    () => musicTracks.find((track) => track.id === musicTrackId) ?? musicTracks[0],
     [musicTrackId, musicTracks],
   )
-  const selectedMusicTrackId = selectedMusicTrack.id
-  const selectedMusicDurationSeconds = selectedMusicTrack.durationSeconds
+  const selectedMusicTrackId = selectedMusicTrack?.id ?? ''
+  const selectedMusicDurationSeconds = selectedMusicTrack?.durationSeconds ?? 0
+  useEffect(() => {
+    if (!musicTracks.length) return
+    setMusicTrackId((currentTrackId) => (
+      musicTracks.some((track) => track.id === currentTrackId)
+        ? currentTrackId
+        : musicTracks[0]?.id ?? currentTrackId
+    ))
+  }, [musicTracks])
   const savedPlacesQuery = useQuery({
     queryKey: ['saved-places', selectedProfileId],
     queryFn: ({ signal }) => listSavedPlaces(selectedProfileId!, undefined, signal),
@@ -3655,6 +3630,7 @@ export function NavigationShell({
               onClose={manualRiskAssistantStep && !demoAssistantStep ? resetManualRiskConversation : resetAssistantScenario}
               onRecommendationAction={(recommendation) => {
                 if (recommendation.type === 'music') {
+                  if (!selectedMusicTrack) return
                   setMusicTrackId(selectedMusicTrack.id)
                   setMusicProgressSeconds(0)
                   setMusicPlaying(true)
@@ -3847,6 +3823,7 @@ export function NavigationShell({
                     onPickTrack={(trackId) => setMusicTrackId(trackId)}
                     onSearchKeywordChange={setMusicSearchKeyword}
                     onStartPlayback={() => {
+                      if (!selectedMusicTrack) return
                       setMusicProgressSeconds(0)
                       setMusicPlaying(true)
                       setMusicModalOpen(false)
@@ -5508,7 +5485,7 @@ function RoadieOrbControl({
   hidden: boolean
   manualResultCards: ManualRiskResultCard[]
   musicRecommendationLoading: boolean
-  musicRecommendationTrack: UiMusicTrack
+  musicRecommendationTrack?: UiMusicTrack
   motionTiming: MotionTiming
   onClose: () => void
   onRecommendationAction: (recommendation: RoadieAssistantRecommendation) => void
@@ -6096,7 +6073,7 @@ function AssistantRecommendationList({
   recommendations,
 }: {
   musicRecommendationLoading: boolean
-  musicRecommendationTrack: UiMusicTrack
+  musicRecommendationTrack?: UiMusicTrack
   motionTiming: MotionTiming
   onRecommendationAction: (recommendation: RoadieAssistantRecommendation) => void
   recommendations: RoadieAssistantRecommendation[]
@@ -6219,10 +6196,18 @@ function AssistantMusicRecommendationCard({
   track,
 }: {
   loading: boolean
-  track: UiMusicTrack
+  track?: UiMusicTrack
 }) {
   if (loading) {
     return <MusicRecommendationLoadingCard />
+  }
+
+  if (!track) {
+    return (
+      <div className="flex min-h-[4.75rem] items-center rounded-2xl border border-dashed border-[var(--nav-border)] bg-white px-3 py-2 text-sm font-semibold text-[var(--nav-muted)]">
+        추천 음악을 준비 중입니다.
+      </div>
+    )
   }
 
   return (
@@ -10067,7 +10052,7 @@ function MusicPopover({
   motionTiming: MotionTiming
   musicSearchKeyword: string
   musicPlaying: boolean
-  selectedTrack: UiMusicTrack
+  selectedTrack?: UiMusicTrack
   tracks: UiMusicTrack[]
   loading: boolean
   error: boolean
@@ -10151,7 +10136,7 @@ function MusicPopover({
             {loading ? (
               <MusicRecommendationLoadingCard />
             ) : tracks.length ? tracks.map((track) => {
-              const active = track.id === selectedTrack.id
+              const active = track.id === selectedTrack?.id
 
               return (
                 <button
@@ -10189,7 +10174,8 @@ function MusicPopover({
         </motion.div>
         <motion.div className="flex shrink-0 gap-2" variants={{ hidden: { opacity: 0, y: 8 }, visible: { opacity: 1, y: 0 } }}>
           <button
-            className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[var(--nav-primary)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--nav-primary-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
+            className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[var(--nav-primary)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--nav-primary-hover)] disabled:cursor-not-allowed disabled:bg-[var(--nav-disabled)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nav-primary)]"
+            disabled={!selectedTrack}
             onClick={onStartPlayback}
             type="button"
           >
@@ -10222,11 +10208,11 @@ function MiniPlayer({
   motionTiming: MotionTiming
   musicPlaying: boolean
   progressSeconds: number
-  selectedTrack: UiMusicTrack
+  selectedTrack?: UiMusicTrack
   onClose: () => void
   onTogglePlay: () => void
 }) {
-  if (!musicPlaying) {
+  if (!musicPlaying || !selectedTrack) {
     return null
   }
 

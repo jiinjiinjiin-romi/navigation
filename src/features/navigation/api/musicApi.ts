@@ -15,7 +15,7 @@ export interface MusicRecommendationTrack {
   durationSeconds: number
   coverUrl: string | null
   sourceUrl: string
-  provider: 'itunes'
+  provider: 'itunes' | 'demo-fallback'
 }
 
 interface MusicRecommendationResponse {
