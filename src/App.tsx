@@ -15,7 +15,6 @@ import { ModelLabPage } from './features/model-lab/components/ModelLabPage'
 import { NavigationShell } from './features/navigation/components/NavigationShell'
 
 const SIDEBAR_COLLAPSED_STORAGE_KEY = 'roadie-app-sidebar-collapsed'
-const SIDEBAR_GUIDE_SESSION_KEY = 'roadie-app-sidebar-guide-closed'
 const SIDEBAR_GUIDE_HIDE_UNTIL_KEY = 'roadie-app-sidebar-guide-hidden-until'
 const SIDEBAR_GUIDE_HIDE_DURATION_MS = 24 * 60 * 60 * 1000
 const SIDEBAR_GUIDE_CONNECTOR_GAP = 10
@@ -100,7 +99,14 @@ function App() {
     const storedPreference = localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY)
     return storedPreference === null ? true : storedPreference === 'true'
   })
-  const [sidebarGuideVisible, setSidebarGuideVisible] = useState(shouldShowSidebarGuide)
+  const [entryState, setEntryState] = useState(() => {
+    const sidebarGuideVisible = shouldShowSidebarGuide()
+
+    return {
+      introGateOpen: !sidebarGuideVisible,
+      sidebarGuideVisible,
+    }
+  })
 
   useEffect(() => {
     const handleNavigation = () => setPathname(window.location.pathname)
@@ -142,13 +148,18 @@ function App() {
   }
 
   const closeSidebarGuide = () => {
-    sessionStorage.setItem(SIDEBAR_GUIDE_SESSION_KEY, 'true')
-    setSidebarGuideVisible(false)
+    setEntryState({
+      introGateOpen: true,
+      sidebarGuideVisible: false,
+    })
   }
 
   const hideSidebarGuideForDay = () => {
     localStorage.setItem(SIDEBAR_GUIDE_HIDE_UNTIL_KEY, String(Date.now() + SIDEBAR_GUIDE_HIDE_DURATION_MS))
-    setSidebarGuideVisible(false)
+    setEntryState({
+      introGateOpen: true,
+      sidebarGuideVisible: false,
+    })
   }
 
   return (
@@ -159,9 +170,9 @@ function App() {
       onNavigate={navigate}
       onToggleSidebar={toggleSidebar}
       pathname={pathname}
-      sidebarGuideVisible={sidebarGuideVisible}
+      sidebarGuideVisible={entryState.sidebarGuideVisible}
     >
-      {renderCurrentPage(pathname, !sidebarGuideVisible)}
+      {renderCurrentPage(pathname, entryState.introGateOpen)}
     </AppShell>
   )
 }
@@ -665,10 +676,6 @@ function clamp(value: number, min: number, max: number) {
 }
 
 function shouldShowSidebarGuide() {
-  if (sessionStorage.getItem(SIDEBAR_GUIDE_SESSION_KEY) === 'true') {
-    return false
-  }
-
   const hideUntil = Number(localStorage.getItem(SIDEBAR_GUIDE_HIDE_UNTIL_KEY))
 
   return !Number.isFinite(hideUntil) || hideUntil <= Date.now()

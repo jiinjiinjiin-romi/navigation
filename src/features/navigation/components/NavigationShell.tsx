@@ -80,7 +80,7 @@ import {
   type DemoScenarioId,
 } from '@/features/demo-scenarios'
 import { VoiceWave } from '@/features/voice-wave'
-import { type CSSProperties, type KeyboardEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type CSSProperties, type KeyboardEvent, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -5075,8 +5075,35 @@ function normalizeOptionalProfileText(value: string | null) {
 }
 
 function NavigationIntroVideo() {
+  const videoRef = useRef<HTMLVideoElement | null>(null)
   const [visible, setVisible] = useState(true)
   const [fading, setFading] = useState(false)
+  const [playbackBlocked, setPlaybackBlocked] = useState(false)
+  const playIntroVideo = useCallback(() => {
+    const video = videoRef.current
+    if (!video) return
+
+    let playback: Promise<void> | undefined
+    try {
+      playback = video.play()
+    } catch {
+      setPlaybackBlocked(true)
+      return
+    }
+
+    if (!playback) {
+      setPlaybackBlocked(false)
+      return
+    }
+
+    playback
+      .then(() => setPlaybackBlocked(false))
+      .catch(() => setPlaybackBlocked(true))
+  }, [])
+
+  useLayoutEffect(() => {
+    playIntroVideo()
+  }, [playIntroVideo])
 
   if (!visible) {
     return null
@@ -5105,14 +5132,29 @@ function NavigationIntroVideo() {
         disablePictureInPicture
         draggable={false}
         onEnded={() => setFading(true)}
+        onPlay={() => setPlaybackBlocked(false)}
         playsInline
         preload="auto"
+        ref={videoRef}
         src={INTRO_VIDEO_SOURCE}
         tabIndex={-1}
       />
+      {playbackBlocked && !fading ? (
+        <div className="absolute inset-0 z-[1] grid place-items-center bg-black/28 px-6 text-white backdrop-blur-[1px]">
+          <button
+            className="inline-flex h-12 items-center gap-2 rounded-full bg-white px-5 text-sm font-extrabold text-[#101828] shadow-[0_14px_34px_rgb(0_0_0/0.28)] transition-[background-color,box-shadow,transform] duration-150 ease-out hover:-translate-y-0.5 hover:bg-[#f2f7ff] hover:shadow-[0_18px_38px_rgb(0_0_0/0.32)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+            data-testid="navigation-intro-play-button"
+            onClick={playIntroVideo}
+            type="button"
+          >
+            <Play className="size-4" weight="fill" />
+            인트로 재생
+          </button>
+        </div>
+      ) : null}
       <button
         aria-label="인트로 영상 건너뛰기"
-        className="absolute bottom-5 right-5 z-[1] inline-flex h-10 items-center gap-1.5 rounded-full bg-white/88 px-4 text-sm font-bold text-[#101828] shadow-[0_10px_24px_rgb(0_0_0/0.22)] backdrop-blur-md transition-[background-color,box-shadow,transform] duration-150 ease-out hover:-translate-y-0.5 hover:bg-white hover:shadow-[0_14px_30px_rgb(0_0_0/0.26)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+        className="absolute bottom-5 right-5 z-[2] inline-flex h-10 items-center gap-1.5 rounded-full bg-white/88 px-4 text-sm font-bold text-[#101828] shadow-[0_10px_24px_rgb(0_0_0/0.22)] backdrop-blur-md transition-[background-color,box-shadow,transform] duration-150 ease-out hover:-translate-y-0.5 hover:bg-white hover:shadow-[0_14px_30px_rgb(0_0_0/0.26)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white motion-reduce:transition-none motion-reduce:hover:translate-y-0"
         data-testid="navigation-intro-skip-button"
         onClick={() => setFading(true)}
         type="button"

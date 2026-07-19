@@ -1087,6 +1087,31 @@ describe('NavigationShell', () => {
     expect(screen.getByTestId('navigation-intro-video')).toHaveAttribute('autoPlay')
   })
 
+  it('shows an intro play fallback when autoplay is blocked', async () => {
+    const playMock = vi.mocked(HTMLMediaElement.prototype.play)
+    playMock.mockReset()
+    playMock.mockRejectedValueOnce(new Error('autoplay blocked'))
+    playMock.mockResolvedValueOnce(undefined)
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell />
+      </QueryClientProvider>,
+    )
+
+    expect(await screen.findByTestId('navigation-intro-play-button')).toHaveTextContent('인트로 재생')
+    expect(playMock).toHaveBeenCalledTimes(1)
+
+    fireEvent.click(screen.getByRole('button', { name: '인트로 재생' }))
+
+    expect(playMock).toHaveBeenCalledTimes(2)
+    await waitFor(() => {
+      expect(screen.queryByTestId('navigation-intro-play-button')).not.toBeInTheDocument()
+    })
+    expect(screen.getByTestId('navigation-intro-video-layer')).toBeInTheDocument()
+  })
+
   it('fades out the intro video after playback ends and reveals the navigation surface', async () => {
     const queryClient = new QueryClient()
 

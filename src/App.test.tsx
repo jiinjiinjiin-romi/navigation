@@ -176,17 +176,24 @@ describe('App', () => {
     }
   })
 
-  it('closes the first-visit sidebar guide for the current session', () => {
-    render(<App />)
+  it('closes only the current sidebar guide overlay and opens the intro gate', () => {
+    const { unmount } = render(<App />)
 
     fireEvent.click(screen.getByRole('button', { name: '사이드바 안내 닫기' }))
 
     expect(screen.queryByTestId('sidebar-guide-overlay')).not.toBeInTheDocument()
     expect(screen.getByTestId('navigation-shell')).toHaveAttribute('data-intro-video-enabled', 'true')
-    expect(sessionStorage.getItem('roadie-app-sidebar-guide-closed')).toBe('true')
+    expect(sessionStorage.getItem('roadie-app-sidebar-guide-closed')).toBeNull()
     expect(screen.getByRole('link', { name: '네비게이션' })).toHaveAttribute('data-tooltip-id', 'sidebar-tooltip-navigation')
+
     return waitFor(() => {
       expect(screen.queryByTestId('sidebar-tooltip-navigation-content')).not.toBeInTheDocument()
+    }).then(() => {
+      unmount()
+      render(<App />)
+
+      expect(screen.getByTestId('sidebar-guide-overlay')).toBeInTheDocument()
+      expect(screen.getByTestId('navigation-shell')).toHaveAttribute('data-intro-video-enabled', 'false')
     })
   })
 
@@ -210,7 +217,7 @@ describe('App', () => {
   })
 
   it('keeps only the latest hovered sidebar tooltip visible', async () => {
-    sessionStorage.setItem('roadie-app-sidebar-guide-closed', 'true')
+    localStorage.setItem('roadie-app-sidebar-guide-hidden-until', String(Date.now() + 24 * 60 * 60 * 1000))
     render(<App />)
 
     fireEvent.mouseEnter(screen.getByRole('button', { name: '사이드바 펼치기' }))
