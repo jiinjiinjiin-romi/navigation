@@ -21,6 +21,61 @@ vi.mock('./features/dashboard/DashboardApp', () => ({
   ),
 }))
 
+function mockSidebarGuideRects() {
+  const originalGetBoundingClientRect = Element.prototype.getBoundingClientRect
+
+  Element.prototype.getBoundingClientRect = function getBoundingClientRectMock() {
+    const label = this.getAttribute('aria-label')
+    const collapsed = this.getAttribute('data-collapsed') !== 'false'
+    const right = collapsed ? 80 : 248
+
+    if (label === '네비게이션') {
+      return createDOMRect({ height: 52, right, top: 188, width: 52 })
+    }
+
+    if (label === '대시보드') {
+      return createDOMRect({ height: 52, right, top: 278, width: 52 })
+    }
+
+    if (label === '모델 확인') {
+      return createDOMRect({ height: 52, right, top: 368, width: 52 })
+    }
+
+    return originalGetBoundingClientRect.call(this)
+  }
+
+  return () => {
+    Element.prototype.getBoundingClientRect = originalGetBoundingClientRect
+  }
+}
+
+function createDOMRect({
+  height,
+  right,
+  top,
+  width,
+}: {
+  height: number
+  right: number
+  top: number
+  width: number
+}) {
+  const left = right - width
+  const bottom = top + height
+
+  return {
+    bottom,
+    height,
+    left,
+    right,
+    top,
+    width,
+    x: left,
+    y: top,
+    toJSON: () => ({}),
+  } as DOMRect
+}
+
 describe('App', () => {
   beforeEach(() => {
     localStorage.clear()
@@ -55,44 +110,70 @@ describe('App', () => {
   })
 
   it('defaults the sidebar to the collapsed state when no preference is saved', () => {
-    render(<App />)
+    const restoreRects = mockSidebarGuideRects()
 
-    const activeNavigationLink = screen.getByRole('link', { name: '네비게이션' })
-    const activeNavigationIcon = screen.getByTestId('sidebar-link-icon-sidebar-tooltip-navigation')
+    try {
+      render(<App />)
 
-    expect(screen.getByTestId('global-sidebar')).toHaveAttribute('data-collapsed', 'true')
-    expect(screen.getByRole('button', { name: '사이드바 펼치기' })).toBeInTheDocument()
-    expect(activeNavigationLink).toHaveAttribute('data-active', 'true')
-    expect(activeNavigationLink).not.toHaveClass('bg-white')
-    expect(activeNavigationIcon).toHaveClass('bg-[#fbfcff]')
-    expect(activeNavigationIcon).toHaveClass('text-[var(--nav-primary)]')
-    expect(activeNavigationIcon).toHaveClass('rounded-[1.35rem]')
-    expect(activeNavigationIcon).toHaveClass('shadow-[0_12px_28px_rgb(70_95_255/0.22),0_4px_12px_rgb(70_95_255/0.12),inset_0_0_0_1px_rgb(70_95_255/0.10)]')
-    expect(screen.getByTestId('sidebar-guide-overlay')).toHaveClass('bg-black/45')
-    expect(screen.getByTestId('sidebar-guide-overlay')).not.toHaveClass('bg-black')
-    expect(screen.getByTestId('sidebar-guide-close-button').parentElement).toHaveClass('right-6')
-    expect(screen.getByTestId('sidebar-guide-close-button').parentElement).toHaveClass('top-6')
-    expect(screen.getByTestId('sidebar-guide-close-button')).toBeInTheDocument()
-    expect(screen.getByTestId('sidebar-guide-hide-day-button')).toHaveTextContent('24시간동안 보지 않기')
-    expect(screen.getByRole('button', { name: '사이드바 펼치기' })).toHaveAttribute('data-tooltip-id', 'sidebar-tooltip-expand')
-    expect(screen.getByRole('link', { name: '네비게이션' })).toHaveAttribute('data-tooltip-id', 'sidebar-tooltip-navigation')
-    expect(screen.getByRole('link', { name: '대시보드' })).toHaveAttribute('data-tooltip-id', 'sidebar-tooltip-dashboard')
-    expect(screen.getByRole('link', { name: '모델 확인' })).toHaveAttribute('data-tooltip-id', 'sidebar-tooltip-model-lab')
-    expect(screen.getByTestId('sidebar-tooltip-navigation-content')).toHaveTextContent('데모 시나리오 흐름과 실제 내비게이션을 자유롭게 조작하고,단계별 경고를 확인합니다.')
-    expect(screen.getByTestId('sidebar-tooltip-dashboard-content')).toHaveTextContent('운전자가 본인 운전 기록, 주행 데이터, 위험 행동 분석을 확인하고,개인화 설정을 관리합니다.')
-    expect(screen.getByTestId('sidebar-tooltip-model-lab-content')).toHaveTextContent('운전자 행동 탐지 모델을 테스트합니다.')
-    expect(screen.getByTestId('sidebar-tooltip-navigation-content').querySelectorAll('strong')).toHaveLength(3)
-    expect(screen.getByTestId('sidebar-tooltip-navigation-content').querySelectorAll('span.block')).toHaveLength(2)
-    expect(screen.getByTestId('sidebar-tooltip-dashboard-content').querySelectorAll('span.block')).toHaveLength(2)
-    expect(screen.getByTestId('sidebar-tooltip-navigation-content').querySelector('strong')).toHaveClass('font-bold')
-    expect(screen.getByTestId('sidebar-tooltip-dashboard-content').querySelectorAll('strong')).toHaveLength(4)
-    expect(screen.getByRole('tooltip', { name: /데모 시나리오/ })).toHaveClass('!bg-white/96')
-    expect(screen.getByRole('tooltip', { name: /데모 시나리오/ })).toHaveClass('!text-[#344054]')
-    expect(screen.getByRole('tooltip', { name: /데모 시나리오/ })).toHaveClass('!ring-1')
-    expect(screen.getByRole('tooltip', { name: /데모 시나리오/ })).not.toHaveClass('!bg-[#101828]')
-    expect(screen.getByTestId('sidebar-tooltip-navigation-content')).toHaveAttribute('data-guide-position', '95,210')
-    expect(screen.getByTestId('sidebar-tooltip-dashboard-content')).toHaveAttribute('data-guide-position', '95,300')
-    expect(screen.getByTestId('sidebar-tooltip-model-lab-content')).toHaveAttribute('data-guide-position', '95,390')
+      const activeNavigationLink = screen.getByRole('link', { name: '네비게이션' })
+      const activeNavigationIcon = screen.getByTestId('sidebar-link-icon-sidebar-tooltip-navigation')
+
+      expect(screen.getByTestId('global-sidebar')).toHaveAttribute('data-collapsed', 'true')
+      expect(screen.getByRole('button', { name: '사이드바 펼치기' })).toBeInTheDocument()
+      expect(activeNavigationLink).toHaveAttribute('data-active', 'true')
+      expect(activeNavigationLink).not.toHaveClass('bg-white')
+      expect(activeNavigationIcon).toHaveClass('bg-[#fbfcff]')
+      expect(activeNavigationIcon).toHaveClass('text-[var(--nav-primary)]')
+      expect(activeNavigationIcon).toHaveClass('rounded-[1.35rem]')
+      expect(activeNavigationIcon).toHaveClass('shadow-[0_12px_28px_rgb(70_95_255/0.22),0_4px_12px_rgb(70_95_255/0.12),inset_0_0_0_1px_rgb(70_95_255/0.10)]')
+      expect(screen.getByTestId('sidebar-guide-overlay')).toHaveClass('bg-black/45')
+      expect(screen.getByTestId('sidebar-guide-overlay')).not.toHaveClass('bg-black')
+      expect(screen.getByTestId('sidebar-guide-close-button').parentElement).toHaveClass('right-6')
+      expect(screen.getByTestId('sidebar-guide-close-button').parentElement).toHaveClass('top-6')
+      expect(screen.getByTestId('sidebar-guide-close-button')).toBeInTheDocument()
+      expect(screen.getByTestId('sidebar-guide-hide-day-button')).toHaveTextContent('24시간동안 보지 않기')
+      expect(screen.getByRole('button', { name: '사이드바 펼치기' })).toHaveAttribute('data-tooltip-id', 'sidebar-tooltip-expand')
+      expect(screen.getByRole('link', { name: '네비게이션' })).toHaveAttribute('data-tooltip-id', 'sidebar-tooltip-navigation')
+      expect(screen.getByRole('link', { name: '대시보드' })).toHaveAttribute('data-tooltip-id', 'sidebar-tooltip-dashboard')
+      expect(screen.getByRole('link', { name: '모델 확인' })).toHaveAttribute('data-tooltip-id', 'sidebar-tooltip-model-lab')
+      expect(screen.getByTestId('sidebar-guide-title-navigation')).toHaveTextContent('네비게이션')
+      expect(screen.getByTestId('sidebar-guide-title-navigation')).toHaveClass('text-lg')
+      expect(screen.getByTestId('sidebar-guide-title-navigation')).toHaveClass('font-extrabold')
+      expect(screen.getByTestId('sidebar-guide-title-dashboard')).toHaveTextContent('대시보드')
+      expect(screen.getByTestId('sidebar-guide-title-model-lab')).toHaveTextContent('모델 확인')
+      expect(screen.getByTestId('sidebar-tooltip-navigation-content')).toHaveTextContent('데모 시나리오 흐름과 실제 내비게이션을 자유롭게 조작하고, 단계별 경고를 확인합니다.')
+      expect(screen.getByTestId('sidebar-tooltip-dashboard-content')).toHaveTextContent('운전자가 본인 운전 기록, 주행 데이터, 위험 행동 분석을 확인하고, 개인화 설정을 관리합니다.')
+      expect(screen.getByTestId('sidebar-tooltip-model-lab-content')).toHaveTextContent('운전자 행동 탐지 모델을 테스트합니다.')
+      expect(screen.getByTestId('sidebar-tooltip-navigation-content').querySelectorAll('strong')).toHaveLength(3)
+      expect(screen.getByTestId('sidebar-tooltip-navigation-content').querySelectorAll('span.block')).toHaveLength(2)
+      expect(screen.getByTestId('sidebar-tooltip-dashboard-content').querySelectorAll('span.block')).toHaveLength(2)
+      expect(screen.getByTestId('sidebar-tooltip-navigation-content').querySelector('strong')).toHaveClass('font-bold')
+      expect(screen.getByTestId('sidebar-tooltip-dashboard-content').querySelectorAll('strong')).toHaveLength(4)
+      expect(screen.getByRole('tooltip', { name: /데모 시나리오/ })).toHaveClass('bg-white/96')
+      expect(screen.getByRole('tooltip', { name: /데모 시나리오/ })).toHaveClass('text-[#344054]')
+      expect(screen.getByRole('tooltip', { name: /데모 시나리오/ })).toHaveClass('ring-1')
+      expect(screen.getByRole('tooltip', { name: /데모 시나리오/ })).not.toHaveClass('!bg-[#101828]')
+      expect(screen.getByTestId('sidebar-guide-connectors')).toBeInTheDocument()
+      expect(screen.getByTestId('sidebar-guide-card-navigation')).toHaveClass('w-fit')
+      expect(screen.getByTestId('sidebar-guide-card-dashboard')).toHaveClass('w-fit')
+      expect(screen.getByTestId('sidebar-guide-card-model-lab')).toHaveClass('w-fit')
+      expect(screen.getByTestId('sidebar-guide-card-navigation')).not.toHaveClass('w-[min(36rem,calc(100vw-2rem))]')
+      expect(screen.getByTestId('sidebar-guide-card-navigation')).not.toHaveClass('w-[min(27rem,calc(100vw-2rem))]')
+      expect(screen.getByTestId('sidebar-guide-card-dashboard')).not.toHaveClass('w-[min(29rem,calc(100vw-2rem))]')
+      expect(screen.getByTestId('sidebar-tooltip-navigation-content')).toHaveClass('whitespace-normal')
+      expect(screen.getByTestId('sidebar-tooltip-navigation-content')).toHaveClass('[word-break:keep-all]')
+      expect(screen.getByTestId('sidebar-guide-card-navigation')).toHaveAttribute('data-guide-anchor', '90,214')
+      expect(screen.getByTestId('sidebar-guide-card-navigation')).toHaveAttribute('data-guide-card-position', '158,160')
+      expect(screen.getByTestId('sidebar-guide-card-dashboard')).toHaveAttribute('data-guide-anchor', '90,304')
+      expect(screen.getByTestId('sidebar-guide-card-dashboard')).toHaveAttribute('data-guide-card-position', '202,308')
+      expect(screen.getByTestId('sidebar-guide-card-model-lab')).toHaveAttribute('data-guide-anchor', '90,394')
+      expect(screen.getByTestId('sidebar-guide-card-model-lab')).toHaveAttribute('data-guide-card-position', '246,456')
+      expect(screen.getByTestId('sidebar-guide-connectors').querySelector('[data-guide-connector="navigation"]')).toHaveAttribute('data-guide-connector-path', 'M 90 214 H 122 V 208 H 159')
+      expect(screen.getByTestId('sidebar-guide-connectors').querySelector('[data-guide-connector="dashboard"]')).toHaveAttribute('data-guide-connector-path', 'M 90 304 H 122 V 356 H 203')
+      expect(screen.getByTestId('sidebar-guide-connectors').querySelector('[data-guide-connector="model-lab"]')).toHaveAttribute('data-guide-connector-path', 'M 90 394 H 122 V 504 H 247')
+    } finally {
+      restoreRects()
+    }
   })
 
   it('closes the first-visit sidebar guide for the current session', () => {
@@ -135,10 +216,12 @@ describe('App', () => {
     fireEvent.mouseEnter(screen.getByRole('link', { name: '네비게이션' }))
 
     expect(await screen.findByTestId('sidebar-tooltip-navigation-content')).toBeInTheDocument()
+    expect(screen.getByTestId('sidebar-tooltip-navigation-content')).toHaveTextContent('네비게이션')
 
     fireEvent.mouseEnter(screen.getByRole('link', { name: '대시보드' }))
 
     expect(await screen.findByTestId('sidebar-tooltip-dashboard-content')).toBeInTheDocument()
+    expect(screen.getByTestId('sidebar-tooltip-dashboard-content')).toHaveTextContent('대시보드')
     expect(screen.queryByTestId('sidebar-tooltip-navigation-content')).not.toBeInTheDocument()
   })
 
@@ -219,5 +302,25 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: '사이드바 접기' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '사이드바 접기' })).toHaveAttribute('data-tooltip-id', 'sidebar-tooltip-collapse')
     expect(screen.getByTestId('sidebar-tooltip-navigation-content')).toHaveTextContent('데모 시나리오')
+  })
+
+  it('anchors the first-visit guide to expanded sidebar link bounds', () => {
+    const restoreRects = mockSidebarGuideRects()
+
+    try {
+      localStorage.setItem('roadie-app-sidebar-collapsed', 'false')
+      render(<App />)
+
+      expect(screen.getByTestId('global-sidebar')).toHaveAttribute('data-collapsed', 'false')
+      expect(screen.getByTestId('sidebar-guide-card-navigation')).toHaveAttribute('data-guide-anchor', '258,214')
+      expect(screen.getByTestId('sidebar-guide-card-navigation')).toHaveAttribute('data-guide-card-position', '326,160')
+      expect(screen.getByTestId('sidebar-guide-card-dashboard')).toHaveAttribute('data-guide-anchor', '258,304')
+      expect(screen.getByTestId('sidebar-guide-card-dashboard')).toHaveAttribute('data-guide-card-position', '370,308')
+      expect(screen.getByTestId('sidebar-guide-card-model-lab')).toHaveAttribute('data-guide-anchor', '258,394')
+      expect(screen.getByTestId('sidebar-guide-card-model-lab')).toHaveAttribute('data-guide-card-position', '414,456')
+      expect(screen.getByTestId('sidebar-guide-connectors').querySelector('[data-guide-connector="navigation"]')).toHaveAttribute('data-guide-connector-path', 'M 258 214 H 290 V 208 H 327')
+    } finally {
+      restoreRects()
+    }
   })
 })
