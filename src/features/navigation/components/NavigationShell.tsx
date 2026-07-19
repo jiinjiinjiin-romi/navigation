@@ -2130,13 +2130,13 @@ export function NavigationShell({
   const rootSideRailActive = cockpitLayoutActive
   const rootDemoReadyVisible = cockpitLayoutActive && !demoScenarioState && !demoCompleted
   const navigationViewportClassName = [
-    'relative z-10 col-start-1 min-h-0 overflow-hidden rounded-[1.1rem] border border-white/70 bg-[var(--nav-frame)] shadow-[0_18px_46px_rgb(15_23_42/0.24)] ring-1 ring-[rgb(148_163_184/0.18)]',
+    'relative z-10 col-start-1 min-h-[562.5px] min-w-[900px] overflow-hidden rounded-[1.1rem] border border-white/70 bg-[var(--nav-frame)] shadow-[0_18px_46px_rgb(15_23_42/0.24)] ring-1 ring-[rgb(148_163_184/0.18)]',
     manualNavigationActive
       ? 'aspect-[16/10] w-full max-h-full self-center'
       : driverVideoPanelVisible ? 'row-start-2 h-full' : 'aspect-[16/10] w-full max-h-full self-center',
   ].join(' ')
   const navigationStageClassName = [
-    'roadie-navigation-root-stage roadie-navigation-density-scope roadie-navigation-word-boundary relative grid h-screen min-h-0 gap-[var(--roadie-nav-stage-gap)] p-[var(--roadie-nav-stage-padding)]',
+    'roadie-navigation-root-stage roadie-navigation-density-scope roadie-navigation-word-boundary relative grid h-screen min-h-[calc(562.5px+(var(--roadie-nav-stage-padding)*2))] gap-[var(--roadie-nav-stage-gap)] p-[var(--roadie-nav-stage-padding)]',
     rootSideRailActive || manualNavigationActive || demoScenarioState || demoCompleted ? 'pl-[var(--roadie-nav-side-offset)]' : '',
     'grid-cols-[minmax(0,1fr)]',
     driverVideoPanelVisible ? 'grid-rows-[minmax(17rem,38vh)_minmax(0,1fr)]' : 'items-center',
@@ -3646,10 +3646,6 @@ export function NavigationShell({
               musicRecommendationLoading={musicRecommendationsLoading}
               musicRecommendationTrack={selectedMusicTrack}
               onClose={manualRiskAssistantStep && !demoAssistantStep ? resetManualRiskConversation : resetAssistantScenario}
-              onWakeCall={() => {
-                selectAssistantScenario('route-search-voice')
-                setAssistantStepIndex(1)
-              }}
               onRecommendationAction={(recommendation) => {
                 if (recommendation.type === 'music') {
                   setMusicTrackId(selectedMusicTrack.id)
@@ -5223,7 +5219,7 @@ export function DriverVideoPanel({
   return (
     <motion.section
       aria-label="운전자 영상"
-      className="driver-video-player-surface relative col-start-1 row-start-1 flex h-full min-h-0 items-center justify-center overflow-hidden rounded-[1.1rem] border border-white/10 bg-black text-white shadow-[0_18px_46px_rgb(0_0_0/0.28)]"
+      className="driver-video-player-surface relative col-start-1 row-start-1 flex h-full min-h-0 min-w-[900px] items-center justify-center overflow-hidden rounded-[1.1rem] border border-white/10 bg-black text-white shadow-[0_18px_46px_rgb(0_0_0/0.28)]"
       data-testid="driver-video-panel"
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
@@ -5468,7 +5464,6 @@ function RoadieOrbControl({
   motionTiming,
   onClose,
   onRecommendationAction,
-  onWakeCall,
   assistantVoiceId,
   profileName,
   reducedMotion,
@@ -5482,7 +5477,6 @@ function RoadieOrbControl({
   motionTiming: MotionTiming
   onClose: () => void
   onRecommendationAction: (recommendation: RoadieAssistantRecommendation) => void
-  onWakeCall: () => void
   assistantVoiceId: string
   profileName: string | null
   reducedMotion: boolean
@@ -5744,17 +5738,7 @@ function RoadieOrbControl({
           >
             <X className="size-4" weight="bold" />
           </motion.button>
-        ) : (
-          <button
-            aria-label="로디 호출"
-            className="pointer-events-auto absolute right-0 top-0 z-10 size-[8.25rem] rounded-full bg-transparent outline-none transition focus-visible:ring-2 focus-visible:ring-[var(--nav-ai-secondary)]"
-            data-testid="roadie-orb-control"
-            onClick={onWakeCall}
-            type="button"
-          >
-            <span className="sr-only">로디 음성 어시스턴트 호출</span>
-          </button>
-        )}
+        ) : null}
         <motion.div
           className="relative flex h-full min-h-0 flex-col"
         >
@@ -5985,10 +5969,11 @@ function ManualRiskResponseOptionList({
         duration: motionTiming.duration === 0 ? 0 : 0.28,
       }}
     >
-      <div className="flex items-stretch gap-2">
+      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_2.75rem] items-stretch gap-2">
         <div className="grid min-w-0 flex-1 gap-2">
           {options.map((option, index) => (
             <motion.div
+              className="min-w-0"
               key={option.id}
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
@@ -6005,7 +5990,7 @@ function ManualRiskResponseOptionList({
         </div>
         <button
           aria-label="선택지를 음성으로 말하기"
-          className="grid min-h-11 w-11 shrink-0 place-items-center self-stretch rounded-xl border border-[var(--nav-border)] bg-white text-[var(--nav-primary)] transition hover:bg-[var(--nav-primary-soft)] disabled:cursor-not-allowed disabled:opacity-50"
+          className="grid min-h-11 w-full min-w-0 shrink-0 place-items-center self-stretch rounded-xl border border-[var(--nav-border)] bg-white text-[var(--nav-primary)] transition hover:bg-[var(--nav-primary-soft)] disabled:cursor-not-allowed disabled:opacity-50"
           disabled={disabled && voiceStatus !== 'recording'}
           onClick={onVoiceInput}
           title="음성으로 말하기"

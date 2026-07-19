@@ -439,7 +439,7 @@ function AppShell({
           'roadie-paper-content roadie-navigation-container h-screen min-h-0 min-w-0 transition-[margin-left] duration-200 ease-out',
           activeSection === 'dashboard'
             ? 'overflow-auto lg:overflow-hidden'
-            : activeSection === 'model-lab' ? 'overflow-auto' : 'overflow-hidden',
+            : activeSection === 'model-lab' ? 'overflow-auto' : 'overflow-x-auto overflow-y-auto',
           collapsed ? 'ml-[7.75rem]' : 'ml-[18.25rem] max-xl:ml-[7.75rem]',
         ].join(' ')}
         data-testid="app-content"

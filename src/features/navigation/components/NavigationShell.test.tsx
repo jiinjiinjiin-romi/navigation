@@ -1038,6 +1038,8 @@ describe('NavigationShell', () => {
     expect(screen.getByTestId('demo-entry-manual-control-button')).toBeInTheDocument()
     expect(screen.queryByTestId('driver-video-panel')).not.toBeInTheDocument()
     expect(screen.getByTestId('navigation-viewport')).toHaveClass('aspect-[16/10]')
+    expect(screen.getByTestId('navigation-viewport')).toHaveClass('min-w-[900px]')
+    expect(screen.getByTestId('navigation-viewport')).toHaveClass('min-h-[562.5px]')
     expect(screen.getByTestId('navigation-viewport')).toHaveClass('self-center')
     expect(screen.getByTestId('navigation-viewport')).not.toHaveClass('h-full')
     const introLayer = screen.getByTestId('navigation-intro-video-layer')
@@ -1171,8 +1173,11 @@ describe('NavigationShell', () => {
     expect(await screen.findByTestId('demo-scenario-selection')).toBeInTheDocument()
     expect(screen.getByTestId('navigation-viewport')).toHaveClass('row-start-2')
     expect(screen.getByTestId('navigation-viewport')).toHaveClass('h-full')
+    expect(screen.getByTestId('navigation-viewport')).toHaveClass('min-w-[900px]')
+    expect(screen.getByTestId('navigation-viewport')).toHaveClass('min-h-[562.5px]')
     const driverVideoPanel = screen.getByTestId('driver-video-panel')
     expect(driverVideoPanel).toBeInTheDocument()
+    expect(driverVideoPanel).toHaveClass('min-w-[900px]')
     expect(within(driverVideoPanel).getAllByText('대표 시나리오 영상 대기')).toHaveLength(2)
     expect(
       within(driverVideoPanel).getAllByText('대표 시나리오 영상 대기')[0].closest('.roadie-navigation-density-surface'),
@@ -1886,6 +1891,9 @@ describe('NavigationShell', () => {
     fireEvent.click(screen.getByRole('button', { name: '졸음 위험 상황 선택' }))
     const sharedMicrophone = await screen.findByRole('button', { name: '선택지를 음성으로 말하기' })
     expect(screen.queryByRole('button', { name: '창문 조금만 열어줘. 음성으로 말하기' })).not.toBeInTheDocument()
+    expect(screen.getByTestId('manual-risk-response-options').querySelector(':scope > div')).toHaveClass('grid-cols-[minmax(0,1fr)_2.75rem]')
+    expect(sharedMicrophone).toHaveClass('w-full')
+    expect(sharedMicrophone).toHaveClass('min-w-0')
     mockedSynthesizeVoice.mockClear()
     fireEvent.click(sharedMicrophone)
     await waitFor(() => expect(Recorder.latest).toBeDefined())
@@ -3366,6 +3374,7 @@ describe('NavigationShell', () => {
     expect(stage).toHaveClass('roadie-navigation-word-boundary')
     expect(stage).toHaveClass('gap-[var(--roadie-nav-stage-gap)]')
     expect(stage).toHaveClass('p-[var(--roadie-nav-stage-padding)]')
+    expect(stage).toHaveClass('min-h-[calc(562.5px+(var(--roadie-nav-stage-padding)*2))]')
     expect(stage).toHaveClass('pl-[var(--roadie-nav-side-offset)]')
     expect(stage).toHaveClass('grid-cols-[minmax(0,1fr)]')
     expect(stage).not.toHaveClass('grid-rows-[minmax(17rem,38vh)_minmax(0,1fr)]')
@@ -3380,6 +3389,8 @@ describe('NavigationShell', () => {
     expect(manualLayout).toHaveClass('w-[var(--roadie-nav-side-rail-width)]')
     expect(manualLayout).not.toHaveClass('col-start-2')
     expect(viewport).toHaveClass('aspect-[16/10]')
+    expect(viewport).toHaveClass('min-w-[900px]')
+    expect(viewport).toHaveClass('min-h-[562.5px]')
     expect(viewport).toHaveClass('col-start-1')
     expect(viewport).toHaveClass('self-center')
     expect(manualLayout).toContainElement(manualControlPanel)
@@ -3584,8 +3595,7 @@ describe('NavigationShell', () => {
       </QueryClientProvider>,
     )
 
-    expect(screen.getByRole('button', { name: '로디 호출' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '로디 호출' })).toHaveClass('right-0')
+    expect(screen.queryByRole('button', { name: '로디 호출' })).not.toBeInTheDocument()
     expect(screen.getByTestId('voice-orb')).toHaveAttribute('data-state', 'idle')
     expect(screen.getByTestId('voice-orb')).toHaveAttribute('data-energy', '0')
     expect(screen.getByTestId('voice-orb')).toHaveAttribute('data-color-theme', 'daylight')
@@ -3788,7 +3798,7 @@ describe('NavigationShell', () => {
     fireEvent.click(screen.getByRole('button', { name: '로디 AI 에이전트 닫기' }))
 
     expect(screen.queryByTestId('roadie-assistant-panel')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '로디 호출' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '로디 호출' })).not.toBeInTheDocument()
     expect(screen.getByTestId('voice-orb')).toHaveAttribute('data-state', 'idle')
   })
 
