@@ -1132,11 +1132,84 @@ describe('NavigationShell', () => {
     expect(introLayer).toHaveClass('opacity-0')
     expect(screen.getByTestId('demo-entry-mode-selection')).toBeInTheDocument()
 
-    fireEvent.transitionEnd(introLayer)
+    fireEvent.transitionEnd(introLayer, { propertyName: 'opacity' })
 
     expect(screen.queryByTestId('navigation-intro-video-layer')).not.toBeInTheDocument()
     expect(screen.queryByTestId('navigation-intro-video')).not.toBeInTheDocument()
     expect(screen.getByTestId('demo-entry-mode-selection')).toBeInTheDocument()
+  })
+
+  it('removes the intro video with a fallback when transitionend does not fire', async () => {
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell />
+      </QueryClientProvider>,
+    )
+
+    const introLayer = await screen.findByTestId('navigation-intro-video-layer')
+
+    vi.useFakeTimers()
+
+    try {
+      fireEvent.ended(screen.getByTestId('navigation-intro-video'))
+
+      expect(introLayer).toHaveClass('opacity-0')
+      expect(introLayer).toHaveClass('pointer-events-none')
+      expect(screen.getByTestId('demo-entry-mode-selection')).toBeInTheDocument()
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1100)
+      })
+
+      expect(screen.queryByTestId('navigation-intro-video-layer')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('navigation-intro-video')).not.toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('removes the intro video immediately when reduced motion disables transitions', async () => {
+    const originalMatchMedia = window.matchMedia
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      writable: true,
+      value: vi.fn().mockImplementation((query: string) => ({
+        matches: query.includes('prefers-reduced-motion'),
+        media: query,
+        onchange: null,
+        addEventListener: () => undefined,
+        removeEventListener: () => undefined,
+        addListener: () => undefined,
+        removeListener: () => undefined,
+        dispatchEvent: () => false,
+      })),
+    })
+    const queryClient = new QueryClient()
+
+    try {
+      render(
+        <QueryClientProvider client={queryClient}>
+          <NavigationShell />
+        </QueryClientProvider>,
+      )
+
+      await screen.findByTestId('navigation-intro-video-layer')
+
+      fireEvent.click(screen.getByRole('button', { name: '인트로 영상 건너뛰기' }))
+
+      await waitFor(() => {
+        expect(screen.queryByTestId('navigation-intro-video-layer')).not.toBeInTheDocument()
+      })
+      expect(screen.queryByTestId('navigation-intro-video')).not.toBeInTheDocument()
+    } finally {
+      Object.defineProperty(window, 'matchMedia', {
+        configurable: true,
+        writable: true,
+        value: originalMatchMedia,
+      })
+    }
   })
 
   it('skips the intro video from the bottom-right skip button', async () => {
@@ -1155,7 +1228,7 @@ describe('NavigationShell', () => {
     expect(introLayer).toHaveClass('opacity-0')
     expect(screen.getByTestId('demo-entry-mode-selection')).toBeInTheDocument()
 
-    fireEvent.transitionEnd(introLayer)
+    fireEvent.transitionEnd(introLayer, { propertyName: 'opacity' })
 
     expect(screen.queryByTestId('navigation-intro-video-layer')).not.toBeInTheDocument()
     expect(screen.queryByTestId('navigation-intro-video')).not.toBeInTheDocument()

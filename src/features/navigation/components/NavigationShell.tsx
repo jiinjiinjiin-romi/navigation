@@ -204,6 +204,8 @@ const DEVICE_NORMAL_DRIVING_VIDEO_SOURCE: DriverVideoSource = {
   url: versionVideoAssetUrl('/videos/device-normal-driving.mp4'),
 }
 const INTRO_VIDEO_SOURCE = versionVideoAssetUrl('/intro.mp4')
+const INTRO_VIDEO_FADE_FALLBACK_MS = 1100
+const REDUCED_MOTION_MEDIA_QUERY = '(prefers-reduced-motion: reduce)'
 const DROWSY_NORMAL_DRIVING_VIDEO_EVENT_IDS = new Set([
   'drowsy_ok_response',
   'drowsy_ok_acknowledged',
@@ -5075,11 +5077,26 @@ function normalizeOptionalProfileText(value: string | null) {
   return normalized ? normalized : null
 }
 
+function isReducedMotionActive(shouldReduceMotion: boolean | null) {
+  return Boolean(shouldReduceMotion)
+    || (typeof window !== 'undefined' && window.matchMedia?.(REDUCED_MOTION_MEDIA_QUERY).matches)
+}
+
 function NavigationIntroVideo() {
+  const shouldReduceMotion = useReducedMotion()
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const [visible, setVisible] = useState(true)
   const [fading, setFading] = useState(false)
   const [playbackBlocked, setPlaybackBlocked] = useState(false)
+  const finishIntro = useCallback(() => {
+    setVisible(false)
+  }, [])
+  const dismissIntro = useCallback(() => {
+    setFading(true)
+    if (isReducedMotionActive(shouldReduceMotion)) {
+      finishIntro()
+    }
+  }, [finishIntro, shouldReduceMotion])
   const playIntroVideo = useCallback(() => {
     const video = videoRef.current
     if (!video) return
@@ -5106,6 +5123,18 @@ function NavigationIntroVideo() {
     playIntroVideo()
   }, [playIntroVideo])
 
+  useEffect(() => {
+    if (!fading) return undefined
+
+    if (isReducedMotionActive(shouldReduceMotion)) {
+      finishIntro()
+      return undefined
+    }
+
+    const timeoutId = window.setTimeout(finishIntro, INTRO_VIDEO_FADE_FALLBACK_MS)
+    return () => window.clearTimeout(timeoutId)
+  }, [fading, finishIntro, shouldReduceMotion])
+
   if (!visible) {
     return null
   }
@@ -5113,13 +5142,14 @@ function NavigationIntroVideo() {
   return (
     <div
       className={[
-        'pointer-events-auto absolute inset-0 z-[70] overflow-hidden bg-black transition-opacity duration-1000 ease-out motion-reduce:duration-0',
-        fading ? 'opacity-0' : 'opacity-100',
+        'absolute inset-0 z-[70] overflow-hidden bg-black transition-opacity duration-1000 ease-out motion-reduce:duration-0',
+        fading ? 'pointer-events-none opacity-0' : 'pointer-events-auto opacity-100',
       ].join(' ')}
       data-testid="navigation-intro-video-layer"
-      onTransitionEnd={() => {
+      onTransitionEnd={(event) => {
+        if (event.target !== event.currentTarget || event.propertyName !== 'opacity') return
         if (fading) {
-          setVisible(false)
+          finishIntro()
         }
       }}
     >
@@ -5132,7 +5162,7 @@ function NavigationIntroVideo() {
         data-testid="navigation-intro-video"
         disablePictureInPicture
         draggable={false}
-        onEnded={() => setFading(true)}
+        onEnded={dismissIntro}
         onPlay={() => setPlaybackBlocked(false)}
         playsInline
         preload="auto"
@@ -5157,7 +5187,7 @@ function NavigationIntroVideo() {
         aria-label="인트로 영상 건너뛰기"
         className="absolute bottom-5 right-5 z-[2] inline-flex h-10 items-center gap-1.5 rounded-full bg-white/88 px-4 text-sm font-bold text-[#101828] shadow-[0_10px_24px_rgb(0_0_0/0.22)] backdrop-blur-md transition-[background-color,box-shadow,transform] duration-150 ease-out hover:-translate-y-0.5 hover:bg-white hover:shadow-[0_14px_30px_rgb(0_0_0/0.26)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white motion-reduce:transition-none motion-reduce:hover:translate-y-0"
         data-testid="navigation-intro-skip-button"
-        onClick={() => setFading(true)}
+        onClick={dismissIntro}
         type="button"
       >
         Skip
