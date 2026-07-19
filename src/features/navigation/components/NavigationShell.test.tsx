@@ -1046,6 +1046,13 @@ describe('NavigationShell', () => {
     expect(introLayer).toHaveClass('pointer-events-auto')
     expect(introLayer).toHaveClass('opacity-100')
     expect(introLayer).toHaveClass('duration-1000')
+    expect(screen.getByRole('button', { name: '인트로 영상 건너뛰기' })).toHaveTextContent('Skip')
+    expect(screen.getByTestId('navigation-intro-skip-button')).toHaveClass('bottom-5')
+    expect(screen.getByTestId('navigation-intro-skip-button')).toHaveClass('right-5')
+    expect(screen.getByTestId('navigation-intro-skip-button')).toHaveClass('font-bold')
+    expect(screen.getByTestId('navigation-intro-skip-button')).not.toHaveClass('font-black')
+    expect(screen.getByTestId('navigation-intro-skip-button')).toHaveClass('hover:-translate-y-0.5')
+    expect(screen.getByTestId('navigation-intro-skip-button')).toHaveClass('motion-reduce:hover:translate-y-0')
     expect(introVideo).toHaveAttribute('src', '/intro.mp4?v=llast-20260715')
     expect(introVideo).toHaveClass('pointer-events-none')
     expect(introVideo).toHaveAttribute('autoPlay')
@@ -1058,6 +1065,26 @@ describe('NavigationShell', () => {
     expect(introVideo.tabIndex).toBe(-1)
     expect(screen.queryByText('영상 선택')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('운전자 영상 파일 선택')).not.toBeInTheDocument()
+  })
+
+  it('mounts the intro video only after the app guide allows playback', async () => {
+    const queryClient = new QueryClient()
+    const renderShell = (introVideoEnabled: boolean) => (
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell introVideoEnabled={introVideoEnabled} />
+      </QueryClientProvider>
+    )
+
+    const { rerender } = render(renderShell(false))
+
+    expect(await screen.findByTestId('demo-entry-mode-selection')).toBeInTheDocument()
+    expect(screen.queryByTestId('navigation-intro-video-layer')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('navigation-intro-video')).not.toBeInTheDocument()
+
+    rerender(renderShell(true))
+
+    expect(screen.getByTestId('navigation-intro-video-layer')).toBeInTheDocument()
+    expect(screen.getByTestId('navigation-intro-video')).toHaveAttribute('autoPlay')
   })
 
   it('fades out the intro video after playback ends and reveals the navigation surface', async () => {
@@ -1081,6 +1108,28 @@ describe('NavigationShell', () => {
     expect(screen.queryByTestId('navigation-intro-video-layer')).not.toBeInTheDocument()
     expect(screen.queryByTestId('navigation-intro-video')).not.toBeInTheDocument()
     expect(screen.getByTestId('demo-entry-mode-selection')).toBeInTheDocument()
+  })
+
+  it('skips the intro video from the bottom-right skip button', async () => {
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationShell />
+      </QueryClientProvider>,
+    )
+
+    const introLayer = await screen.findByTestId('navigation-intro-video-layer')
+
+    fireEvent.click(screen.getByRole('button', { name: '인트로 영상 건너뛰기' }))
+
+    expect(introLayer).toHaveClass('opacity-0')
+    expect(screen.getByTestId('demo-entry-mode-selection')).toBeInTheDocument()
+
+    fireEvent.transitionEnd(introLayer)
+
+    expect(screen.queryByTestId('navigation-intro-video-layer')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('navigation-intro-video')).not.toBeInTheDocument()
   })
 
   it('shows the waiting driver-video panel after opening representative scenarios', async () => {

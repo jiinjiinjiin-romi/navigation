@@ -390,7 +390,7 @@
       radial-gradient(ellipse at 88% 88%, rgb(177 220 255 / 0.42), transparent 54%),
       radial-gradient(ellipse at 54% 106%, rgb(231 214 255 / 0.44), transparent 60%),
       linear-gradient(180deg, #ffffff 0%, #ffffff 46%, #f8fbff 100%);
-    overflow: hidden;
+    overflow: visible;
   }
 
   .roadie-glass {

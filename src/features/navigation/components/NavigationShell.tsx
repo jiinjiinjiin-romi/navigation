@@ -1317,10 +1317,12 @@ export function NavigationShell({
   calibrationTiming,
   initialProfileSetupComplete = false,
   initialSelectedProfileId,
+  introVideoEnabled = true,
 }: {
   calibrationTiming?: CalibrationTiming
   initialProfileSetupComplete?: boolean
   initialSelectedProfileId?: string
+  introVideoEnabled?: boolean
 } = {}) {
   const shouldReduceMotion = useReducedMotion()
   const queryClient = useQueryClient()
@@ -3603,7 +3605,7 @@ export function NavigationShell({
             'w-full',
           ].join(' ')}
         >
-          <NavigationIntroVideo />
+          {introVideoEnabled ? <NavigationIntroVideo /> : null}
           {runtimeNavigationActive ? (
             <>
             <TmapPanel
@@ -5082,7 +5084,6 @@ function NavigationIntroVideo() {
 
   return (
     <div
-      aria-hidden="true"
       className={[
         'pointer-events-auto absolute inset-0 z-[70] overflow-hidden bg-black transition-opacity duration-1000 ease-out motion-reduce:duration-0',
         fading ? 'opacity-0' : 'opacity-100',
@@ -5109,6 +5110,16 @@ function NavigationIntroVideo() {
         src={INTRO_VIDEO_SOURCE}
         tabIndex={-1}
       />
+      <button
+        aria-label="인트로 영상 건너뛰기"
+        className="absolute bottom-5 right-5 z-[1] inline-flex h-10 items-center gap-1.5 rounded-full bg-white/88 px-4 text-sm font-bold text-[#101828] shadow-[0_10px_24px_rgb(0_0_0/0.22)] backdrop-blur-md transition-[background-color,box-shadow,transform] duration-150 ease-out hover:-translate-y-0.5 hover:bg-white hover:shadow-[0_14px_30px_rgb(0_0_0/0.26)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+        data-testid="navigation-intro-skip-button"
+        onClick={() => setFading(true)}
+        type="button"
+      >
+        Skip
+        <CaretRight className="size-4" weight="bold" />
+      </button>
     </div>
   )
 }
