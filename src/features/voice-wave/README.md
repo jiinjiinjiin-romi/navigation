@@ -1,6 +1,6 @@
 # ROADIE Voice Wave
 
-Internal visual state component for Roady speech activity.
+Internal visual state component for AI assistant speech activity.
 
 ```tsx
 import { VoiceWave, normalizeWaveEnergy } from '@/features/voice-wave'
